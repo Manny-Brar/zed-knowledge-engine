@@ -442,7 +442,91 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 13: ke_license — License management
+// Tool 13: ke_import — Import markdown files from a directory
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_import',
+  {
+    source_dir: z.string().describe('Directory path to scan for .md files to import'),
+    subdirectory: z.string().default('imported').describe('Vault subdirectory to place imported files in'),
+  },
+  async ({ source_dir, subdirectory }) => {
+    try {
+      const resolvedSource = path.resolve(source_dir);
+      if (!fs.existsSync(resolvedSource)) {
+        return { content: [{ type: 'text', text: `Directory not found: ${resolvedSource}` }], isError: true };
+      }
+
+      const fileLayerMod = require('../core/file-layer.cjs');
+      const sourceFiles = fileLayerMod.listNotes(resolvedSource);
+
+      if (sourceFiles.length === 0) {
+        return { content: [{ type: 'text', text: `No .md files found in ${resolvedSource}` }] };
+      }
+
+      const targetDir = path.join(VAULT_DIR, subdirectory);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      let imported = 0;
+      let skipped = 0;
+      const importedFiles = [];
+
+      for (const sourceFile of sourceFiles) {
+        const relativeName = path.relative(resolvedSource, sourceFile);
+        const targetFile = path.join(targetDir, relativeName);
+        const targetParent = path.dirname(targetFile);
+
+        // Don't overwrite existing files
+        if (fs.existsSync(targetFile)) {
+          skipped++;
+          continue;
+        }
+
+        if (!fs.existsSync(targetParent)) {
+          fs.mkdirSync(targetParent, { recursive: true });
+        }
+
+        // Read source, add frontmatter if missing
+        let content = fs.readFileSync(sourceFile, 'utf-8');
+        const { frontmatter } = fileLayerMod.parseFrontmatter(content);
+
+        if (Object.keys(frontmatter).length === 0) {
+          const title = path.basename(sourceFile, '.md');
+          const date = new Date().toISOString().split('T')[0];
+          content = `---\ntitle: "${title}"\ndate: ${date}\ntype: imported\ntags: [imported]\n---\n\n${content}`;
+        }
+
+        fs.writeFileSync(targetFile, content, 'utf-8');
+        imported++;
+        importedFiles.push(relativeName);
+      }
+
+      // Rebuild graph
+      engine.rebuild();
+
+      const text = [
+        `## Import Complete`,
+        '',
+        `- **Imported**: ${imported} files`,
+        `- **Skipped**: ${skipped} (already exist)`,
+        `- **Source**: ${resolvedSource}`,
+        `- **Destination**: ${targetDir}`,
+        '',
+        imported > 0 ? `### Imported Files\n${importedFiles.map(f => `- ${f}`).join('\n')}` : '',
+      ].join('\n');
+
+      return { content: [{ type: 'text', text }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Import error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 14: ke_license — License management
 // ---------------------------------------------------------------------------
 
 server.tool(
