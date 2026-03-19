@@ -2,9 +2,9 @@
 description: Show ZED Knowledge Engine vault statistics and health
 ---
 
-Use the `zed_stats` MCP tool to get current vault statistics, then present them clearly to the user.
+Run `zed stats` via the Bash tool to get current vault statistics, then present them clearly to the user.
 
-Also use `zed_hubs` (limit 5) to show the most connected notes, and check for orphan notes using `zed_clusters`.
+Also run `zed hubs --limit 5` via the Bash tool to show the most connected notes, and check for orphan notes using `zed clusters`.
 
 Present a concise dashboard like:
 

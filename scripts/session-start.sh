@@ -1,39 +1,23 @@
 #!/bin/bash
 # session-start.sh — Run on SessionStart hook
 #
-# Rebuilds the knowledge graph index and outputs a brief status.
-# Output is shown to Claude as context at session start.
+# Rebuilds the knowledge graph and outputs a brief status via CLI.
 
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
 VAULT_DIR="$DATA_DIR/vault"
-DB_PATH="$DATA_DIR/knowledge.db"
 
-# Skip if vault doesn't exist yet (setup not run)
+# Skip if vault doesn't exist yet
 if [ ! -d "$VAULT_DIR" ]; then
   exit 0
 fi
 
-# Rebuild index and output status
-node -e "
-  const KE = require('$PLUGIN_ROOT/core/engine.cjs');
-  const engine = new KE({
-    vaultPath: '$VAULT_DIR',
-    dbPath: '$DB_PATH'
-  });
-  const result = engine.build();
-  const stats = engine.getStats();
+export ZED_DATA_DIR="$DATA_DIR"
 
-  if (stats.nodeCount > 0) {
-    console.log('[ZED] Knowledge Engine: ' + stats.nodeCount + ' notes, ' + stats.edgeCount + ' connections, ' + stats.clusterCount + ' clusters');
+# Rebuild graph silently
+node "$PLUGIN_ROOT/bin/zed" rebuild >/dev/null 2>&1 || true
 
-    const hubs = engine.findHubs(3);
-    if (hubs.length > 0 && hubs[0].backlink_count > 0) {
-      console.log('[ZED] Top hubs: ' + hubs.filter(h => h.backlink_count > 0).map(h => h.title + ' (' + h.backlink_count + ')').join(', '));
-    }
-  }
-
-  engine.close();
-" 2>/dev/null || true
+# Show overview
+node "$PLUGIN_ROOT/bin/zed" overview 2>/dev/null || true

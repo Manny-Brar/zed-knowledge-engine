@@ -1,8 +1,7 @@
 /**
- * test-mcp.cjs — Integration tests for the MCP Server
+ * test-mcp.cjs — Integration tests for the Slim MCP Server (4 tools)
  *
- * Spawns the MCP server as a child process, sends JSON-RPC messages,
- * and validates responses for all 17 tools.
+ * Tests: zed_search, zed_read_note, zed_write_note, zed_decide
  */
 
 'use strict';
@@ -13,20 +12,19 @@ const fs = require('fs');
 const assert = require('assert');
 
 const SERVER_PATH = path.join(__dirname, 'mcp-server.mjs');
-const TEST_DATA = path.join(require('os').tmpdir(), 'ke-mcp-test-' + Date.now());
+const TEST_DATA = path.join(require('os').tmpdir(), 'zed-mcp-test-' + Date.now());
 
 let passed = 0;
 let failed = 0;
 
 // ---------------------------------------------------------------------------
-// MCP Client Helper
+// MCP Client
 // ---------------------------------------------------------------------------
 
 class McpTestClient {
   constructor() {
     this.proc = null;
     this.buffer = '';
-    this.responses = new Map();
     this.nextId = 1;
     this._resolvers = new Map();
   }
@@ -41,8 +39,7 @@ class McpTestClient {
       this.proc.stdout.on('data', (data) => {
         this.buffer += data.toString();
         const lines = this.buffer.split('\n');
-        this.buffer = lines.pop(); // Keep incomplete line
-
+        this.buffer = lines.pop();
         for (const line of lines) {
           if (!line.trim()) continue;
           try {
@@ -55,9 +52,8 @@ class McpTestClient {
         }
       });
 
-      this.proc.stderr.on('data', () => {}); // Suppress stderr
+      this.proc.stderr.on('data', () => {});
 
-      // Initialize
       setTimeout(async () => {
         try {
           await this.send('initialize', {
@@ -67,9 +63,7 @@ class McpTestClient {
           });
           this.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
           setTimeout(resolve, 100);
-        } catch (e) {
-          reject(e);
-        }
+        } catch (e) { reject(e); }
       }, 300);
     });
   }
@@ -78,15 +72,11 @@ class McpTestClient {
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
       this._resolvers.set(id, resolve);
-
-      const msg = { jsonrpc: '2.0', id, method, params };
-      this.proc.stdin.write(JSON.stringify(msg) + '\n');
-
-      // Timeout
+      this.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
       setTimeout(() => {
         if (this._resolvers.has(id)) {
           this._resolvers.delete(id);
-          reject(new Error(`Timeout waiting for response to ${method} (id: ${id})`));
+          reject(new Error(`Timeout: ${method}`));
         }
       }, 5000);
     });
@@ -104,26 +94,22 @@ class McpTestClient {
   }
 
   stop() {
-    if (this.proc) {
-      this.proc.kill();
-      this.proc = null;
-    }
+    if (this.proc) { this.proc.kill(); this.proc = null; }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Test Runner
+// Test runner
 // ---------------------------------------------------------------------------
 
 async function test(name, fn) {
   try {
     await fn();
     passed++;
-    console.log(`  ✓ ${name}`);
+    console.log(`  \u2713 ${name}`);
   } catch (err) {
     failed++;
-    console.log(`  ✗ ${name}`);
-    console.log(`    ${err.message}`);
+    console.log(`  \u2717 ${name}: ${err.message}`);
   }
 }
 
@@ -132,156 +118,106 @@ async function test(name, fn) {
 // ---------------------------------------------------------------------------
 
 async function runTests() {
-  // Clean up test data
   fs.rmSync(TEST_DATA, { recursive: true, force: true });
 
   const client = new McpTestClient();
   await client.start();
 
-  console.log('\n── MCP Server Integration Tests ──\n');
+  console.log('\n── MCP Server Tests (Slim: 4 tools) ──\n');
 
   // Tool listing
-  await test('lists all 17 tools', async () => {
+  await test('lists exactly 4 tools', async () => {
     const tools = await client.listTools();
-    assert.strictEqual(tools.length, 24);
-    const names = tools.map(t => t.name);
-    assert.ok(names.includes('zed_search'));
-    assert.ok(names.includes('zed_stats'));
-    assert.ok(names.includes('zed_global_search'));
-    assert.ok(names.includes('zed_promote'));
+    assert.strictEqual(tools.length, 4, `Expected 4, got ${tools.length}: ${tools.map(t => t.name).join(', ')}`);
+    const names = tools.map(t => t.name).sort();
+    assert.deepStrictEqual(names, ['zed_decide', 'zed_read_note', 'zed_search', 'zed_write_note']);
   });
 
-  // zed_stats
-  await test('zed_stats returns vault info', async () => {
-    const result = await client.callTool('zed_stats');
-    assert.ok(result.content[0].text.includes('Notes'));
-    assert.ok(result.content[0].text.includes('Connections'));
-  });
-
-  // zed_daily — create
-  await test('zed_daily creates session note', async () => {
-    const result = await client.callTool('zed_daily');
-    assert.ok(result.content[0].text.includes('Daily note created') || result.content[0].text.includes('Session'));
-  });
-
-  // zed_decide
-  await test('zed_decide creates decision record', async () => {
-    const result = await client.callTool('zed_decide', {
-      title: 'Test Decision',
-      context: 'Testing the MCP server',
-      decision: 'Use integration tests',
-      alternatives: 'Manual testing',
-      consequences: 'Better reliability',
-    });
-    assert.ok(result.content[0].text.includes('Decision record created'));
-  });
-
-  // zed_write_note
+  // zed_write_note — create test data first
   await test('zed_write_note creates a note', async () => {
     const result = await client.callTool('zed_write_note', {
       file_name: 'patterns/test-pattern.md',
-      content: '---\ntitle: Test Pattern\ntags: [pattern, test]\n---\n# Test Pattern\nA pattern for [[Test Decision]].',
+      content: '---\ntitle: "Test Pattern"\ntags: [pattern, test]\n---\n# Test Pattern\nA reusable pattern for [[API Design]].',
     });
     assert.ok(result.content[0].text.includes('Note written'));
   });
 
-  // zed_rebuild
-  await test('zed_rebuild rebuilds graph', async () => {
-    const result = await client.callTool('zed_rebuild');
-    assert.ok(result.content[0].text.includes('Graph rebuilt'));
-    assert.ok(result.content[0].text.includes('Nodes'));
+  await test('zed_write_note creates second note', async () => {
+    const result = await client.callTool('zed_write_note', {
+      file_name: 'decisions/api-design.md',
+      content: '---\ntitle: "API Design"\ntags: [decision, api]\n---\n# API Design\nWe chose REST.',
+    });
+    assert.ok(result.content[0].text.includes('Note written'));
+  });
+
+  // zed_decide — structured ADR
+  await test('zed_decide creates decision record', async () => {
+    const result = await client.callTool('zed_decide', {
+      title: 'Use SQLite for storage',
+      context: 'Need embedded database',
+      decision: 'SQLite via better-sqlite3',
+      alternatives: 'PostgreSQL, LevelDB',
+      consequences: 'No server needed, single file',
+    });
+    assert.ok(result.content[0].text.includes('Decision recorded'));
   });
 
   // zed_search
-  await test('zed_search finds notes', async () => {
+  await test('zed_search finds notes by content', async () => {
     const result = await client.callTool('zed_search', { query: 'pattern', limit: 5 });
-    assert.ok(result.content[0].text.includes('Test Pattern') || result.content[0].text.includes('Search Results'));
+    assert.ok(result.content[0].text.includes('Test Pattern'));
   });
 
-  // zed_search — empty query
-  await test('zed_search handles empty query', async () => {
-    const result = await client.callTool('zed_search', { query: '', limit: 5 });
+  await test('zed_search returns no results for gibberish', async () => {
+    const result = await client.callTool('zed_search', { query: 'xyznonexistent999', limit: 5 });
     assert.ok(result.content[0].text.includes('No results'));
   });
 
-  // zed_backlinks
-  await test('zed_backlinks finds linking notes', async () => {
-    const result = await client.callTool('zed_backlinks', { note_path: 'Test Decision' });
-    // Test Pattern links to Test Decision
-    const text = result.content[0].text;
-    assert.ok(text.includes('Test Pattern') || text.includes('No backlinks') || text.includes('Backlinks'));
-  });
-
-  // zed_related
-  await test('zed_related finds nearby notes', async () => {
-    const result = await client.callTool('zed_related', { note_path: 'Test Decision', max_hops: 2 });
-    assert.ok(result.content[0].text);
-  });
-
-  // zed_hubs
-  await test('zed_hubs returns hub notes', async () => {
-    const result = await client.callTool('zed_hubs', { limit: 5 });
-    assert.ok(result.content[0].text.includes('Hub') || result.content[0].text.includes('backlinks'));
-  });
-
-  // zed_clusters
-  await test('zed_clusters detects clusters', async () => {
-    const result = await client.callTool('zed_clusters');
-    assert.ok(result.content[0].text.includes('Cluster'));
-  });
-
-  // zed_shortest_path
-  await test('zed_shortest_path finds paths', async () => {
-    const result = await client.callTool('zed_shortest_path', {
-      from_note: 'Test Pattern',
-      to_note: 'Test Decision',
-    });
-    assert.ok(result.content[0].text.includes('Path') || result.content[0].text.includes('No path'));
+  await test('zed_search finds decision records', async () => {
+    const result = await client.callTool('zed_search', { query: 'SQLite', limit: 5 });
+    assert.ok(result.content[0].text.includes('SQLite'));
   });
 
   // zed_read_note
-  await test('zed_read_note reads note content', async () => {
-    const result = await client.callTool('zed_read_note', { note_path: 'Test Decision' });
+  await test('zed_read_note reads by title', async () => {
+    const result = await client.callTool('zed_read_note', { note_path: 'Test Pattern' });
     const text = result.content[0].text;
-    assert.ok(text.includes('Test Decision') || text.includes('Testing the MCP server'));
+    assert.ok(text.includes('Test Pattern'));
+    assert.ok(text.includes('reusable pattern'));
   });
 
-  // zed_license status
-  await test('zed_license returns status', async () => {
-    const result = await client.callTool('zed_license', { action: 'status' });
-    assert.ok(result.content[0].text.includes('License Status'));
-    assert.ok(result.content[0].text.includes('trial'));
+  await test('zed_read_note reads by relative path', async () => {
+    const result = await client.callTool('zed_read_note', { note_path: 'decisions/api-design.md' });
+    assert.ok(result.content[0].text.includes('API Design'));
   });
 
-  // zed_graph_data
-  await test('zed_graph_data returns JSON', async () => {
-    const result = await client.callTool('zed_graph_data');
-    const data = JSON.parse(result.content[0].text);
-    assert.ok(data.stats);
-    assert.ok(Array.isArray(data.nodes));
-    assert.ok(Array.isArray(data.edges));
-  });
-
-  // zed_global_search
-  await test('zed_global_search searches both vaults', async () => {
-    const result = await client.callTool('zed_global_search', { query: 'pattern' });
-    assert.ok(result.content[0].text.includes('Project Knowledge') || result.content[0].text.includes('No results'));
-  });
-
-  // zed_import with non-existent dir
-  await test('zed_import handles missing directory', async () => {
-    const result = await client.callTool('zed_import', { source_dir: '/nonexistent/path' });
+  await test('zed_read_note errors on missing note', async () => {
+    const result = await client.callTool('zed_read_note', { note_path: 'Nonexistent Note' });
     assert.ok(result.isError);
     assert.ok(result.content[0].text.includes('not found'));
   });
 
-  // zed_promote
-  await test('zed_promote promotes note to global', async () => {
-    const result = await client.callTool('zed_promote', {
-      note_path: 'Test Pattern',
-      global_subdir: 'patterns',
+  // zed_write_note — update existing
+  await test('zed_write_note overwrites existing note', async () => {
+    const result = await client.callTool('zed_write_note', {
+      file_name: 'patterns/test-pattern.md',
+      content: '---\ntitle: "Test Pattern Updated"\ntags: [pattern, test, updated]\n---\n# Test Pattern Updated\nNow with more detail.',
     });
-    assert.ok(result.content[0].text.includes('Promoted') || result.content[0].text.includes('already exists'));
+    assert.ok(result.content[0].text.includes('Note written'));
+
+    // Verify update
+    const read = await client.callTool('zed_read_note', { note_path: 'patterns/test-pattern.md' });
+    assert.ok(read.content[0].text.includes('Updated'));
+  });
+
+  // zed_decide — with empty optionals
+  await test('zed_decide handles empty alternatives/consequences', async () => {
+    const result = await client.callTool('zed_decide', {
+      title: 'Quick Decision',
+      context: 'Needed fast',
+      decision: 'Just do it',
+    });
+    assert.ok(result.content[0].text.includes('Decision recorded'));
   });
 
   // Cleanup

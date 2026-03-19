@@ -2,7 +2,7 @@
 description: Create a new knowledge note from a template
 ---
 
-Use the `zed_template` MCP tool to create a new note from a template.
+Run `zed template` via the Bash tool to create a new note from a template.
 
 If "$ARGUMENTS" is provided, parse it as "type title" (e.g., "decision Use PostgreSQL" or "pattern Error handling middleware").
 

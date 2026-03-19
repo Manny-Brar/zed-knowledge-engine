@@ -2,14 +2,18 @@
 description: Comprehensive vault dashboard — stats, health, hubs, recent notes, and recommendations in one view
 ---
 
-Generate a comprehensive knowledge vault overview by calling multiple tools:
+Generate a comprehensive knowledge vault overview by running `zed overview` via the Bash tool, which gathers all data in one call:
 
-1. `zed_stats` — vault statistics
-2. `zed_health` — health score and recommendations
-3. `zed_hubs` (limit 5) — most connected notes
-4. `zed_recent` (limit 5) — recently modified notes
-5. `zed_tags` — tag cloud
-6. `zed_suggest_links` (limit 3) — quick link suggestions
+- Vault statistics, health score, top hubs, recent notes, tags, and link suggestions
+
+Alternatively, gather the data piecemeal via individual CLI calls:
+
+1. `zed stats` — vault statistics
+2. `zed health` — health score and recommendations
+3. `zed hubs --limit 5` — most connected notes
+4. `zed recent --limit 5` — recently modified notes
+5. `zed tags` — tag cloud
+6. `zed suggest-links --limit 3` — quick link suggestions
 
 Present as a clean dashboard:
 

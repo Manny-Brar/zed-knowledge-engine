@@ -1,0 +1,715 @@
+#!/usr/bin/env node
+
+/**
+ * bin/zed — ZED Knowledge Engine CLI
+ *
+ * Token-efficient CLI interface. Claude calls this via Bash instead of
+ * loading 20+ MCP tool schemas into every message.
+ *
+ * Usage: zed <command> [args...] [--json]
+ */
+
+'use strict';
+
+const path = require('path');
+const fs = require('fs');
+
+// ---------------------------------------------------------------------------
+// Configuration (matches MCP server paths)
+// ---------------------------------------------------------------------------
+
+const DATA_DIR = process.env.ZED_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || path.join(process.env.HOME, '.zed-data');
+const VAULT_DIR = path.join(DATA_DIR, 'vault');
+const DB_PATH = path.join(DATA_DIR, 'knowledge.db');
+const GLOBAL_DIR = path.join(process.env.HOME, '.zed', 'global');
+const GLOBAL_DB_PATH = path.join(process.env.HOME, '.zed', 'global.db');
+
+// Ensure dirs exist
+for (const dir of [
+  VAULT_DIR,
+  path.join(VAULT_DIR, 'decisions'),
+  path.join(VAULT_DIR, 'patterns'),
+  path.join(VAULT_DIR, 'sessions'),
+  path.join(VAULT_DIR, 'architecture'),
+  GLOBAL_DIR,
+  path.join(GLOBAL_DIR, 'patterns'),
+  path.join(GLOBAL_DIR, 'learnings'),
+]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+// ---------------------------------------------------------------------------
+// Parse args
+// ---------------------------------------------------------------------------
+
+const args = process.argv.slice(2);
+const jsonMode = args.includes('--json');
+const filteredArgs = args.filter(a => a !== '--json');
+const command = filteredArgs[0];
+const commandArgs = filteredArgs.slice(1);
+
+if (!command || command === 'help' || command === '--help') {
+  printHelp();
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// Initialize engine (lazy — only when needed)
+// ---------------------------------------------------------------------------
+
+let _engine = null;
+let _globalEngine = null;
+
+function getEngine() {
+  if (!_engine) {
+    const KnowledgeEngine = require('../core/engine.cjs');
+    _engine = new KnowledgeEngine({ vaultPath: VAULT_DIR, dbPath: DB_PATH });
+    _engine.build();
+  }
+  return _engine;
+}
+
+function getGlobalEngine() {
+  if (!_globalEngine) {
+    const KnowledgeEngine = require('../core/engine.cjs');
+    _globalEngine = new KnowledgeEngine({ vaultPath: GLOBAL_DIR, dbPath: GLOBAL_DB_PATH });
+    _globalEngine.build();
+  }
+  return _globalEngine;
+}
+
+// ---------------------------------------------------------------------------
+// Output helpers
+// ---------------------------------------------------------------------------
+
+function output(data) {
+  if (jsonMode) {
+    console.log(JSON.stringify(data, null, 2));
+  } else if (typeof data === 'string') {
+    console.log(data);
+  } else {
+    console.log(JSON.stringify(data, null, 2));
+  }
+}
+
+function error(msg) {
+  if (jsonMode) {
+    console.error(JSON.stringify({ error: msg }));
+  } else {
+    console.error(`Error: ${msg}`);
+  }
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Note path resolution (same logic as MCP server)
+// ---------------------------------------------------------------------------
+
+function resolveNotePath(input) {
+  if (path.isAbsolute(input) && fs.existsSync(input)) return input;
+  const vaultRelative = path.join(VAULT_DIR, input);
+  if (fs.existsSync(vaultRelative)) return vaultRelative;
+  if (!input.endsWith('.md')) {
+    const withExt = path.join(VAULT_DIR, input + '.md');
+    if (fs.existsSync(withExt)) return withExt;
+  }
+  const engine = getEngine();
+  const notes = engine.listNotes();
+  for (const notePath of notes) {
+    const basename = path.basename(notePath, '.md');
+    if (basename.toLowerCase() === input.toLowerCase()) return notePath;
+    try {
+      const note = engine.readNote(notePath);
+      if (note.title && note.title.toLowerCase() === input.toLowerCase()) return notePath;
+    } catch { continue; }
+  }
+  return null;
+}
+
+function formatTimeAgo(ms) {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return `${Math.floor(days / 7)}w ago`;
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+const commands = {
+
+  // --- Graph queries ---
+
+  backlinks() {
+    const notePath = commandArgs[0];
+    if (!notePath) error('Usage: zed backlinks <note>');
+    const resolved = resolveNotePath(notePath);
+    if (!resolved) error(`Note not found: ${notePath}`);
+    const engine = getEngine();
+    const backlinks = engine.getBacklinks(resolved);
+    if (jsonMode) return output({ note: path.basename(resolved), backlinks });
+    if (backlinks.length === 0) return output(`No backlinks for "${path.basename(resolved)}"`);
+    const lines = backlinks.map(b => `  ${b.source_title} → "${b.link_text}"`);
+    output(`Backlinks to ${path.basename(resolved)}:\n${lines.join('\n')}`);
+  },
+
+  related() {
+    const notePath = commandArgs[0];
+    const maxHops = parseInt(commandArgs[1]) || 2;
+    if (!notePath) error('Usage: zed related <note> [hops]');
+    const resolved = resolveNotePath(notePath);
+    if (!resolved) error(`Note not found: ${notePath}`);
+    const engine = getEngine();
+    const related = engine.getRelated(resolved, maxHops);
+    if (jsonMode) return output({ note: path.basename(resolved), maxHops, related });
+    if (related.length === 0) return output(`No related notes within ${maxHops} hops`);
+    const lines = related.map(r => `  ${r.node.title} (${r.distance} hop${r.distance > 1 ? 's' : ''})`);
+    output(`Related to ${path.basename(resolved)} (${maxHops} hops):\n${lines.join('\n')}`);
+  },
+
+  hubs() {
+    const limit = parseInt(commandArgs[0]) || 10;
+    const engine = getEngine();
+    const hubs = engine.findHubs(limit);
+    if (jsonMode) return output({ hubs });
+    if (hubs.length === 0) return output('No hubs (empty graph)');
+    const lines = hubs.map((h, i) => `  ${i + 1}. ${h.title} — ${h.backlink_count} backlinks`);
+    output(`Knowledge Hubs:\n${lines.join('\n')}`);
+  },
+
+  clusters() {
+    const engine = getEngine();
+    const clusters = engine.getClusters();
+    if (jsonMode) return output({ clusters: clusters.map((c, i) => ({ id: i + 1, size: c.length, members: c.map(n => n.title) })) });
+    if (clusters.length === 0) return output('No clusters (empty graph)');
+    const lines = clusters.map((c, i) => `  Cluster ${i + 1} (${c.length} notes): ${c.map(n => n.title).join(', ')}`);
+    output(`Knowledge Clusters:\n${lines.join('\n')}`);
+  },
+
+  path() {
+    const from = commandArgs[0];
+    const to = commandArgs[1];
+    if (!from || !to) error('Usage: zed path <from> <to>');
+    const fromResolved = resolveNotePath(from);
+    const toResolved = resolveNotePath(to);
+    if (!fromResolved) error(`Source not found: ${from}`);
+    if (!toResolved) error(`Target not found: ${to}`);
+    const engine = getEngine();
+    const sp = engine.shortestPath(fromResolved, toResolved);
+    if (jsonMode) return output({ from, to, path: sp ? sp.map(n => n.title) : null });
+    if (!sp) return output(`No path between "${from}" and "${to}"`);
+    output(`Path: ${sp.map(n => n.title).join(' → ')} (${sp.length - 1} hops)`);
+  },
+
+  // --- Vault info ---
+
+  stats() {
+    const engine = getEngine();
+    const stats = engine.getStats();
+    if (jsonMode) return output({ ...stats, vaultPath: VAULT_DIR, dbPath: DB_PATH });
+    output(`Notes: ${stats.nodeCount}  Connections: ${stats.edgeCount}  Orphans: ${stats.orphanCount}  Clusters: ${stats.clusterCount}`);
+  },
+
+  health() {
+    const engine = getEngine();
+    const stats = engine.getStats();
+    const hubs = engine.findHubs(100);
+    const orphans = engine.getOrphans();
+    const clusters = engine.getClusters();
+
+    if (stats.nodeCount === 0) {
+      return output(jsonMode ? { score: 0, grade: 'N/A', message: 'Empty vault' } : 'Vault Health: Empty — no notes yet');
+    }
+
+    const connectivityRatio = stats.edgeCount / stats.nodeCount;
+    const orphanRatio = stats.orphanCount / stats.nodeCount;
+    const hubsWithLinks = hubs.filter(h => h.backlink_count > 0).length;
+    const avgBacklinks = hubs.length > 0 ? hubs.reduce((sum, h) => sum + h.backlink_count, 0) / hubs.length : 0;
+
+    let score = 50;
+    score += Math.min(20, connectivityRatio * 10);
+    score -= Math.min(20, orphanRatio * 30);
+    score += Math.min(15, hubsWithLinks * 3);
+    const clusterPenalty = clusters.length > 1 ? Math.min(15, (clusters.length - 1) * 2) : 0;
+    score += 15 - clusterPenalty;
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    let grade;
+    if (score >= 90) grade = 'A';
+    else if (score >= 75) grade = 'B';
+    else if (score >= 60) grade = 'C';
+    else if (score >= 40) grade = 'D';
+    else grade = 'F';
+
+    const recs = [];
+    if (orphanRatio > 0.3) recs.push('Connect orphan notes');
+    if (connectivityRatio < 1) recs.push('Add more [[wikilinks]]');
+    if (clusters.length > 3) recs.push(`Bridge ${clusters.length} disconnected clusters`);
+    if (stats.nodeCount < 10) recs.push('Keep adding knowledge');
+
+    if (jsonMode) return output({ score, grade, stats, orphanRatio, connectivityRatio, avgBacklinks, recommendations: recs });
+    const lines = [
+      `Vault Health: ${grade} (${score}/100)`,
+      `  Notes: ${stats.nodeCount}  Connections: ${stats.edgeCount}  Orphans: ${stats.orphanCount}`,
+    ];
+    if (recs.length > 0) lines.push(`  Recommendations: ${recs.join('; ')}`);
+    output(lines.join('\n'));
+  },
+
+  tags() {
+    const engine = getEngine();
+    const filterTag = commandArgs[0];
+
+    if (filterTag) {
+      const results = engine.searchByTag(filterTag, { limit: 50 });
+      if (jsonMode) return output({ tag: filterTag, notes: results.map(r => ({ title: r.node.title, path: r.node.path })) });
+      if (results.length === 0) return output(`No notes tagged "${filterTag}"`);
+      const lines = results.map(r => `  ${r.node.title}`);
+      output(`Notes tagged "${filterTag}":\n${lines.join('\n')}`);
+      return;
+    }
+
+    const allNodes = engine.graph.db.prepare('SELECT tags FROM nodes').all();
+    const tagCounts = new Map();
+    for (const node of allNodes) {
+      try {
+        const tags = JSON.parse(node.tags || '[]');
+        for (const t of tags) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+      } catch {}
+    }
+
+    if (jsonMode) return output({ tags: Object.fromEntries(tagCounts) });
+    if (tagCounts.size === 0) return output('No tags found');
+    const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
+    const lines = sorted.map(([t, count]) => `  ${t} (${count})`);
+    output(`Tags:\n${lines.join('\n')}`);
+  },
+
+  recent() {
+    const limit = parseInt(commandArgs[0]) || 10;
+    const engine = getEngine();
+    const notes = engine.listNotes();
+    const noteStats = notes.map(notePath => {
+      try {
+        const stat = fs.statSync(notePath);
+        const note = engine.readNote(notePath);
+        return { path: notePath, title: note.title, mtime: stat.mtimeMs };
+      } catch { return null; }
+    }).filter(Boolean);
+
+    noteStats.sort((a, b) => b.mtime - a.mtime);
+    const recent = noteStats.slice(0, limit);
+
+    if (jsonMode) return output({ recent: recent.map(n => ({ title: n.title, path: n.path, mtime: n.mtime })) });
+    if (recent.length === 0) return output('No notes in vault');
+    const lines = recent.map((n, i) => `  ${i + 1}. ${n.title} — ${formatTimeAgo(Date.now() - n.mtime)}`);
+    output(`Recent Notes:\n${lines.join('\n')}`);
+  },
+
+  // --- Content operations ---
+
+  snippets() {
+    const query = commandArgs.join(' ');
+    if (!query) error('Usage: zed snippets <query>');
+    const engine = getEngine();
+    const results = engine.searchWithSnippets(query, { limit: 5 });
+    if (jsonMode) return output({ query, results });
+    if (results.length === 0) return output(`No results for "${query}"`);
+    const lines = results.map((r, i) => {
+      const snip = r.snippets.length > 0 ? r.snippets[0].substring(0, 120) + '...' : 'No snippet';
+      return `  ${i + 1}. ${r.node.title} (${r.score.toFixed(3)})\n     ${snip}`;
+    });
+    output(`Snippets for "${query}":\n${lines.join('\n')}`);
+  },
+
+  daily() {
+    const append = commandArgs.join(' ');
+    const engine = getEngine();
+    const date = new Date().toISOString().split('T')[0];
+    const fileName = `sessions/${date}.md`;
+    const notePath = path.join(VAULT_DIR, fileName);
+
+    if (fs.existsSync(notePath)) {
+      if (append) {
+        const existing = fs.readFileSync(notePath, 'utf-8');
+        fs.writeFileSync(notePath, existing + '\n' + append + '\n', 'utf-8');
+        engine.rebuild();
+        return output(jsonMode ? { action: 'appended', file: fileName } : `Appended to ${fileName}`);
+      }
+      const note = engine.readNote(notePath);
+      return output(jsonMode ? { file: fileName, content: note.content } : note.content);
+    }
+
+    const content = [
+      '---', `title: "Session ${date}"`, `date: ${date}`, 'type: daily',
+      'tags: [session, daily]', '---', '', `# Session Notes — ${date}`, '',
+      '## Work Done', append || '- _Session started_', '',
+      '## Decisions Made', '', '## Patterns Learned', '', '## Next Session', '',
+    ].join('\n');
+
+    engine.writeNote(notePath, content);
+    engine.rebuild();
+    output(jsonMode ? { action: 'created', file: fileName } : `Daily note created: ${fileName}`);
+  },
+
+  template() {
+    const templateType = commandArgs[0];
+    const title = commandArgs.slice(1).join(' ');
+    if (!templateType || !title) error('Usage: zed template <type> <title>\nTypes: decision, architecture, postmortem, pattern, daily');
+
+    const templateMap = {
+      decision: 'decision-record.md', architecture: 'architecture-doc.md',
+      postmortem: 'bug-postmortem.md', pattern: 'pattern-library.md', daily: 'daily-session.md',
+    };
+    const subdirMap = {
+      decision: 'decisions', architecture: 'architecture', postmortem: 'decisions',
+      pattern: 'patterns', daily: 'sessions',
+    };
+
+    if (!templateMap[templateType]) error(`Unknown template: ${templateType}. Use: ${Object.keys(templateMap).join(', ')}`);
+
+    const pluginRoot = path.resolve(__dirname, '..');
+    const templatePath = path.join(pluginRoot, 'templates', templateMap[templateType]);
+    if (!fs.existsSync(templatePath)) error(`Template file not found: ${templateMap[templateType]}`);
+
+    let content = fs.readFileSync(templatePath, 'utf-8');
+    const date = new Date().toISOString().split('T')[0];
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    content = content.replace(/\{\{TITLE\}\}/g, title).replace(/\{\{DATE\}\}/g, date);
+
+    const fileName = `${subdirMap[templateType]}/${date}-${slug}.md`;
+    const notePath = path.join(VAULT_DIR, fileName);
+    const engine = getEngine();
+    engine.writeNote(notePath, content);
+    engine.rebuild();
+    output(jsonMode ? { action: 'created', template: templateType, file: fileName } : `Created ${templateType}: ${fileName}`);
+  },
+
+  // --- Maintenance ---
+
+  rebuild() {
+    const start = Date.now();
+    const engine = getEngine();
+    const result = engine.rebuild();
+    const elapsed = Date.now() - start;
+    output(jsonMode
+      ? { ...result, elapsed_ms: elapsed }
+      : `Rebuilt in ${elapsed}ms — ${result.nodeCount} nodes, ${result.edgeCount} edges`
+    );
+  },
+
+  import() {
+    const sourceDir = commandArgs[0];
+    const subdir = commandArgs[1] || 'imported';
+    if (!sourceDir) error('Usage: zed import <source_dir> [subdirectory]');
+
+    const resolvedSource = path.resolve(sourceDir);
+    if (!fs.existsSync(resolvedSource)) error(`Directory not found: ${resolvedSource}`);
+
+    const fileLayerMod = require('../core/file-layer.cjs');
+    const sourceFiles = fileLayerMod.listNotes(resolvedSource);
+    if (sourceFiles.length === 0) return output(jsonMode ? { imported: 0, skipped: 0 } : `No .md files in ${resolvedSource}`);
+
+    const targetDir = path.join(VAULT_DIR, subdir);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    let imported = 0, skipped = 0;
+    for (const sourceFile of sourceFiles) {
+      const relativeName = path.relative(resolvedSource, sourceFile);
+      const targetFile = path.join(targetDir, relativeName);
+      if (fs.existsSync(targetFile)) { skipped++; continue; }
+
+      const targetParent = path.dirname(targetFile);
+      if (!fs.existsSync(targetParent)) fs.mkdirSync(targetParent, { recursive: true });
+
+      let content = fs.readFileSync(sourceFile, 'utf-8');
+      const { frontmatter } = fileLayerMod.parseFrontmatter(content);
+      if (Object.keys(frontmatter).length === 0) {
+        const title = path.basename(sourceFile, '.md');
+        const date = new Date().toISOString().split('T')[0];
+        content = `---\ntitle: "${title}"\ndate: ${date}\ntype: imported\ntags: [imported]\n---\n\n${content}`;
+      }
+      fs.writeFileSync(targetFile, content, 'utf-8');
+      imported++;
+    }
+
+    const engine = getEngine();
+    engine.rebuild();
+    output(jsonMode ? { imported, skipped, source: resolvedSource, target: targetDir } : `Imported ${imported} files (${skipped} skipped)`);
+  },
+
+  'suggest-links'() {
+    const notePath = commandArgs[0];
+    const limit = parseInt(commandArgs[1]) || 10;
+    const engine = getEngine();
+    const allNotes = engine.listNotes();
+    const noteTitles = new Map();
+
+    for (const np of allNotes) {
+      try {
+        const note = engine.readNote(np);
+        noteTitles.set(note.title.toLowerCase(), { path: np, title: note.title });
+      } catch {}
+    }
+
+    const suggestions = [];
+    const notesToCheck = notePath ? [resolveNotePath(notePath)].filter(Boolean) : allNotes;
+
+    for (const np of notesToCheck) {
+      if (suggestions.length >= limit) break;
+      try {
+        const note = engine.readNote(np);
+        const existingLinks = new Set(note.wikilinks.map(l => l.target.toLowerCase()));
+        for (const [titleLower, target] of noteTitles) {
+          if (suggestions.length >= limit) break;
+          if (target.path === np) continue;
+          if (existingLinks.has(titleLower)) continue;
+          const bodyLower = note.body.toLowerCase();
+          if (bodyLower.includes(titleLower) && titleLower.length > 3) {
+            suggestions.push({ from: note.title, to: target.title });
+          }
+        }
+      } catch {}
+    }
+
+    if (jsonMode) return output({ suggestions });
+    if (suggestions.length === 0) return output('No unlinked mentions found');
+    const lines = suggestions.map((s, i) => `  ${i + 1}. "${s.from}" → link to "${s.to}"`);
+    output(`Suggested Links:\n${lines.join('\n')}`);
+  },
+
+  timeline() {
+    const typeFilter = commandArgs[0] || '';
+    const limit = parseInt(commandArgs[1]) || 20;
+    const engine = getEngine();
+    const notes = engine.listNotes();
+    const entries = [];
+
+    for (const notePath of notes) {
+      try {
+        const note = engine.readNote(notePath);
+        const type = note.frontmatter.type || 'note';
+        if (typeFilter && type !== typeFilter) continue;
+        entries.push({ title: note.title, type, date: note.frontmatter.date || 'undated' });
+      } catch {}
+    }
+
+    entries.sort((a, b) => {
+      if (a.date === 'undated') return 1;
+      if (b.date === 'undated') return -1;
+      return b.date.localeCompare(a.date);
+    });
+
+    const limited = entries.slice(0, limit);
+    if (jsonMode) return output({ entries: limited });
+    if (limited.length === 0) return output('No entries');
+    const badge = { decision: 'D', daily: 'S', pattern: 'P', postmortem: 'B', architecture: 'A', note: 'N' };
+    const lines = limited.map(e => `  ${e.date} [${badge[e.type] || 'N'}] ${e.title}`);
+    output(`Timeline:\n${lines.join('\n')}\n  [D]ecision [S]ession [P]attern [B]ug [A]rchitecture [N]ote`);
+  },
+
+  graph() {
+    const maxNodes = parseInt(commandArgs[0]) || 50;
+    const engine = getEngine();
+    const stats = engine.getStats();
+    const hubs = engine.findHubs(maxNodes);
+    const clusters = engine.getClusters();
+    const orphans = engine.getOrphans();
+
+    const nodes = [];
+    const edges = [];
+
+    for (const hub of hubs.slice(0, maxNodes)) {
+      nodes.push({ id: hub.id, title: hub.title, type: hub.type || 'note', backlinks: hub.backlink_count });
+      const outlinks = engine.getOutlinks(hub.path);
+      for (const link of outlinks) {
+        edges.push({ from: hub.title, to: link.target_title, label: link.link_text });
+      }
+    }
+
+    output({
+      stats,
+      nodes,
+      edges,
+      clusters: clusters.map((c, i) => ({ id: i + 1, size: c.length, members: c.map(n => n.title) })),
+      orphans: orphans.map(o => o.title),
+    });
+  },
+
+  promote() {
+    const notePath = commandArgs[0];
+    const subdir = commandArgs[1] || 'patterns';
+    if (!notePath) error('Usage: zed promote <note> [subdir]');
+
+    const resolved = resolveNotePath(notePath);
+    if (!resolved) error(`Note not found: ${notePath}`);
+
+    const engine = getEngine();
+    const note = engine.readNote(resolved);
+    const targetDir = path.join(GLOBAL_DIR, subdir);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    const targetFile = path.join(targetDir, path.basename(resolved));
+    if (fs.existsSync(targetFile)) error(`Already exists in global vault: ${path.basename(resolved)}`);
+
+    fs.writeFileSync(targetFile, note.content, 'utf-8');
+    const globalEngine = getGlobalEngine();
+    globalEngine.rebuild();
+    output(jsonMode
+      ? { action: 'promoted', file: `${subdir}/${path.basename(resolved)}` }
+      : `Promoted to global: ${subdir}/${path.basename(resolved)}`
+    );
+  },
+
+  'global-search'() {
+    const query = commandArgs.join(' ');
+    if (!query) error('Usage: zed global-search <query>');
+
+    const engine = getEngine();
+    const globalEngine = getGlobalEngine();
+    const projectResults = engine.searchNotes(query, { limit: 10 });
+    const globalResults = globalEngine.searchNotes(query, { limit: 10 });
+
+    if (jsonMode) return output({
+      query,
+      project: projectResults.map(r => ({ title: r.node.title, score: r.boostedScore })),
+      global: globalResults.map(r => ({ title: r.node.title, score: r.boostedScore })),
+    });
+
+    const lines = [];
+    if (projectResults.length > 0) {
+      lines.push('Project:');
+      projectResults.forEach((r, i) => lines.push(`  ${i + 1}. ${r.node.title} (${r.boostedScore.toFixed(3)})`));
+    }
+    if (globalResults.length > 0) {
+      lines.push('Global:');
+      globalResults.forEach((r, i) => lines.push(`  ${i + 1}. ${r.node.title} (${r.boostedScore.toFixed(3)})`));
+    }
+    if (lines.length === 0) return output(`No results for "${query}"`);
+    output(lines.join('\n'));
+  },
+
+  license() {
+    const action = commandArgs[0] || 'status';
+    const { LicenseManager } = require('../core/license.cjs');
+    const lm = new LicenseManager(DATA_DIR);
+
+    if (action === 'activate') {
+      const key = commandArgs[1];
+      if (!key) error('Usage: zed license activate <key>');
+      const result = lm.activate(key);
+      output(jsonMode ? result : (result.success ? `License activated: ${result.message}` : `Failed: ${result.message}`));
+      return;
+    }
+
+    const status = lm.getStatus();
+    if (jsonMode) return output(status);
+    const lines = [`Status: ${status.valid ? 'Active' : 'Inactive'}`, `Tier: ${status.tier}`];
+    if (status.daysRemaining !== null) lines.push(`Days remaining: ${status.daysRemaining}`);
+    output(lines.join('  |  '));
+  },
+
+  overview() {
+    const engine = getEngine();
+    const stats = engine.getStats();
+
+    if (stats.nodeCount === 0) {
+      return output('ZED Vault: Empty\n  Get started: zed daily, zed template decision "My First Decision"');
+    }
+
+    const hubs = engine.findHubs(5);
+    const orphans = engine.getOrphans();
+    const clusters = engine.getClusters();
+
+    // Health score (inline)
+    const connectivityRatio = stats.edgeCount / stats.nodeCount;
+    const orphanRatio = stats.orphanCount / stats.nodeCount;
+    let score = 50 + Math.min(20, connectivityRatio * 10) - Math.min(20, orphanRatio * 30);
+    score += Math.min(15, hubs.filter(h => h.backlink_count > 0).length * 3);
+    score += 15 - (clusters.length > 1 ? Math.min(15, (clusters.length - 1) * 2) : 0);
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    let grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F';
+
+    if (jsonMode) return output({ stats, score, grade, hubs: hubs.map(h => h.title), orphanCount: orphans.length, clusterCount: clusters.length });
+
+    const lines = [
+      `ZED Vault Overview`,
+      `  Health: ${grade} (${score}/100)  |  Notes: ${stats.nodeCount}  |  Connections: ${stats.edgeCount}  |  Orphans: ${stats.orphanCount}`,
+    ];
+    if (hubs.length > 0) lines.push(`  Top hubs: ${hubs.map(h => h.title).join(', ')}`);
+    if (clusters.length > 1) lines.push(`  Clusters: ${clusters.length}`);
+    output(lines.join('\n'));
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Dispatch
+// ---------------------------------------------------------------------------
+
+const handler = commands[command];
+if (!handler) {
+  console.error(`Unknown command: ${command}`);
+  printHelp();
+  process.exit(1);
+}
+
+try {
+  handler();
+} catch (err) {
+  error(err.message);
+} finally {
+  // Clean up
+  try { if (_engine) _engine.close(); } catch {}
+  try { if (_globalEngine) _globalEngine.close(); } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// Help
+// ---------------------------------------------------------------------------
+
+function printHelp() {
+  console.log(`
+ZED Knowledge Engine CLI
+
+Usage: zed <command> [args] [--json]
+
+Graph:
+  backlinks <note>          What links to this note
+  related <note> [hops]     Related notes within N hops (default: 2)
+  hubs [limit]              Most-connected nodes (default: 10)
+  clusters                  Knowledge clusters
+  path <from> <to>          Shortest path between notes
+
+Info:
+  stats                     Vault statistics
+  health                    Vault quality score
+  tags [tag]                List tags or browse by tag
+  recent [limit]            Recently modified notes
+  overview                  Full dashboard
+  timeline [type] [limit]   Chronological view
+
+Content:
+  daily [text]              Daily session note (create/append/read)
+  template <type> <title>   Create from template
+  snippets <query>          Search with context snippets
+  suggest-links [note]      Find unlinked mentions
+
+Maintenance:
+  rebuild                   Rebuild graph index
+  import <dir> [subdir]     Import markdown files
+  promote <note> [subdir]   Promote to global vault
+  global-search <query>     Search project + global vaults
+  license [status|activate] License management
+  graph [max_nodes]         Export graph data as JSON
+
+Options:
+  --json                    Output as JSON (for machine parsing)
+  --help                    Show this help
+`);
+}

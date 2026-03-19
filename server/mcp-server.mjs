@@ -1,8 +1,22 @@
 /**
- * mcp-server.mjs — ZED Knowledge Engine MCP Server
+ * mcp-server.mjs — ZED Knowledge Engine MCP Server (Slim)
  *
- * Exposes the ZED knowledge engine as MCP tools for Claude Code.
- * Powered by the Nelson Muntz Protocol.
+ * Only 4 MCP tools — the ones Claude needs structured access to during
+ * conversations. Everything else is available via the `zed` CLI (bin/zed),
+ * which Claude calls through Bash. This saves ~3,500 tokens/turn.
+ *
+ * MCP Tools:
+ *   1. zed_search    — Graph-boosted full-text search
+ *   2. zed_read_note — Read a knowledge note
+ *   3. zed_write_note — Write/update a note
+ *   4. zed_decide    — Create a decision record (ADR)
+ *
+ * Everything else: `zed <command>` via CLI
+ *   zed backlinks, zed hubs, zed clusters, zed path, zed stats,
+ *   zed health, zed tags, zed recent, zed overview, zed daily,
+ *   zed template, zed rebuild, zed import, zed promote, zed graph,
+ *   zed timeline, zed suggest-links, zed snippets, zed global-search,
+ *   zed license
  *
  * Transport: stdio (standard for Claude Code plugins)
  */
@@ -26,10 +40,6 @@ const DATA_DIR = process.env.CLAUDE_PLUGIN_DATA || path.join(process.env.HOME, '
 const VAULT_DIR = path.join(DATA_DIR, 'vault');
 const DB_PATH = path.join(DATA_DIR, 'knowledge.db');
 
-// Global vault (cross-project patterns and learnings)
-const GLOBAL_DIR = path.join(process.env.HOME, '.zed', 'global');
-const GLOBAL_DB_PATH = path.join(process.env.HOME, '.zed', 'global.db');
-
 // Ensure data directories exist
 for (const dir of [
   VAULT_DIR,
@@ -37,19 +47,9 @@ for (const dir of [
   path.join(VAULT_DIR, 'patterns'),
   path.join(VAULT_DIR, 'sessions'),
   path.join(VAULT_DIR, 'architecture'),
-  GLOBAL_DIR,
-  path.join(GLOBAL_DIR, 'patterns'),
-  path.join(GLOBAL_DIR, 'learnings'),
 ]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
-
-// ---------------------------------------------------------------------------
-// Initialize License Manager
-// ---------------------------------------------------------------------------
-
-const { LicenseManager } = require('../core/license.cjs');
-const license = new LicenseManager(DATA_DIR);
 
 // ---------------------------------------------------------------------------
 // Initialize Engine
@@ -60,15 +60,7 @@ const engine = new KnowledgeEngine({
   dbPath: DB_PATH,
 });
 
-// Build index on startup (fast for empty vaults, necessary for populated ones)
 engine.build();
-
-// Initialize global engine (cross-project knowledge)
-const globalEngine = new KnowledgeEngine({
-  vaultPath: GLOBAL_DIR,
-  dbPath: GLOBAL_DB_PATH,
-});
-globalEngine.build();
 
 // ---------------------------------------------------------------------------
 // MCP Server
@@ -76,29 +68,29 @@ globalEngine.build();
 
 const server = new McpServer({
   name: 'zed-knowledge-engine',
-  version: '6.0.0',
+  version: '6.1.0',
 });
 
 // ---------------------------------------------------------------------------
-// ZED Tool 1: ke_search — Graph-boosted full-text search
+// Tool 1: zed_search — Graph-boosted full-text search
 // ---------------------------------------------------------------------------
 
 server.tool(
   'zed_search',
   {
-    query: z.string().describe('Search query (supports FTS5 operators: AND, OR, NOT, NEAR)'),
-    limit: z.number().int().positive().default(10).describe('Maximum number of results'),
+    query: z.string().describe('Search query (supports FTS5: AND, OR, NOT, NEAR)'),
+    limit: z.number().int().positive().default(10).describe('Max results'),
   },
   async ({ query, limit }) => {
     try {
       const results = engine.searchNotes(query, { limit });
       if (results.length === 0) {
-        return { content: [{ type: 'text', text: `No results found for "${query}"` }] };
+        return { content: [{ type: 'text', text: `No results for "${query}"` }] };
       }
       const formatted = results.map((r, i) =>
         `${i + 1}. **${r.node.title}** (score: ${r.boostedScore.toFixed(3)}, backlinks: ${r.backlinkCount})\n   Path: ${r.node.path}`
       ).join('\n');
-      return { content: [{ type: 'text', text: `## Search Results for "${query}"\n\n${formatted}` }] };
+      return { content: [{ type: 'text', text: `## Search: "${query}"\n\n${formatted}` }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Search error: ${err.message}` }], isError: true };
     }
@@ -106,255 +98,13 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// ZED Tool 1b: ke_search_snippets — Search with context snippets
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_search_snippets',
-  {
-    query: z.string().describe('Search query'),
-    limit: z.number().int().positive().default(5).describe('Maximum number of results'),
-  },
-  async ({ query, limit }) => {
-    try {
-      const results = engine.searchWithSnippets(query, { limit });
-      if (results.length === 0) {
-        return { content: [{ type: 'text', text: `No results found for "${query}"` }] };
-      }
-      const formatted = results.map((r, i) => {
-        const snippetText = r.snippets.length > 0
-          ? r.snippets.map(s => `> ${s.replace(/\n/g, '\n> ')}`).join('\n\n')
-          : '> _No matching snippets_';
-        return `### ${i + 1}. ${r.node.title} (score: ${r.score.toFixed(3)})\n\n${snippetText}`;
-      }).join('\n\n---\n\n');
-      return { content: [{ type: 'text', text: `## Search Snippets: "${query}"\n\n${formatted}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 1c: ke_template — Create a note from a template
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_template',
-  {
-    template_type: z.enum(['decision', 'architecture', 'postmortem', 'pattern', 'daily']).describe('Template type to use'),
-    title: z.string().describe('Title for the new note'),
-  },
-  async ({ template_type, title }) => {
-    try {
-      const templateMap = {
-        decision: 'decision-record.md',
-        architecture: 'architecture-doc.md',
-        postmortem: 'bug-postmortem.md',
-        pattern: 'pattern-library.md',
-        daily: 'daily-session.md',
-      };
-
-      const subdirMap = {
-        decision: 'decisions',
-        architecture: 'architecture',
-        postmortem: 'decisions',
-        pattern: 'patterns',
-        daily: 'sessions',
-      };
-
-      const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-      const templatePath = path.join(pluginRoot, 'templates', templateMap[template_type]);
-
-      if (!fs.existsSync(templatePath)) {
-        return { content: [{ type: 'text', text: `Template not found: ${template_type}` }], isError: true };
-      }
-
-      let content = fs.readFileSync(templatePath, 'utf-8');
-      const date = new Date().toISOString().split('T')[0];
-      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-      // Replace template variables
-      content = content.replace(/\{\{TITLE\}\}/g, title);
-      content = content.replace(/\{\{DATE\}\}/g, date);
-
-      const fileName = `${subdirMap[template_type]}/${date}-${slug}.md`;
-      const notePath = path.join(VAULT_DIR, fileName);
-      engine.writeNote(notePath, content);
-      engine.rebuild();
-
-      return { content: [{ type: 'text', text: `Created from ${template_type} template: ${fileName}\nTitle: ${title}\nEdit the note to fill in the details.` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 2: ke_backlinks — Get backlinks pointing to a note
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_backlinks',
-  {
-    note_path: z.string().describe('Absolute path to the note, or title to search for'),
-  },
-  async ({ note_path }) => {
-    try {
-      const resolved = resolveNotePath(note_path);
-      if (!resolved) return { content: [{ type: 'text', text: `Note not found: ${note_path}` }], isError: true };
-      const backlinks = engine.getBacklinks(resolved);
-      if (backlinks.length === 0) {
-        return { content: [{ type: 'text', text: `No backlinks found for "${path.basename(resolved)}"` }] };
-      }
-      const formatted = backlinks.map(b =>
-        `- **${b.source_title}** → "${b.link_text}"\n  Context: ${b.context}`
-      ).join('\n');
-      return { content: [{ type: 'text', text: `## Backlinks to ${path.basename(resolved)}\n\n${formatted}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 3: ke_related — Find related notes within N hops
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_related',
-  {
-    note_path: z.string().describe('Absolute path to the note, or title to search for'),
-    max_hops: z.number().int().min(1).max(5).default(2).describe('Maximum number of hops in the graph'),
-  },
-  async ({ note_path, max_hops }) => {
-    try {
-      const resolved = resolveNotePath(note_path);
-      if (!resolved) return { content: [{ type: 'text', text: `Note not found: ${note_path}` }], isError: true };
-      const related = engine.getRelated(resolved, max_hops);
-      if (related.length === 0) {
-        return { content: [{ type: 'text', text: `No related notes found within ${max_hops} hops` }] };
-      }
-      const formatted = related.map(r =>
-        `- **${r.node.title}** (${r.distance} hop${r.distance > 1 ? 's' : ''})`
-      ).join('\n');
-      return { content: [{ type: 'text', text: `## Related to ${path.basename(resolved)} (within ${max_hops} hops)\n\n${formatted}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 4: ke_hubs — Find most-connected knowledge nodes
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_hubs',
-  {
-    limit: z.number().int().positive().default(10).describe('Number of hubs to return'),
-  },
-  async ({ limit }) => {
-    try {
-      const hubs = engine.findHubs(limit);
-      if (hubs.length === 0) {
-        return { content: [{ type: 'text', text: 'No hubs found (empty knowledge graph)' }] };
-      }
-      const formatted = hubs.map((h, i) =>
-        `${i + 1}. **${h.title}** — ${h.backlink_count} backlinks`
-      ).join('\n');
-      return { content: [{ type: 'text', text: `## Knowledge Hubs\n\n${formatted}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 5: ke_clusters — Detect knowledge clusters
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_clusters',
-  {},
-  async () => {
-    try {
-      const clusters = engine.getClusters();
-      if (clusters.length === 0) {
-        return { content: [{ type: 'text', text: 'No clusters found (empty knowledge graph)' }] };
-      }
-      const formatted = clusters.map((c, i) =>
-        `### Cluster ${i + 1} (${c.length} notes)\n${c.map(n => `- ${n.title}`).join('\n')}`
-      ).join('\n\n');
-      return { content: [{ type: 'text', text: `## Knowledge Clusters\n\n${formatted}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 6: ke_shortest_path — Find connection between two notes
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_shortest_path',
-  {
-    from_note: z.string().describe('Source note path or title'),
-    to_note: z.string().describe('Target note path or title'),
-  },
-  async ({ from_note, to_note }) => {
-    try {
-      const fromResolved = resolveNotePath(from_note);
-      const toResolved = resolveNotePath(to_note);
-      if (!fromResolved) return { content: [{ type: 'text', text: `Source note not found: ${from_note}` }], isError: true };
-      if (!toResolved) return { content: [{ type: 'text', text: `Target note not found: ${to_note}` }], isError: true };
-      const sp = engine.shortestPath(fromResolved, toResolved);
-      if (!sp) {
-        return { content: [{ type: 'text', text: `No path found between "${from_note}" and "${to_note}"` }] };
-      }
-      const formatted = sp.map(n => n.title).join(' → ');
-      return { content: [{ type: 'text', text: `## Path: ${formatted}\n\n${sp.length - 1} hops` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 7: ke_stats — Vault statistics
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_stats',
-  {},
-  async () => {
-    try {
-      const stats = engine.getStats();
-      const text = [
-        '## Knowledge Engine Stats',
-        '',
-        `- **Notes**: ${stats.nodeCount}`,
-        `- **Connections**: ${stats.edgeCount}`,
-        `- **Orphans**: ${stats.orphanCount}`,
-        `- **Clusters**: ${stats.clusterCount}`,
-        `- **Vault path**: ${VAULT_DIR}`,
-        `- **Database**: ${DB_PATH}`,
-      ].join('\n');
-      return { content: [{ type: 'text', text }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 8: ke_read_note — Read a knowledge note
+// Tool 2: zed_read_note — Read a knowledge note
 // ---------------------------------------------------------------------------
 
 server.tool(
   'zed_read_note',
   {
-    note_path: z.string().describe('Absolute path or title of the note to read'),
+    note_path: z.string().describe('Absolute path, vault-relative path, or title of the note'),
   },
   async ({ note_path }) => {
     try {
@@ -366,7 +116,6 @@ server.tool(
         '',
         `**Path**: ${note.path}`,
         `**Tags**: ${JSON.stringify(note.frontmatter.tags || [])}`,
-        `**Word count**: ${note.wordCount}`,
         `**Wikilinks**: ${note.wikilinks.map(l => l.target).join(', ') || 'none'}`,
         '',
         '---',
@@ -381,40 +130,39 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// ZED Tool 9: ke_write_note — Write/update a knowledge note
+// Tool 3: zed_write_note — Write or update a note
 // ---------------------------------------------------------------------------
 
 server.tool(
   'zed_write_note',
   {
-    file_name: z.string().describe('Filename (e.g., "my-decision.md") or relative path within vault (e.g., "decisions/auth-strategy.md")'),
+    file_name: z.string().describe('Filename or vault-relative path (e.g., "decisions/auth-strategy.md")'),
     content: z.string().describe('Full markdown content including frontmatter'),
   },
   async ({ file_name, content }) => {
     try {
       const notePath = path.join(VAULT_DIR, file_name);
       engine.writeNote(notePath, content);
-      // Rebuild to pick up new note in graph
       engine.rebuild();
-      return { content: [{ type: 'text', text: `Note written: ${notePath}\nGraph rebuilt with new note.` }] };
+      return { content: [{ type: 'text', text: `Note written: ${file_name}\nGraph rebuilt.` }] };
     } catch (err) {
-      return { content: [{ type: 'text', text: `Error writing note: ${err.message}` }], isError: true };
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
     }
   }
 );
 
 // ---------------------------------------------------------------------------
-// ZED Tool 10: ke_decide — Create a decision record
+// Tool 4: zed_decide — Create a decision record (ADR)
 // ---------------------------------------------------------------------------
 
 server.tool(
   'zed_decide',
   {
-    title: z.string().describe('Title of the decision (e.g., "Use JWT for authentication")'),
+    title: z.string().describe('Decision title (e.g., "Use JWT for auth")'),
     context: z.string().describe('What is the context or problem?'),
     decision: z.string().describe('What was decided?'),
-    alternatives: z.string().default('').describe('What alternatives were considered?'),
-    consequences: z.string().default('').describe('What are the consequences of this decision?'),
+    alternatives: z.string().default('').describe('Alternatives considered'),
+    consequences: z.string().default('').describe('Consequences of this decision'),
   },
   async ({ title, context, decision, alternatives, consequences }) => {
     try {
@@ -426,7 +174,7 @@ server.tool(
         `title: "${title}"`,
         `date: ${date}`,
         'type: decision',
-        `tags: [decision]`,
+        'tags: [decision]',
         'status: accepted',
         '---',
         '',
@@ -449,7 +197,7 @@ server.tool(
       const notePath = path.join(VAULT_DIR, fileName);
       engine.writeNote(notePath, content);
       engine.rebuild();
-      return { content: [{ type: 'text', text: `Decision record created: ${fileName}\nTitle: ${title}\nGraph rebuilt.` }] };
+      return { content: [{ type: 'text', text: `Decision recorded: ${fileName}\nTitle: ${title}` }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
     }
@@ -457,726 +205,34 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// ZED Tool 11: ke_daily — Get or create today's session note
+// Helper: Resolve note path
 // ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_daily',
-  {
-    append: z.string().default('').describe('Optional text to append to today\'s session note'),
-  },
-  async ({ append }) => {
-    try {
-      const date = new Date().toISOString().split('T')[0];
-      const fileName = `sessions/${date}.md`;
-      const notePath = path.join(VAULT_DIR, fileName);
-
-      if (fs.existsSync(notePath)) {
-        // Read existing
-        if (append) {
-          const existing = fs.readFileSync(notePath, 'utf-8');
-          fs.writeFileSync(notePath, existing + '\n' + append + '\n', 'utf-8');
-          engine.rebuild();
-          return { content: [{ type: 'text', text: `Appended to ${fileName}` }] };
-        }
-        const note = engine.readNote(notePath);
-        return { content: [{ type: 'text', text: note.content }] };
-      }
-
-      // Create new daily note
-      const content = [
-        '---',
-        `title: "Session ${date}"`,
-        `date: ${date}`,
-        'type: daily',
-        'tags: [session, daily]',
-        '---',
-        '',
-        `# Session Notes — ${date}`,
-        '',
-        '## Work Done',
-        append || '- _Session started_',
-        '',
-        '## Decisions Made',
-        '',
-        '## Patterns Learned',
-        '',
-        '## Next Session',
-        '',
-      ].join('\n');
-
-      engine.writeNote(notePath, content);
-      engine.rebuild();
-      return { content: [{ type: 'text', text: `Daily note created: ${fileName}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 12: ke_rebuild — Rebuild graph index
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_rebuild',
-  {},
-  async () => {
-    try {
-      const start = Date.now();
-      const result = engine.rebuild();
-      const elapsed = Date.now() - start;
-      return {
-        content: [{
-          type: 'text',
-          text: `Graph rebuilt in ${elapsed}ms\nNodes: ${result.nodeCount}\nEdges: ${result.edgeCount}`,
-        }],
-      };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Rebuild error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 13: ke_import — Import markdown files from a directory
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_import',
-  {
-    source_dir: z.string().describe('Directory path to scan for .md files to import'),
-    subdirectory: z.string().default('imported').describe('Vault subdirectory to place imported files in'),
-  },
-  async ({ source_dir, subdirectory }) => {
-    try {
-      const resolvedSource = path.resolve(source_dir);
-      if (!fs.existsSync(resolvedSource)) {
-        return { content: [{ type: 'text', text: `Directory not found: ${resolvedSource}` }], isError: true };
-      }
-
-      const fileLayerMod = require('../core/file-layer.cjs');
-      const sourceFiles = fileLayerMod.listNotes(resolvedSource);
-
-      if (sourceFiles.length === 0) {
-        return { content: [{ type: 'text', text: `No .md files found in ${resolvedSource}` }] };
-      }
-
-      const targetDir = path.join(VAULT_DIR, subdirectory);
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-
-      let imported = 0;
-      let skipped = 0;
-      const importedFiles = [];
-
-      for (const sourceFile of sourceFiles) {
-        const relativeName = path.relative(resolvedSource, sourceFile);
-        const targetFile = path.join(targetDir, relativeName);
-        const targetParent = path.dirname(targetFile);
-
-        // Don't overwrite existing files
-        if (fs.existsSync(targetFile)) {
-          skipped++;
-          continue;
-        }
-
-        if (!fs.existsSync(targetParent)) {
-          fs.mkdirSync(targetParent, { recursive: true });
-        }
-
-        // Read source, add frontmatter if missing
-        let content = fs.readFileSync(sourceFile, 'utf-8');
-        const { frontmatter } = fileLayerMod.parseFrontmatter(content);
-
-        if (Object.keys(frontmatter).length === 0) {
-          const title = path.basename(sourceFile, '.md');
-          const date = new Date().toISOString().split('T')[0];
-          content = `---\ntitle: "${title}"\ndate: ${date}\ntype: imported\ntags: [imported]\n---\n\n${content}`;
-        }
-
-        fs.writeFileSync(targetFile, content, 'utf-8');
-        imported++;
-        importedFiles.push(relativeName);
-      }
-
-      // Rebuild graph
-      engine.rebuild();
-
-      const text = [
-        `## Import Complete`,
-        '',
-        `- **Imported**: ${imported} files`,
-        `- **Skipped**: ${skipped} (already exist)`,
-        `- **Source**: ${resolvedSource}`,
-        `- **Destination**: ${targetDir}`,
-        '',
-        imported > 0 ? `### Imported Files\n${importedFiles.map(f => `- ${f}`).join('\n')}` : '',
-      ].join('\n');
-
-      return { content: [{ type: 'text', text }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Import error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 14: ke_license — License management
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_license',
-  {
-    action: z.enum(['status', 'activate']).describe('Action: "status" to check license, "activate" to activate a key'),
-    key: z.string().default('').describe('License key (required for activate action)'),
-  },
-  async ({ action, key }) => {
-    try {
-      if (action === 'activate') {
-        if (!key) {
-          return { content: [{ type: 'text', text: 'Please provide a license key. Format: KE6-XXXX-XXXX-XXXX-XXXX' }], isError: true };
-        }
-        const result = license.activate(key);
-        return { content: [{ type: 'text', text: result.success ? `License activated! ${result.message}` : `Activation failed: ${result.message}` }] };
-      }
-
-      // Status
-      const status = license.getStatus();
-      const lines = [
-        '## License Status',
-        '',
-        `- **Status**: ${status.valid ? 'Active' : 'Inactive'}`,
-        `- **Tier**: ${status.tier}`,
-        `- **Reason**: ${status.reason}`,
-      ];
-      if (status.daysRemaining !== null) {
-        lines.push(`- **Days remaining**: ${status.daysRemaining}`);
-      }
-      if (status.key) {
-        lines.push(`- **Key**: ${status.key.slice(0, 8)}...${status.key.slice(-4)}`);
-      }
-      if (!status.valid) {
-        lines.push('', 'Activate with: `/ke:activate KE6-XXXX-XXXX-XXXX-XXXX`');
-      }
-      return { content: [{ type: 'text', text: lines.join('\n') }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 14: ke_graph_data — Export graph data for visualization
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_graph_data',
-  {
-    filter_type: z.string().default('').describe('Filter nodes by type (e.g., "decision", "pattern", "daily"). Empty for all.'),
-    max_nodes: z.number().int().positive().default(50).describe('Maximum number of nodes to include'),
-  },
-  async ({ filter_type, max_nodes }) => {
-    try {
-      const stats = engine.getStats();
-      const hubs = engine.findHubs(max_nodes);
-      const clusters = engine.getClusters();
-      const orphans = engine.getOrphans();
-
-      // Build nodes list with metadata
-      const nodes = [];
-      const edgesOut = [];
-
-      for (const hub of hubs.slice(0, max_nodes)) {
-        // Parse tags from JSON string
-        let tags = [];
-        try { tags = JSON.parse(hub.tags || '[]'); } catch {}
-
-        if (filter_type && hub.type !== filter_type && !tags.includes(filter_type)) continue;
-
-        nodes.push({
-          id: hub.id,
-          title: hub.title,
-          type: hub.type || 'note',
-          backlinks: hub.backlink_count,
-          path: hub.path,
-        });
-
-        // Get outlinks for this node
-        const outlinks = engine.getOutlinks(hub.path);
-        for (const link of outlinks) {
-          edgesOut.push({
-            from: hub.title,
-            to: link.target_title,
-            label: link.link_text,
-          });
-        }
-      }
-
-      const data = {
-        stats,
-        nodes,
-        edges: edgesOut,
-        clusters: clusters.map((c, i) => ({
-          id: i + 1,
-          size: c.length,
-          members: c.map(n => n.title),
-        })),
-        orphans: orphans.map(o => o.title),
-      };
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        }],
-      };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 16: ke_health — Knowledge vault health score and recommendations
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_health',
-  {},
-  async () => {
-    try {
-      const stats = engine.getStats();
-      const hubs = engine.findHubs(100);
-      const orphans = engine.getOrphans();
-      const clusters = engine.getClusters();
-
-      if (stats.nodeCount === 0) {
-        return { content: [{ type: 'text', text: '## Vault Health: Empty\n\nNo notes yet. Start with `/ke:decide` or `/ke:daily` to begin building your knowledge graph.' }] };
-      }
-
-      // Calculate health metrics
-      const connectivityRatio = stats.nodeCount > 0 ? stats.edgeCount / stats.nodeCount : 0;
-      const orphanRatio = stats.nodeCount > 0 ? stats.orphanCount / stats.nodeCount : 0;
-      const hubsWithLinks = hubs.filter(h => h.backlink_count > 0).length;
-      const avgBacklinks = hubs.length > 0
-        ? hubs.reduce((sum, h) => sum + h.backlink_count, 0) / hubs.length
-        : 0;
-
-      // Score (0-100)
-      let score = 50; // base
-
-      // Connectivity bonus (+20 max)
-      score += Math.min(20, connectivityRatio * 10);
-
-      // Orphan penalty (-20 max)
-      score -= Math.min(20, orphanRatio * 30);
-
-      // Hub bonus (+15 max) — having well-connected hubs is good
-      score += Math.min(15, hubsWithLinks * 3);
-
-      // Cluster bonus (+15 max) — fewer clusters = more connected
-      const clusterPenalty = clusters.length > 1 ? Math.min(15, (clusters.length - 1) * 2) : 0;
-      score += 15 - clusterPenalty;
-
-      score = Math.max(0, Math.min(100, Math.round(score)));
-
-      // Grade
-      let grade, emoji;
-      if (score >= 90) { grade = 'A'; emoji = 'Excellent'; }
-      else if (score >= 75) { grade = 'B'; emoji = 'Good'; }
-      else if (score >= 60) { grade = 'C'; emoji = 'Fair'; }
-      else if (score >= 40) { grade = 'D'; emoji = 'Needs Work'; }
-      else { grade = 'F'; emoji = 'Getting Started'; }
-
-      // Recommendations
-      const recs = [];
-      if (orphanRatio > 0.3) recs.push('Connect orphan notes: ' + orphans.slice(0, 3).map(o => o.title).join(', '));
-      if (connectivityRatio < 1) recs.push('Add more [[wikilinks]] between related notes');
-      if (clusters.length > 3) recs.push('Bridge your ' + clusters.length + ' disconnected knowledge clusters');
-      if (hubsWithLinks === 0) recs.push('Create hub notes that link to multiple related topics');
-      if (stats.nodeCount < 10) recs.push('Keep adding knowledge — the graph compounds after 10+ notes');
-
-      const lines = [
-        `## Vault Health: ${grade} (${score}/100) — ${emoji}`,
-        '',
-        '### Metrics',
-        `| Metric | Value |`,
-        `|--------|-------|`,
-        `| Notes | ${stats.nodeCount} |`,
-        `| Connections | ${stats.edgeCount} |`,
-        `| Connectivity ratio | ${connectivityRatio.toFixed(2)} edges/note |`,
-        `| Orphans | ${stats.orphanCount} (${(orphanRatio * 100).toFixed(0)}%) |`,
-        `| Clusters | ${clusters.length} |`,
-        `| Avg backlinks | ${avgBacklinks.toFixed(1)} |`,
-      ];
-
-      if (recs.length > 0) {
-        lines.push('', '### Recommendations');
-        recs.forEach(r => lines.push(`- ${r}`));
-      }
-
-      if (orphans.length > 0 && orphans.length <= 10) {
-        lines.push('', '### Orphan Notes (no connections)');
-        orphans.forEach(o => lines.push(`- ${o.title}`));
-      }
-
-      return { content: [{ type: 'text', text: lines.join('\n') }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 17: ke_tags — List all tags and browse notes by tag
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_tags',
-  {
-    tag: z.string().default('').describe('Filter by specific tag (empty lists all tags with counts)'),
-  },
-  async ({ tag }) => {
-    try {
-      if (tag) {
-        // Search by specific tag
-        const results = engine.searchByTag(tag, { limit: 50 });
-        if (results.length === 0) {
-          return { content: [{ type: 'text', text: `No notes tagged with "${tag}"` }] };
-        }
-        const formatted = results.map(r => `- **${r.node.title}** (${r.node.path})`).join('\n');
-        return { content: [{ type: 'text', text: `## Notes tagged: ${tag}\n\n${formatted}` }] };
-      }
-
-      // List all tags with counts
-      const allNodes = engine.graph.db.prepare('SELECT tags FROM nodes').all();
-      const tagCounts = new Map();
-
-      for (const node of allNodes) {
-        try {
-          const tags = JSON.parse(node.tags || '[]');
-          for (const t of tags) {
-            tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
-          }
-        } catch {}
-      }
-
-      if (tagCounts.size === 0) {
-        return { content: [{ type: 'text', text: 'No tags found. Add tags to your notes\' frontmatter.' }] };
-      }
-
-      const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
-      const formatted = sorted.map(([t, count]) => `- **${t}** (${count} note${count > 1 ? 's' : ''})`).join('\n');
-      return { content: [{ type: 'text', text: `## All Tags\n\n${formatted}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 18: ke_recent — Show recently modified notes
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_recent',
-  {
-    limit: z.number().int().positive().default(10).describe('Number of recent notes to show'),
-  },
-  async ({ limit }) => {
-    try {
-      const notes = engine.listNotes();
-      const noteStats = notes.map(notePath => {
-        try {
-          const stat = fs.statSync(notePath);
-          const note = engine.readNote(notePath);
-          return { path: notePath, title: note.title, mtime: stat.mtimeMs };
-        } catch {
-          return null;
-        }
-      }).filter(Boolean);
-
-      noteStats.sort((a, b) => b.mtime - a.mtime);
-      const recent = noteStats.slice(0, limit);
-
-      if (recent.length === 0) {
-        return { content: [{ type: 'text', text: 'No notes in vault yet.' }] };
-      }
-
-      const formatted = recent.map((n, i) => {
-        const ago = formatTimeAgo(Date.now() - n.mtime);
-        return `${i + 1}. **${n.title}** — ${ago}`;
-      }).join('\n');
-
-      return { content: [{ type: 'text', text: `## Recently Modified Notes\n\n${formatted}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 19: ke_suggest_links — Find unlinked mentions and suggest connections
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_suggest_links',
-  {
-    note_path: z.string().default('').describe('Note to analyze (empty = analyze all notes)'),
-    limit: z.number().int().positive().default(10).describe('Max suggestions'),
-  },
-  async ({ note_path, limit }) => {
-    try {
-      const allNotes = engine.listNotes();
-      const noteTitles = new Map(); // title.lower -> path
-
-      for (const np of allNotes) {
-        try {
-          const note = engine.readNote(np);
-          noteTitles.set(note.title.toLowerCase(), { path: np, title: note.title });
-        } catch {}
-      }
-
-      const suggestions = [];
-
-      const notesToCheck = note_path
-        ? [resolveNotePath(note_path)].filter(Boolean)
-        : allNotes;
-
-      for (const np of notesToCheck) {
-        if (suggestions.length >= limit) break;
-        try {
-          const note = engine.readNote(np);
-          const existingLinks = new Set(note.wikilinks.map(l => l.target.toLowerCase()));
-
-          // Check if any other note title appears in this note's body without being linked
-          for (const [titleLower, target] of noteTitles) {
-            if (suggestions.length >= limit) break;
-            if (target.path === np) continue; // skip self
-            if (existingLinks.has(titleLower)) continue; // already linked
-
-            // Check if title appears in body (case-insensitive)
-            const bodyLower = note.body.toLowerCase();
-            if (bodyLower.includes(titleLower) && titleLower.length > 3) {
-              suggestions.push({
-                from: note.title,
-                to: target.title,
-                reason: `"${target.title}" is mentioned in "${note.title}" but not linked`,
-              });
-            }
-          }
-        } catch {}
-      }
-
-      if (suggestions.length === 0) {
-        return { content: [{ type: 'text', text: 'No unlinked mentions found. Your notes are well-connected!' }] };
-      }
-
-      const formatted = suggestions.map((s, i) =>
-        `${i + 1}. **${s.from}** should link to **${s.to}**\n   ${s.reason}`
-      ).join('\n');
-
-      return { content: [{ type: 'text', text: `## Suggested Links\n\n${formatted}\n\nUse \`ke_write_note\` to add [[wikilinks]] to strengthen your knowledge graph.` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 20: ke_timeline — Chronological view of decisions and events
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_timeline',
-  {
-    type_filter: z.string().default('').describe('Filter by type (decision, daily, pattern, postmortem). Empty for all.'),
-    limit: z.number().int().positive().default(20).describe('Max entries'),
-  },
-  async ({ type_filter, limit }) => {
-    try {
-      const notes = engine.listNotes();
-      const entries = [];
-
-      for (const notePath of notes) {
-        try {
-          const note = engine.readNote(notePath);
-          const type = note.frontmatter.type || 'note';
-          const date = note.frontmatter.date || null;
-
-          if (type_filter && type !== type_filter) continue;
-
-          entries.push({
-            title: note.title,
-            type,
-            date: date || 'undated',
-            path: notePath,
-          });
-        } catch {}
-      }
-
-      // Sort by date descending
-      entries.sort((a, b) => {
-        if (a.date === 'undated') return 1;
-        if (b.date === 'undated') return -1;
-        return b.date.localeCompare(a.date);
-      });
-
-      const limited = entries.slice(0, limit);
-
-      if (limited.length === 0) {
-        return { content: [{ type: 'text', text: type_filter ? `No ${type_filter} entries found.` : 'No dated entries found.' }] };
-      }
-
-      const typeEmoji = { decision: 'D', daily: 'S', pattern: 'P', postmortem: 'B', architecture: 'A', note: 'N', index: 'I', imported: 'i' };
-
-      const formatted = limited.map(e => {
-        const badge = typeEmoji[e.type] || 'N';
-        return `\`${e.date}\` [${badge}] **${e.title}**`;
-      }).join('\n');
-
-      const legend = 'Legend: [D]ecision [S]ession [P]attern [B]ug [A]rchitecture [N]ote';
-
-      return { content: [{ type: 'text', text: `## Timeline${type_filter ? ` (${type_filter})` : ''}\n\n${formatted}\n\n_${legend}_` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 21: ke_global_search — Search across project + global vaults
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_global_search',
-  {
-    query: z.string().describe('Search query'),
-    limit: z.number().int().positive().default(10).describe('Max results per vault'),
-  },
-  async ({ query, limit }) => {
-    try {
-      const projectResults = engine.searchNotes(query, { limit });
-      const globalResults = globalEngine.searchNotes(query, { limit });
-
-      const sections = [];
-
-      if (projectResults.length > 0) {
-        sections.push('### Project Knowledge\n' + projectResults.map((r, i) =>
-          `${i + 1}. **${r.node.title}** (score: ${r.boostedScore.toFixed(3)}) [project]`
-        ).join('\n'));
-      }
-
-      if (globalResults.length > 0) {
-        sections.push('### Global Knowledge\n' + globalResults.map((r, i) =>
-          `${i + 1}. **${r.node.title}** (score: ${r.boostedScore.toFixed(3)}) [global]`
-        ).join('\n'));
-      }
-
-      if (sections.length === 0) {
-        return { content: [{ type: 'text', text: `No results in project or global vaults for "${query}"` }] };
-      }
-
-      return { content: [{ type: 'text', text: `## Cross-Project Search: "${query}"\n\n${sections.join('\n\n')}` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// ZED Tool 17: ke_promote — Promote a project note to global vault
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'zed_promote',
-  {
-    note_path: z.string().describe('Path or title of the project note to promote to global'),
-    global_subdir: z.string().default('patterns').describe('Subdirectory in global vault (patterns, learnings)'),
-  },
-  async ({ note_path, global_subdir }) => {
-    try {
-      const resolved = resolveNotePath(note_path);
-      if (!resolved) return { content: [{ type: 'text', text: `Note not found: ${note_path}` }], isError: true };
-
-      const note = engine.readNote(resolved);
-      const targetDir = path.join(GLOBAL_DIR, global_subdir);
-      if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-
-      const targetFile = path.join(targetDir, path.basename(resolved));
-
-      if (fs.existsSync(targetFile)) {
-        return { content: [{ type: 'text', text: `Note already exists in global vault: ${path.basename(resolved)}` }], isError: true };
-      }
-
-      // Copy to global vault
-      fs.writeFileSync(targetFile, note.content, 'utf-8');
-      globalEngine.rebuild();
-
-      return { content: [{ type: 'text', text: `Promoted to global vault: ${global_subdir}/${path.basename(resolved)}\nGlobal vault rebuilt.` }] };
-    } catch (err) {
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
-    }
-  }
-);
-
-// ---------------------------------------------------------------------------
-// Helper: Resolve a note path (accepts absolute path, title, or relative name)
-// ---------------------------------------------------------------------------
-
-function formatTimeAgo(ms) {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return `${Math.floor(days / 7)}w ago`;
-}
 
 function resolveNotePath(input) {
-  // If it's an absolute path that exists, use it
   if (path.isAbsolute(input) && fs.existsSync(input)) return input;
-
-  // Try as vault-relative path
   const vaultRelative = path.join(VAULT_DIR, input);
   if (fs.existsSync(vaultRelative)) return vaultRelative;
-
-  // Try with .md extension
   if (!input.endsWith('.md')) {
     const withExt = path.join(VAULT_DIR, input + '.md');
     if (fs.existsSync(withExt)) return withExt;
   }
-
-  // Search by title in the graph
   const notes = engine.listNotes();
   for (const notePath of notes) {
     const basename = path.basename(notePath, '.md');
     if (basename.toLowerCase() === input.toLowerCase()) return notePath;
-
-    // Try reading title
     try {
       const note = engine.readNote(notePath);
       if (note.title && note.title.toLowerCase() === input.toLowerCase()) return notePath;
-    } catch {
-      continue;
-    }
+    } catch { continue; }
   }
-
   return null;
 }
 
 // ---------------------------------------------------------------------------
-// Connect transport and start
+// Error handling + Transport
 // ---------------------------------------------------------------------------
 
-// Global error handlers — MCP server must never crash
 process.on('uncaughtException', (err) => {
-  // Log but don't crash — the server must stay alive for Claude
   fs.appendFileSync(
     path.join(DATA_DIR, 'error.log'),
     `[${new Date().toISOString()}] Uncaught: ${err.message}\n${err.stack}\n\n`
@@ -1190,9 +246,8 @@ process.on('unhandledRejection', (reason) => {
   );
 });
 
-// Cleanup on exit
-process.on('SIGTERM', () => { try { engine.close(); globalEngine.close(); } catch {} process.exit(0); });
-process.on('SIGINT', () => { try { engine.close(); globalEngine.close(); } catch {} process.exit(0); });
+process.on('SIGTERM', () => { try { engine.close(); } catch {} process.exit(0); });
+process.on('SIGINT', () => { try { engine.close(); } catch {} process.exit(0); });
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

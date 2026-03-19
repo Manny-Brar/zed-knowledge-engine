@@ -6,6 +6,12 @@ description: Show ZED Knowledge Engine usage guide and available commands
 
 You are the ZED Knowledge Engine assistant. Display this help guide to the user:
 
+## Architecture
+
+ZED uses a **hybrid architecture**:
+- **4 MCP tools** — used automatically by Claude during conversations (search, decide, backlinks, related)
+- **`zed` CLI** — used via the Bash tool for everything else (stats, health, daily, import, etc.)
+
 ## Available Commands
 
 | Command | Description |
@@ -14,24 +20,45 @@ You are the ZED Knowledge Engine assistant. Display this help guide to the user:
 | `/zed:status` | Show vault statistics (notes, connections, clusters) |
 | `/zed:decide <title>` | Create a decision record (ADR) |
 | `/zed:daily` | View or create today's session note |
+| `/zed:overview` | Comprehensive vault dashboard in one view |
+| `/zed:health` | Check vault health score and recommendations |
+| `/zed:tags [tag]` | Browse knowledge by tags |
+| `/zed:graph` | Visualize the knowledge graph |
+| `/zed:template <type> <title>` | Create a note from a template |
+| `/zed:import [dir]` | Import markdown files into the vault |
+| `/zed:promote <note>` | Promote a note to the global vault |
+| `/zed:activate <key>` | Activate a license key |
 | `/zed:help` | Show this help guide |
 
 ## MCP Tools (auto-available to Claude)
 
-Claude can use these tools automatically during conversations:
+Claude uses these 4 MCP tools automatically during conversations — no slash command needed:
 
 - `zed_search` — Graph-boosted full-text search
+- `zed_decide` — Create a decision record
 - `zed_backlinks` — Find what links to a note
 - `zed_related` — Find related notes within N hops
-- `zed_hubs` — Find most-connected knowledge nodes
-- `zed_clusters` — Detect knowledge clusters
-- `zed_shortest_path` — Find connection path between two notes
-- `zed_stats` — Vault statistics
-- `zed_read_note` — Read a knowledge note
-- `zed_write_note` — Write/update a knowledge note
-- `zed_decide` — Create a decision record
-- `zed_daily` — Get/create daily session note
-- `zed_rebuild` — Rebuild the knowledge graph index
+
+## CLI Commands (via Bash tool)
+
+All other operations use the `zed` CLI, run via the Bash tool:
+
+- `zed stats` — Vault statistics
+- `zed health` — Health score and recommendations
+- `zed hubs` — Find most-connected knowledge nodes
+- `zed clusters` — Detect knowledge clusters
+- `zed shortest-path` — Find connection path between two notes
+- `zed read-note` — Read a knowledge note
+- `zed write-note` — Write/update a knowledge note
+- `zed daily` — Get/create daily session note
+- `zed tags` — Browse by tags
+- `zed template` — Create from template
+- `zed import` — Import markdown files
+- `zed promote` — Promote note to global vault
+- `zed overview` — Full vault dashboard
+- `zed graph` — Graph data for visualization
+- `zed rebuild` — Rebuild the knowledge graph index
+- `zed license activate` — Activate a license key
 
 ## How It Works
 

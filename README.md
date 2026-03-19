@@ -169,7 +169,7 @@ Knowledge learned in one project is available in all projects. Use `/zed:promote
 | `/zed:search <query>` | Search knowledge graph |
 | `/zed:decide <title>` | Record a decision |
 | `/zed:daily` | Today's session note |
-| `/zed:template <type> <title>` | Create from template (decision, pattern, architecture, postmortem, daily) |
+| `/zed:template <type> <title>` | Create from template |
 | `/zed:health` | Vault quality score |
 | `/zed:tags [tag]` | Browse by tags |
 | `/zed:graph` | Visualize the graph |
@@ -179,11 +179,36 @@ Knowledge learned in one project is available in all projects. Use `/zed:promote
 | `/zed:activate <key>` | Activate license |
 | `/zed:help` | Full reference |
 
-## Under the Hood (24 MCP Tools)
+## Under the Hood
 
-ZED uses these automatically during conversations — you never need to call them directly:
+ZED uses a **hybrid architecture** for maximum token efficiency:
 
-`zed_search` `zed_search_snippets` `zed_template` `zed_backlinks` `zed_related` `zed_hubs` `zed_clusters` `zed_shortest_path` `zed_stats` `zed_read_note` `zed_write_note` `zed_decide` `zed_daily` `zed_rebuild` `zed_import` `zed_license` `zed_health` `zed_tags` `zed_recent` `zed_suggest_links` `zed_timeline` `zed_graph_data` `zed_global_search` `zed_promote`
+### MCP Tools (4) — Claude uses these automatically
+| Tool | Purpose |
+|------|---------|
+| `zed_search` | Graph-boosted full-text search |
+| `zed_read_note` | Read a knowledge note |
+| `zed_write_note` | Create/update notes |
+| `zed_decide` | Create decision records |
+
+### CLI (21 subcommands) — via `zed <command>`
+Everything else runs through the CLI, saving ~3,500 tokens per turn:
+
+```
+zed backlinks <note>       zed health
+zed related <note> [hops]  zed tags [tag]
+zed hubs [limit]           zed recent [limit]
+zed clusters               zed suggest-links
+zed path <from> <to>       zed timeline [type]
+zed stats                  zed daily [text]
+zed template <type> <t>    zed rebuild
+zed import <dir>           zed promote <note>
+zed license [action]       zed graph [max]
+zed overview               zed global-search <q>
+zed snippets <query>
+```
+
+Add `--json` to any CLI command for structured output.
 
 ---
 
@@ -204,10 +229,11 @@ Claude Code + ZED
          │    ├── Project vault → ~/.zed-data/
          │    └── Global vault  → ~/.zed/global/
          │
+         ├── MCP Server (4 tools — token efficient)
+         ├── CLI (21 subcommands — zed <cmd>)
          ├── 13 slash commands
-         ├── 24 MCP tools
          ├── Session hooks (auto-capture)
-         └── 5 templates
+         └── 5 templates (decision, pattern, architecture, postmortem, daily)
 ```
 
 ## Performance
@@ -233,10 +259,11 @@ CXXFLAGS="-I$(xcrun --show-sdk-path)/usr/include/c++/v1 -isysroot $(xcrun --show
 ## Development
 
 ```bash
-npm test          # 35 core tests
-npm run test:mcp  # 19 integration tests
-npm run test:all  # 54 total
-npm run bench     # Benchmarks
+npm test          # 35 core engine tests
+npm run test:mcp  # 12 MCP server tests
+npm run test:cli  # 28 CLI integration tests
+npm run test:all  # 75 total
+npm run bench     # Performance benchmarks
 ```
 
 ---
