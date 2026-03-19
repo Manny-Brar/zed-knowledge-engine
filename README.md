@@ -84,9 +84,11 @@ Automatic daily notes that capture your work sessions. Build continuity across d
 | `/ke:decide <title>` | Create decision record |
 | `/ke:daily` | Today's session note |
 | `/ke:graph` | Visualize knowledge graph |
+| `/ke:import <dir>` | Import existing markdown files |
+| `/ke:promote <note>` | Promote note to global vault |
 | `/ke:activate <key>` | Activate license |
 
-## MCP Tools (14 total)
+## MCP Tools (17 total)
 
 Claude automatically has access to these tools:
 
@@ -104,8 +106,11 @@ Claude automatically has access to these tools:
 | `ke_decide` | Create decision record |
 | `ke_daily` | Daily session note |
 | `ke_rebuild` | Rebuild graph index |
+| `ke_import` | Import markdown files from directory |
 | `ke_license` | License management |
 | `ke_graph_data` | Export graph data for visualization |
+| `ke_global_search` | Search across project + global vaults |
+| `ke_promote` | Promote project note to global vault |
 
 ## Architecture
 
