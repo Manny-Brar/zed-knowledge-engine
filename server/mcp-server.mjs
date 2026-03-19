@@ -27,14 +27,21 @@ const DATA_DIR = process.env.CLAUDE_PLUGIN_DATA || path.join(process.env.HOME, '
 const VAULT_DIR = path.join(DATA_DIR, 'vault');
 const DB_PATH = path.join(DATA_DIR, 'knowledge.db');
 
-// Ensure data directories exist
-if (!fs.existsSync(VAULT_DIR)) {
-  fs.mkdirSync(VAULT_DIR, { recursive: true });
-}
+// Global vault (cross-project patterns and learnings)
+const GLOBAL_DIR = path.join(process.env.HOME, '.nelson-ke', 'global');
+const GLOBAL_DB_PATH = path.join(process.env.HOME, '.nelson-ke', 'global.db');
 
-// Subdirectories for organized knowledge
-for (const sub of ['decisions', 'patterns', 'sessions', 'architecture']) {
-  const dir = path.join(VAULT_DIR, sub);
+// Ensure data directories exist
+for (const dir of [
+  VAULT_DIR,
+  path.join(VAULT_DIR, 'decisions'),
+  path.join(VAULT_DIR, 'patterns'),
+  path.join(VAULT_DIR, 'sessions'),
+  path.join(VAULT_DIR, 'architecture'),
+  GLOBAL_DIR,
+  path.join(GLOBAL_DIR, 'patterns'),
+  path.join(GLOBAL_DIR, 'learnings'),
+]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -56,6 +63,13 @@ const engine = new KnowledgeEngine({
 
 // Build index on startup (fast for empty vaults, necessary for populated ones)
 engine.build();
+
+// Initialize global engine (cross-project knowledge)
+const globalEngine = new KnowledgeEngine({
+  vaultPath: GLOBAL_DIR,
+  dbPath: GLOBAL_DB_PATH,
+});
+globalEngine.build();
 
 // ---------------------------------------------------------------------------
 // MCP Server
@@ -642,6 +656,82 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Tool 16: ke_global_search — Search across project + global vaults
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_global_search',
+  {
+    query: z.string().describe('Search query'),
+    limit: z.number().int().positive().default(10).describe('Max results per vault'),
+  },
+  async ({ query, limit }) => {
+    try {
+      const projectResults = engine.searchNotes(query, { limit });
+      const globalResults = globalEngine.searchNotes(query, { limit });
+
+      const sections = [];
+
+      if (projectResults.length > 0) {
+        sections.push('### Project Knowledge\n' + projectResults.map((r, i) =>
+          `${i + 1}. **${r.node.title}** (score: ${r.boostedScore.toFixed(3)}) [project]`
+        ).join('\n'));
+      }
+
+      if (globalResults.length > 0) {
+        sections.push('### Global Knowledge\n' + globalResults.map((r, i) =>
+          `${i + 1}. **${r.node.title}** (score: ${r.boostedScore.toFixed(3)}) [global]`
+        ).join('\n'));
+      }
+
+      if (sections.length === 0) {
+        return { content: [{ type: 'text', text: `No results in project or global vaults for "${query}"` }] };
+      }
+
+      return { content: [{ type: 'text', text: `## Cross-Project Search: "${query}"\n\n${sections.join('\n\n')}` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 17: ke_promote — Promote a project note to global vault
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_promote',
+  {
+    note_path: z.string().describe('Path or title of the project note to promote to global'),
+    global_subdir: z.string().default('patterns').describe('Subdirectory in global vault (patterns, learnings)'),
+  },
+  async ({ note_path, global_subdir }) => {
+    try {
+      const resolved = resolveNotePath(note_path);
+      if (!resolved) return { content: [{ type: 'text', text: `Note not found: ${note_path}` }], isError: true };
+
+      const note = engine.readNote(resolved);
+      const targetDir = path.join(GLOBAL_DIR, global_subdir);
+      if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+      const targetFile = path.join(targetDir, path.basename(resolved));
+
+      if (fs.existsSync(targetFile)) {
+        return { content: [{ type: 'text', text: `Note already exists in global vault: ${path.basename(resolved)}` }], isError: true };
+      }
+
+      // Copy to global vault
+      fs.writeFileSync(targetFile, note.content, 'utf-8');
+      globalEngine.rebuild();
+
+      return { content: [{ type: 'text', text: `Promoted to global vault: ${global_subdir}/${path.basename(resolved)}\nGlobal vault rebuilt.` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Helper: Resolve a note path (accepts absolute path, title, or relative name)
 // ---------------------------------------------------------------------------
 
@@ -680,6 +770,10 @@ function resolveNotePath(input) {
 // ---------------------------------------------------------------------------
 // Connect transport and start
 // ---------------------------------------------------------------------------
+
+// Cleanup on exit
+process.on('SIGTERM', () => { engine.close(); globalEngine.close(); process.exit(0); });
+process.on('SIGINT', () => { engine.close(); globalEngine.close(); process.exit(0); });
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
