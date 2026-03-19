@@ -878,7 +878,116 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 18: ke_global_search — Search across project + global vaults
+// Tool 18: ke_recent — Show recently modified notes
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_recent',
+  {
+    limit: z.number().int().positive().default(10).describe('Number of recent notes to show'),
+  },
+  async ({ limit }) => {
+    try {
+      const notes = engine.listNotes();
+      const noteStats = notes.map(notePath => {
+        try {
+          const stat = fs.statSync(notePath);
+          const note = engine.readNote(notePath);
+          return { path: notePath, title: note.title, mtime: stat.mtimeMs };
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+
+      noteStats.sort((a, b) => b.mtime - a.mtime);
+      const recent = noteStats.slice(0, limit);
+
+      if (recent.length === 0) {
+        return { content: [{ type: 'text', text: 'No notes in vault yet.' }] };
+      }
+
+      const formatted = recent.map((n, i) => {
+        const ago = formatTimeAgo(Date.now() - n.mtime);
+        return `${i + 1}. **${n.title}** — ${ago}`;
+      }).join('\n');
+
+      return { content: [{ type: 'text', text: `## Recently Modified Notes\n\n${formatted}` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 19: ke_suggest_links — Find unlinked mentions and suggest connections
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_suggest_links',
+  {
+    note_path: z.string().default('').describe('Note to analyze (empty = analyze all notes)'),
+    limit: z.number().int().positive().default(10).describe('Max suggestions'),
+  },
+  async ({ note_path, limit }) => {
+    try {
+      const allNotes = engine.listNotes();
+      const noteTitles = new Map(); // title.lower -> path
+
+      for (const np of allNotes) {
+        try {
+          const note = engine.readNote(np);
+          noteTitles.set(note.title.toLowerCase(), { path: np, title: note.title });
+        } catch {}
+      }
+
+      const suggestions = [];
+
+      const notesToCheck = note_path
+        ? [resolveNotePath(note_path)].filter(Boolean)
+        : allNotes;
+
+      for (const np of notesToCheck) {
+        if (suggestions.length >= limit) break;
+        try {
+          const note = engine.readNote(np);
+          const existingLinks = new Set(note.wikilinks.map(l => l.target.toLowerCase()));
+
+          // Check if any other note title appears in this note's body without being linked
+          for (const [titleLower, target] of noteTitles) {
+            if (suggestions.length >= limit) break;
+            if (target.path === np) continue; // skip self
+            if (existingLinks.has(titleLower)) continue; // already linked
+
+            // Check if title appears in body (case-insensitive)
+            const bodyLower = note.body.toLowerCase();
+            if (bodyLower.includes(titleLower) && titleLower.length > 3) {
+              suggestions.push({
+                from: note.title,
+                to: target.title,
+                reason: `"${target.title}" is mentioned in "${note.title}" but not linked`,
+              });
+            }
+          }
+        } catch {}
+      }
+
+      if (suggestions.length === 0) {
+        return { content: [{ type: 'text', text: 'No unlinked mentions found. Your notes are well-connected!' }] };
+      }
+
+      const formatted = suggestions.map((s, i) =>
+        `${i + 1}. **${s.from}** should link to **${s.to}**\n   ${s.reason}`
+      ).join('\n');
+
+      return { content: [{ type: 'text', text: `## Suggested Links\n\n${formatted}\n\nUse \`ke_write_note\` to add [[wikilinks]] to strengthen your knowledge graph.` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 20: ke_global_search — Search across project + global vaults
 // ---------------------------------------------------------------------------
 
 server.tool(
@@ -956,6 +1065,18 @@ server.tool(
 // ---------------------------------------------------------------------------
 // Helper: Resolve a note path (accepts absolute path, title, or relative name)
 // ---------------------------------------------------------------------------
+
+function formatTimeAgo(ms) {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return `${Math.floor(days / 7)}w ago`;
+}
 
 function resolveNotePath(input) {
   // If it's an absolute path that exists, use it
