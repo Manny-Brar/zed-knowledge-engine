@@ -740,7 +740,145 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 16: ke_global_search — Search across project + global vaults
+// Tool 16: ke_health — Knowledge vault health score and recommendations
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_health',
+  {},
+  async () => {
+    try {
+      const stats = engine.getStats();
+      const hubs = engine.findHubs(100);
+      const orphans = engine.getOrphans();
+      const clusters = engine.getClusters();
+
+      if (stats.nodeCount === 0) {
+        return { content: [{ type: 'text', text: '## Vault Health: Empty\n\nNo notes yet. Start with `/ke:decide` or `/ke:daily` to begin building your knowledge graph.' }] };
+      }
+
+      // Calculate health metrics
+      const connectivityRatio = stats.nodeCount > 0 ? stats.edgeCount / stats.nodeCount : 0;
+      const orphanRatio = stats.nodeCount > 0 ? stats.orphanCount / stats.nodeCount : 0;
+      const hubsWithLinks = hubs.filter(h => h.backlink_count > 0).length;
+      const avgBacklinks = hubs.length > 0
+        ? hubs.reduce((sum, h) => sum + h.backlink_count, 0) / hubs.length
+        : 0;
+
+      // Score (0-100)
+      let score = 50; // base
+
+      // Connectivity bonus (+20 max)
+      score += Math.min(20, connectivityRatio * 10);
+
+      // Orphan penalty (-20 max)
+      score -= Math.min(20, orphanRatio * 30);
+
+      // Hub bonus (+15 max) — having well-connected hubs is good
+      score += Math.min(15, hubsWithLinks * 3);
+
+      // Cluster bonus (+15 max) — fewer clusters = more connected
+      const clusterPenalty = clusters.length > 1 ? Math.min(15, (clusters.length - 1) * 2) : 0;
+      score += 15 - clusterPenalty;
+
+      score = Math.max(0, Math.min(100, Math.round(score)));
+
+      // Grade
+      let grade, emoji;
+      if (score >= 90) { grade = 'A'; emoji = 'Excellent'; }
+      else if (score >= 75) { grade = 'B'; emoji = 'Good'; }
+      else if (score >= 60) { grade = 'C'; emoji = 'Fair'; }
+      else if (score >= 40) { grade = 'D'; emoji = 'Needs Work'; }
+      else { grade = 'F'; emoji = 'Getting Started'; }
+
+      // Recommendations
+      const recs = [];
+      if (orphanRatio > 0.3) recs.push('Connect orphan notes: ' + orphans.slice(0, 3).map(o => o.title).join(', '));
+      if (connectivityRatio < 1) recs.push('Add more [[wikilinks]] between related notes');
+      if (clusters.length > 3) recs.push('Bridge your ' + clusters.length + ' disconnected knowledge clusters');
+      if (hubsWithLinks === 0) recs.push('Create hub notes that link to multiple related topics');
+      if (stats.nodeCount < 10) recs.push('Keep adding knowledge — the graph compounds after 10+ notes');
+
+      const lines = [
+        `## Vault Health: ${grade} (${score}/100) — ${emoji}`,
+        '',
+        '### Metrics',
+        `| Metric | Value |`,
+        `|--------|-------|`,
+        `| Notes | ${stats.nodeCount} |`,
+        `| Connections | ${stats.edgeCount} |`,
+        `| Connectivity ratio | ${connectivityRatio.toFixed(2)} edges/note |`,
+        `| Orphans | ${stats.orphanCount} (${(orphanRatio * 100).toFixed(0)}%) |`,
+        `| Clusters | ${clusters.length} |`,
+        `| Avg backlinks | ${avgBacklinks.toFixed(1)} |`,
+      ];
+
+      if (recs.length > 0) {
+        lines.push('', '### Recommendations');
+        recs.forEach(r => lines.push(`- ${r}`));
+      }
+
+      if (orphans.length > 0 && orphans.length <= 10) {
+        lines.push('', '### Orphan Notes (no connections)');
+        orphans.forEach(o => lines.push(`- ${o.title}`));
+      }
+
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 17: ke_tags — List all tags and browse notes by tag
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_tags',
+  {
+    tag: z.string().default('').describe('Filter by specific tag (empty lists all tags with counts)'),
+  },
+  async ({ tag }) => {
+    try {
+      if (tag) {
+        // Search by specific tag
+        const results = engine.searchByTag(tag, { limit: 50 });
+        if (results.length === 0) {
+          return { content: [{ type: 'text', text: `No notes tagged with "${tag}"` }] };
+        }
+        const formatted = results.map(r => `- **${r.node.title}** (${r.node.path})`).join('\n');
+        return { content: [{ type: 'text', text: `## Notes tagged: ${tag}\n\n${formatted}` }] };
+      }
+
+      // List all tags with counts
+      const allNodes = engine.graph.db.prepare('SELECT tags FROM nodes').all();
+      const tagCounts = new Map();
+
+      for (const node of allNodes) {
+        try {
+          const tags = JSON.parse(node.tags || '[]');
+          for (const t of tags) {
+            tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+          }
+        } catch {}
+      }
+
+      if (tagCounts.size === 0) {
+        return { content: [{ type: 'text', text: 'No tags found. Add tags to your notes\' frontmatter.' }] };
+      }
+
+      const sorted = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]);
+      const formatted = sorted.map(([t, count]) => `- **${t}** (${count} note${count > 1 ? 's' : ''})`).join('\n');
+      return { content: [{ type: 'text', text: `## All Tags\n\n${formatted}` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 18: ke_global_search — Search across project + global vaults
 // ---------------------------------------------------------------------------
 
 server.tool(
