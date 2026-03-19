@@ -60,6 +60,93 @@ The plugin auto-starts on session load. On first run it creates your knowledge v
 /ke:help
 ```
 
+## How To Use It
+
+The Knowledge Engine works in two ways: **you talk to it** via slash commands, and **Claude uses it automatically** via MCP tools in the background.
+
+### Day 1: Set Up Your Knowledge Base
+
+After installing, start a Claude Code session with the plugin loaded:
+
+```bash
+claude --plugin-dir /path/to/nelson-knowledge-engine
+```
+
+Then in Claude Code:
+
+```
+You:  /ke:overview
+       → Shows your empty vault. Let's fill it.
+
+You:  /ke:import ./docs
+       → Imports any existing markdown docs from your project into the knowledge graph.
+
+You:  /ke:decide "Use PostgreSQL over SQLite for production"
+       → Claude asks you for context, alternatives, consequences.
+       → Creates a decision record linked into the graph.
+
+You:  /ke:daily
+       → Creates today's session note. Auto-captures what you work on.
+```
+
+### Day-to-Day: Just Work Normally
+
+Once set up, the engine works **automatically in the background**:
+
+- **When you start a session**: The SessionStart hook rebuilds the graph and shows a status line (`[KE] 42 notes, 87 connections, 3 clusters`)
+- **While you work**: Claude can call `ke_search`, `ke_backlinks`, `ke_related` etc. automatically to pull relevant knowledge into conversations. You don't need to do anything.
+- **When you end a session**: The Stop hook captures git activity to today's daily note.
+
+### When You Want To Interact Directly
+
+Use slash commands when you want to explicitly manage knowledge:
+
+```
+/ke:search auth          → Find everything about authentication
+/ke:decide "Switch to JWT" → Record a new decision
+/ke:template pattern "Error handling middleware"
+                          → Create a reusable pattern note
+/ke:health               → Check vault quality (A-F grade, 0-100 score)
+/ke:tags                 → Browse all tags
+/ke:overview             → Full dashboard: stats + hubs + recent + health
+/ke:promote "Error handling middleware"
+                          → Move a pattern to global vault (available in ALL projects)
+```
+
+### How Knowledge Compounds
+
+```
+Session 1:  You decide to use JWT. /ke:decide creates an ADR.
+Session 3:  You debug a token expiry bug. Claude finds the JWT decision via
+            ke_search and references it automatically.
+Session 7:  You extract a "token refresh" pattern. /ke:template pattern.
+            It links to the JWT decision via [[wikilinks]].
+Session 12: New project. /ke:search "authentication" finds your JWT pattern
+            in the global vault — even though it was learned in a different project.
+```
+
+The more you use it, the more Claude knows. The graph connects everything.
+
+### Example: Claude Using It Automatically
+
+You don't always need slash commands. Claude uses the MCP tools on its own:
+
+```
+You:  "I need to add authentication to this API"
+
+Claude thinks: Let me check what we know about auth...
+  → calls ke_search("authentication")
+  → finds your JWT decision record and token refresh pattern
+  → calls ke_related on the JWT decision (2 hops)
+  → finds connected architecture docs
+
+Claude: "Based on your previous decision (2026-03-15), you chose JWT
+         with refresh tokens. Here's how to implement it for this API,
+         following the token refresh pattern you documented..."
+```
+
+---
+
 ## Features
 
 ### Knowledge Graph
