@@ -1,3 +1,9 @@
 {
-  "agent": "zed"
+  "agent": "zed",
+  "skills": [
+    "behavior-controller",
+    "context-loader",
+    "execution-protocol",
+    "compound-learner"
+  ]
 }

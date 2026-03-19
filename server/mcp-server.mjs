@@ -47,6 +47,7 @@ for (const dir of [
   path.join(VAULT_DIR, 'patterns'),
   path.join(VAULT_DIR, 'sessions'),
   path.join(VAULT_DIR, 'architecture'),
+  path.join(VAULT_DIR, '_loop'),
 ]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
@@ -68,7 +69,7 @@ engine.build();
 
 const server = new McpServer({
   name: 'zed-knowledge-engine',
-  version: '6.1.0',
+  version: '6.2.0',
 });
 
 // ---------------------------------------------------------------------------

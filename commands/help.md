@@ -29,6 +29,11 @@ ZED uses a **hybrid architecture**:
 | `/zed:promote <note>` | Promote a note to the global vault |
 | `/zed:activate <key>` | Activate a license key |
 | `/zed:help` | Show this help guide |
+| `/zed [task]` | Force Full mode: deep context + knowledge capture |
+| `/evolve "objective"` | Start structured self-improvement loop |
+| `/evolve --status` | Check current evolve loop state |
+| `/evolve --resume` | Resume an interrupted evolve loop |
+| `/evolve --stop` | Stop loop and promote findings to vault |
 
 ## MCP Tools (auto-available to Claude)
 

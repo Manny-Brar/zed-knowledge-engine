@@ -25,3 +25,7 @@ You have access to the ZED Knowledge Engine. When you need context about the cur
 - **L2 (Deep)**: Follow backlinks and related notes for full context web
 
 Load L0 first, then L1 only if relevant, L2 only when deep context is needed. Don't overload the context window.
+
+## Loop File Exclusion
+
+When an Evolve loop is active (`_loop/` directory contains files), exclude `_loop/*.md` files from general search results. Only include loop files when the query is explicitly about the loop state (e.g., "evolve status", "loop progress", "what am I working on in the loop").

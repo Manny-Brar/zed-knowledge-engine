@@ -34,6 +34,7 @@ for (const dir of [
   GLOBAL_DIR,
   path.join(GLOBAL_DIR, 'patterns'),
   path.join(GLOBAL_DIR, 'learnings'),
+  path.join(VAULT_DIR, '_loop'),
 ]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
@@ -646,6 +647,256 @@ const commands = {
     if (clusters.length > 1) lines.push(`  Clusters: ${clusters.length}`);
     output(lines.join('\n'));
   },
+
+  // --- Evolve Loop ---
+
+  'loop-init'() {
+    const objective = commandArgs[0];
+    if (!objective) error('Usage: zed loop-init "objective text" [--max N]');
+
+    let maxIterations = 0;
+    const maxIdx = commandArgs.indexOf('--max');
+    if (maxIdx !== -1 && commandArgs[maxIdx + 1]) {
+      maxIterations = parseInt(commandArgs[maxIdx + 1]) || 0;
+    }
+
+    const date = new Date().toISOString().split('T')[0];
+    const loopDir = path.join(VAULT_DIR, '_loop');
+
+    const objectiveContent = [
+      '---',
+      `title: "${objective}"`,
+      `date: ${date}`,
+      'type: loop-objective',
+      `max_iterations: ${maxIterations}`,
+      'self_assess_every: 3',
+      'completed: false',
+      'tags: [loop, evolve]',
+      '---',
+      '',
+      '# Objective',
+      '',
+      objective,
+      '',
+      '## Scope',
+      '',
+      '_Defined by the objective above. Stay focused._',
+      '',
+      '## Success Criteria',
+      '',
+      '_Objective is fully achieved._',
+      '',
+    ].join('\n');
+
+    const progressContent = [
+      '---',
+      'title: "Evolve Progress"',
+      `date: ${date}`,
+      'type: loop-progress',
+      'iteration: 0',
+      'tags: [loop, evolve]',
+      '---',
+      '',
+      '# Evolve Progress',
+      '',
+      '---',
+      '',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(loopDir, 'objective.md'), objectiveContent, 'utf-8');
+    fs.writeFileSync(path.join(loopDir, 'progress.md'), progressContent, 'utf-8');
+
+    output(jsonMode
+      ? { action: 'loop-init', objective, max_iterations: maxIterations }
+      : `Evolve loop initialized: "${objective}" (max: ${maxIterations === 0 ? 'unlimited' : maxIterations})`
+    );
+  },
+
+  'loop-tick'() {
+    const note = commandArgs[0];
+    if (!note) error('Usage: zed loop-tick "what was accomplished this iteration"');
+
+    const loopDir = path.join(VAULT_DIR, '_loop');
+    const progressPath = path.join(loopDir, 'progress.md');
+    const objectivePath = path.join(loopDir, 'objective.md');
+
+    if (!fs.existsSync(progressPath)) error('No active evolve loop. Run: zed loop-init "objective"');
+
+    let progressContent = fs.readFileSync(progressPath, 'utf-8');
+
+    // Parse current iteration from frontmatter
+    const iterMatch = progressContent.match(/^iteration:\s*(\d+)/m);
+    const currentIteration = iterMatch ? parseInt(iterMatch[1]) : 0;
+    const newIteration = currentIteration + 1;
+
+    // Update iteration in frontmatter
+    progressContent = progressContent.replace(/^iteration:\s*\d+/m, `iteration: ${newIteration}`);
+
+    // Append new entry
+    const timestamp = new Date().toISOString();
+    const entry = `### Iteration ${newIteration} — ${timestamp}\n\n${note}\n\n---\n\n`;
+    progressContent = progressContent + entry;
+
+    fs.writeFileSync(progressPath, progressContent, 'utf-8');
+
+    // Check max_iterations from objective
+    let maxIterations = 0;
+    let shouldContinue = true;
+    if (fs.existsSync(objectivePath)) {
+      const objectiveContent = fs.readFileSync(objectivePath, 'utf-8');
+      const maxMatch = objectiveContent.match(/^max_iterations:\s*(\d+)/m);
+      maxIterations = maxMatch ? parseInt(maxMatch[1]) : 0;
+      if (maxIterations > 0 && newIteration >= maxIterations) {
+        shouldContinue = false;
+      }
+    }
+
+    output(jsonMode
+      ? { iteration: newIteration, max: maxIterations, continue: shouldContinue }
+      : `Iteration ${newIteration}/${maxIterations === 0 ? 'unlimited' : maxIterations} recorded. Continue: ${shouldContinue}`
+    );
+  },
+
+  'loop-status'() {
+    const loopDir = path.join(VAULT_DIR, '_loop');
+    const objectivePath = path.join(loopDir, 'objective.md');
+    const progressPath = path.join(loopDir, 'progress.md');
+
+    if (!fs.existsSync(objectivePath) || !fs.existsSync(progressPath)) {
+      return output(jsonMode ? { active: false, message: 'No active evolve loop' } : 'No active evolve loop');
+    }
+
+    const objectiveContent = fs.readFileSync(objectivePath, 'utf-8');
+    const progressContent = fs.readFileSync(progressPath, 'utf-8');
+
+    // Parse objective frontmatter
+    const titleMatch = objectiveContent.match(/^title:\s*"(.+)"/m);
+    const maxMatch = objectiveContent.match(/^max_iterations:\s*(\d+)/m);
+    const completedMatch = objectiveContent.match(/^completed:\s*(true|false)/m);
+
+    const title = titleMatch ? titleMatch[1] : 'Unknown';
+    const maxIterations = maxMatch ? parseInt(maxMatch[1]) : 0;
+    const completed = completedMatch ? completedMatch[1] === 'true' : false;
+
+    // Parse progress frontmatter
+    const iterMatch = progressContent.match(/^iteration:\s*(\d+)/m);
+    const iteration = iterMatch ? parseInt(iterMatch[1]) : 0;
+
+    // Get last progress entry
+    const entries = progressContent.split(/^### /m).slice(1);
+    const lastEntry = entries.length > 0 ? '### ' + entries[entries.length - 1].trim() : 'No iterations yet';
+
+    // List assessment files
+    const assessments = fs.readdirSync(loopDir).filter(f => f.startsWith('assessment-') && f.endsWith('.md'));
+
+    if (jsonMode) {
+      return output({ active: true, objective: title, iteration, max: maxIterations, completed, assessments, lastEntry });
+    }
+
+    const lines = [
+      `Evolve Loop Status`,
+      `  Objective: ${title}`,
+      `  Iteration: ${iteration}/${maxIterations === 0 ? 'unlimited' : maxIterations}`,
+      `  Completed: ${completed}`,
+    ];
+    if (assessments.length > 0) lines.push(`  Assessments: ${assessments.join(', ')}`);
+    lines.push(`  Last entry:\n    ${lastEntry.split('\n').join('\n    ')}`);
+    output(lines.join('\n'));
+  },
+
+  'loop-stop'() {
+    const reason = commandArgs[0];
+    if (!reason) error('Usage: zed loop-stop "reason for stopping"');
+
+    const loopDir = path.join(VAULT_DIR, '_loop');
+    const objectivePath = path.join(loopDir, 'objective.md');
+
+    if (!fs.existsSync(objectivePath)) error('No active evolve loop');
+
+    let content = fs.readFileSync(objectivePath, 'utf-8');
+
+    // Set completed to true in frontmatter
+    content = content.replace(/^completed:\s*false/m, 'completed: true');
+
+    // Append stop reason
+    const timestamp = new Date().toISOString();
+    content += `\n## Stopped\n\n**${timestamp}** — ${reason}\n`;
+
+    fs.writeFileSync(objectivePath, content, 'utf-8');
+
+    output(jsonMode
+      ? { action: 'loop-stop', reason, timestamp }
+      : `Evolve loop stopped: ${reason}`
+    );
+  },
+
+  'loop-promote'() {
+    const loopDir = path.join(VAULT_DIR, '_loop');
+    const progressPath = path.join(loopDir, 'progress.md');
+    const objectivePath = path.join(loopDir, 'objective.md');
+
+    if (!fs.existsSync(progressPath)) error('No active evolve loop to promote');
+
+    const progressContent = fs.readFileSync(progressPath, 'utf-8');
+    const objectiveContent = fs.existsSync(objectivePath) ? fs.readFileSync(objectivePath, 'utf-8') : '';
+
+    // Parse objective title
+    const titleMatch = objectiveContent.match(/^title:\s*"(.+)"/m);
+    const objective = titleMatch ? titleMatch[1] : 'Evolve Loop';
+
+    // Create summary note in sessions/
+    const date = new Date().toISOString().split('T')[0];
+    const slug = objective.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const summaryFileName = `${date}-loop-${slug}.md`;
+    const summaryPath = path.join(VAULT_DIR, 'sessions', summaryFileName);
+
+    const summaryContent = [
+      '---',
+      `title: "Loop Summary: ${objective}"`,
+      `date: ${date}`,
+      'type: loop-summary',
+      'tags: [loop, evolve, summary]',
+      '---',
+      '',
+      `# Loop Summary: ${objective}`,
+      '',
+      '## Objective',
+      '',
+      objective,
+      '',
+      '## Progress Log',
+      '',
+      progressContent.split('---').slice(2).join('---').trim(),
+      '',
+    ].join('\n');
+
+    fs.writeFileSync(summaryPath, summaryContent, 'utf-8');
+    const promoted = [summaryFileName];
+
+    // Move assessment files to sessions/
+    const loopFiles = fs.readdirSync(loopDir);
+    const assessments = loopFiles.filter(f => f.startsWith('assessment-') && f.endsWith('.md'));
+    for (const assessment of assessments) {
+      const src = path.join(loopDir, assessment);
+      const dest = path.join(VAULT_DIR, 'sessions', assessment);
+      fs.copyFileSync(src, dest);
+      promoted.push(assessment);
+    }
+
+    // Clear _loop/ directory
+    for (const file of loopFiles) {
+      fs.unlinkSync(path.join(loopDir, file));
+    }
+
+    // Rebuild graph
+    const engine = getEngine();
+    engine.rebuild();
+
+    output(jsonMode
+      ? { action: 'loop-promote', promoted }
+      : `Promoted ${promoted.length} file(s) to sessions/:\n${promoted.map(f => '  ' + f).join('\n')}`
+    );
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -707,6 +958,13 @@ Maintenance:
   global-search <query>     Search project + global vaults
   license [status|activate] License management
   graph [max_nodes]         Export graph data as JSON
+
+Evolve Loop:
+  loop-init "obj" [--max N]   Start an evolve loop
+  loop-tick "progress"        Record iteration progress
+  loop-status                 Check loop state
+  loop-stop "reason"          Stop loop gracefully
+  loop-promote                Promote findings to vault
 
 Options:
   --json                    Output as JSON (for machine parsing)

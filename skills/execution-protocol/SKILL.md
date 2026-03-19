@@ -2,6 +2,13 @@
 description: ZED execution protocol — auto-triggers on complex coding tasks to apply multi-phase planning, verification gates, and knowledge capture. Activates when Claude detects tasks with 3+ steps, architecture decisions, or unfamiliar territory.
 ---
 
+## Mode Awareness
+
+This protocol's activation depends on the current behavioral mode:
+- **Light mode**: Use Steps 1 and 4 only (context check + verify). Skip planning and capture for simple tasks.
+- **Full mode**: Full protocol (all 5 steps).
+- **Evolve mode**: Full protocol, but scope-locked to the evolve objective.
+
 ## ZED Execution Protocol
 
 You are operating under the ZED execution protocol. This task has been identified as requiring structured execution.
