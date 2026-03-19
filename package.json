@@ -5,6 +5,9 @@
   "main": "core/engine.cjs",
   "scripts": {
     "test": "cd core && node test.cjs",
+    "test:mcp": "node server/test-mcp.cjs",
+    "test:all": "cd core && node test.cjs && cd .. && node server/test-mcp.cjs",
+    "bench": "node core/bench.cjs",
     "start": "node server/mcp-server.mjs",
     "setup": "bash scripts/setup.sh"
   },
