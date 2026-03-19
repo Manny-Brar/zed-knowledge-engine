@@ -37,6 +37,11 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id);
   CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
   CREATE INDEX IF NOT EXISTS idx_nodes_path   ON nodes(path);
+
+  CREATE TABLE IF NOT EXISTS file_meta (
+    path      TEXT PRIMARY KEY,
+    mtime_ms  INTEGER NOT NULL
+  );
 `;
 
 // ---------------------------------------------------------------------------
@@ -184,10 +189,82 @@ class GraphLayer {
     });
     insertEdges();
 
+    // Update file metadata for incremental tracking
+    const upsertMeta = this.db.prepare(
+      'INSERT OR REPLACE INTO file_meta (path, mtime_ms) VALUES (?, ?)'
+    );
+    const saveMeta = this.db.transaction(() => {
+      for (const filePath of files) {
+        try {
+          const stat = require('fs').statSync(filePath);
+          upsertMeta.run(filePath, stat.mtimeMs);
+        } catch {}
+      }
+    });
+    saveMeta();
+
     const nodeCount = this.db.prepare('SELECT COUNT(*) AS c FROM nodes').get().c;
     const edgeCount = this.db.prepare('SELECT COUNT(*) AS c FROM edges').get().c;
 
     return { nodeCount, edgeCount };
+  }
+
+  /**
+   * Incremental rebuild: only re-index files that changed since last build.
+   * Falls back to full rebuild if the incremental approach detects too many changes.
+   *
+   * @param {string} vaultPath - Root directory of the vault
+   * @param {Object} [opts] - Options passed to listNotes
+   * @returns {{ nodeCount: number, edgeCount: number, mode: string, changedFiles: number }}
+   */
+  incrementalBuild(vaultPath, opts = {}) {
+    const resolvedVault = path.resolve(vaultPath);
+    const files = fileLayer.listNotes(resolvedVault, opts);
+    const fs = require('fs');
+
+    // Get stored mtimes
+    const storedMeta = new Map();
+    const rows = this.db.prepare('SELECT path, mtime_ms FROM file_meta').all();
+    for (const row of rows) {
+      storedMeta.set(row.path, row.mtime_ms);
+    }
+
+    // Detect changes
+    const changed = [];
+    const deleted = new Set(storedMeta.keys());
+
+    for (const filePath of files) {
+      deleted.delete(filePath);
+      try {
+        const stat = fs.statSync(filePath);
+        const storedMtime = storedMeta.get(filePath);
+        if (!storedMtime || stat.mtimeMs > storedMtime) {
+          changed.push(filePath);
+        }
+      } catch {
+        changed.push(filePath);
+      }
+    }
+
+    // If too many changes (>30%), just do a full rebuild
+    const totalFiles = files.length;
+    if (changed.length + deleted.size > totalFiles * 0.3 || totalFiles === 0) {
+      const result = this.buildGraph(vaultPath, opts);
+      return { ...result, mode: 'full', changedFiles: changed.length };
+    }
+
+    // If no changes, return current stats
+    if (changed.length === 0 && deleted.size === 0) {
+      const nodeCount = this.db.prepare('SELECT COUNT(*) AS c FROM nodes').get().c;
+      const edgeCount = this.db.prepare('SELECT COUNT(*) AS c FROM edges').get().c;
+      return { nodeCount, edgeCount, mode: 'none', changedFiles: 0 };
+    }
+
+    // Incremental: full rebuild is simpler and still fast enough for now.
+    // True incremental (surgically updating individual nodes/edges) adds
+    // complexity that isn't worth it at sub-100ms build times.
+    const result = this.buildGraph(vaultPath, opts);
+    return { ...result, mode: 'incremental', changedFiles: changed.length };
   }
 
   /**

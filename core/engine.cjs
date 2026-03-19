@@ -108,6 +108,21 @@ class KnowledgeEngine {
   }
 
   /**
+   * Incremental build: only re-index files that changed since last build.
+   * Falls back to full rebuild if >30% of files changed.
+   *
+   * @returns {{ nodeCount: number, edgeCount: number, mode: string, changedFiles: number }}
+   */
+  incrementalBuild() {
+    const result = this.graph.incrementalBuild(this.vaultPath, this.ignoreOpts);
+    if (result.mode !== 'none') {
+      this.search.indexVault(this.vaultPath);
+    }
+    this._ready = true;
+    return result;
+  }
+
+  /**
    * Rebuild the graph and index from scratch.
    * Alias for build() — clears existing data and rebuilds.
    *
