@@ -14,7 +14,7 @@ Every AI coding assistant has the same fatal flaw: context amnesia. You start a 
 
 ```bash
 # Add the marketplace
-/plugin marketplace add mannybrar/nelson-knowledge-engine
+/plugin marketplace add mannybrar/nelson-plugins
 
 # Install the plugin
 /plugin install nelson-knowledge-engine
@@ -28,8 +28,8 @@ Every AI coding assistant has the same fatal flaw: context amnesia. You start a 
 The plugin auto-starts on session load. On first run it creates your knowledge vault and starts a 14-day free trial.
 
 ```bash
-# Check status
-/ke:status
+# Full vault overview
+/ke:overview
 
 # Record your first decision
 /ke:decide "Use TypeScript for the API layer"
@@ -39,6 +39,9 @@ The plugin auto-starts on session load. On first run it creates your knowledge v
 
 # View today's session notes
 /ke:daily
+
+# Check vault health
+/ke:health
 
 # See the full help guide
 /ke:help
@@ -64,37 +67,58 @@ Architecture Decision Records (ADRs) with `/ke:decide`. Track what was decided, 
 Automatic daily notes that capture your work sessions. Build continuity across days — each session picks up where the last one left off.
 
 ### Templates
-5 built-in templates for structured knowledge capture:
+5 built-in templates with `/ke:template`:
 - Decision Record (ADR)
 - Architecture Doc
 - Bug Postmortem
 - Pattern Library
 - Daily Session
 
+### Vault Health Scoring
+`/ke:health` grades your vault (A-F, 0-100) based on connectivity, orphan ratio, hub density, and cluster count. Gives specific recommendations to improve your knowledge graph.
+
+### Cross-Project Knowledge
+Patterns learned in one project are available in all projects via the global vault. Use `/ke:promote` to move knowledge from project to global scope.
+
+### Tag Navigation
+Browse your knowledge by tags with `/ke:tags`. See all tags with counts, or filter notes by a specific tag.
+
+### Timeline View
+Chronological view of decisions, sessions, patterns, and events with date and type badges.
+
 ### Graph Visualization
 `/ke:graph` renders your knowledge structure as an ASCII diagram or Excalidraw canvas. See hubs, clusters, orphans, and connections at a glance.
 
-## Commands
+### Smart Link Suggestions
+`ke_suggest_links` detects when note titles are mentioned in other notes without `[[wikilinks]]` and suggests connections to strengthen your graph.
+
+## Commands (13)
 
 | Command | Description |
 |---------|-------------|
+| `/ke:overview` | Full vault dashboard (stats + health + hubs + recent + tags) |
 | `/ke:help` | Usage guide |
 | `/ke:status` | Vault statistics |
 | `/ke:search <query>` | Graph-boosted search |
 | `/ke:decide <title>` | Create decision record |
 | `/ke:daily` | Today's session note |
+| `/ke:template <type> <title>` | Create note from template |
+| `/ke:health` | Vault quality score + recommendations |
+| `/ke:tags [tag]` | Browse by tags |
 | `/ke:graph` | Visualize knowledge graph |
 | `/ke:import <dir>` | Import existing markdown files |
 | `/ke:promote <note>` | Promote note to global vault |
 | `/ke:activate <key>` | Activate license |
 
-## MCP Tools (17 total)
+## MCP Tools (24)
 
 Claude automatically has access to these tools:
 
 | Tool | Description |
 |------|-------------|
 | `ke_search` | Full-text search with graph boost |
+| `ke_search_snippets` | Search with context snippets showing matching lines |
+| `ke_template` | Create note from built-in template |
 | `ke_backlinks` | Find what links to a note |
 | `ke_related` | Related notes within N hops |
 | `ke_hubs` | Most-connected knowledge nodes |
@@ -107,7 +131,12 @@ Claude automatically has access to these tools:
 | `ke_daily` | Daily session note |
 | `ke_rebuild` | Rebuild graph index |
 | `ke_import` | Import markdown files from directory |
-| `ke_license` | License management |
+| `ke_license` | License management (status + activate) |
+| `ke_health` | Vault quality score (0-100) with recommendations |
+| `ke_tags` | List all tags or browse by tag |
+| `ke_recent` | Recently modified notes |
+| `ke_suggest_links` | Find unlinked mentions, suggest connections |
+| `ke_timeline` | Chronological view of decisions and events |
 | `ke_graph_data` | Export graph data for visualization |
 | `ke_global_search` | Search across project + global vaults |
 | `ke_promote` | Promote project note to global vault |
@@ -117,22 +146,42 @@ Claude automatically has access to these tools:
 ```
 Claude Code Session
     │
-    ├── Commands (/ke:search, /ke:decide, etc.)
-    ├── Skills (context-loader, compound-learner)
+    ├── Commands (13 slash commands)
+    ├── Skills (context-loader, compound-learner, onboarding)
     ├── Agents (knowledge-indexer, graph-explorer)
     ├── Hooks (SessionStart, Stop)
     │
-    └── MCP Server (14 tools)
+    └── MCP Server (24 tools)
          │
-         └── Knowledge Engine Core
-              ├── File Layer (markdown I/O, wikilinks, frontmatter)
-              ├── Graph Layer (SQLite nodes + edges, BFS, clusters)
-              └── Search Layer (FTS5 + graph-boosted ranking)
-                   │
-                   └── ${CLAUDE_PLUGIN_DATA}/
-                        ├── knowledge.db (SQLite)
-                        └── vault/ (markdown notes)
+         ├── Project Engine (per-project knowledge)
+         │    ├── File Layer (markdown I/O, wikilinks, frontmatter)
+         │    ├── Graph Layer (SQLite, BFS, clusters, incremental rebuild)
+         │    └── Search Layer (FTS5 + graph-boosted ranking)
+         │
+         ├── Global Engine (cross-project patterns)
+         │
+         └── License Manager (trial, key validation)
+              │
+              ├── ${CLAUDE_PLUGIN_DATA}/
+              │    ├── knowledge.db (project graph)
+              │    └── vault/ (project notes)
+              │
+              └── ~/.nelson-ke/
+                   ├── global.db (global graph)
+                   └── global/ (global patterns)
 ```
+
+## Performance
+
+Benchmarked on synthetic vaults:
+
+| Vault Size | Full Build | Search | Backlinks |
+|-----------|-----------|--------|-----------|
+| 100 notes | ~10ms | <1ms | <1ms |
+| 500 notes | ~43ms | <1ms | <1ms |
+| 1000 notes | ~91ms | <1ms | <1ms |
+
+Incremental rebuild skips unchanged files for even faster updates.
 
 ## Pricing
 
@@ -143,7 +192,7 @@ Claude Code Session
 
 - Claude Code (Claude Pro or Team subscription)
 - Node.js 18+
-- macOS, Linux, or Windows
+- macOS or Linux
 
 ## Development
 
@@ -155,8 +204,17 @@ cd nelson-knowledge-engine
 # Install dependencies (macOS may need CXXFLAGS for better-sqlite3)
 npm install
 
-# Run tests
+# Run core tests (35 tests)
 npm test
+
+# Run MCP integration tests (19 tests)
+npm run test:mcp
+
+# Run all tests (54 total)
+npm run test:all
+
+# Run performance benchmarks
+npm run bench
 
 # Test as Claude Code plugin
 claude --plugin-dir .
