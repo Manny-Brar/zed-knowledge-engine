@@ -136,6 +136,61 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Tool 1c: ke_template — Create a note from a template
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_template',
+  {
+    template_type: z.enum(['decision', 'architecture', 'postmortem', 'pattern', 'daily']).describe('Template type to use'),
+    title: z.string().describe('Title for the new note'),
+  },
+  async ({ template_type, title }) => {
+    try {
+      const templateMap = {
+        decision: 'decision-record.md',
+        architecture: 'architecture-doc.md',
+        postmortem: 'bug-postmortem.md',
+        pattern: 'pattern-library.md',
+        daily: 'daily-session.md',
+      };
+
+      const subdirMap = {
+        decision: 'decisions',
+        architecture: 'architecture',
+        postmortem: 'decisions',
+        pattern: 'patterns',
+        daily: 'sessions',
+      };
+
+      const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+      const templatePath = path.join(pluginRoot, 'templates', templateMap[template_type]);
+
+      if (!fs.existsSync(templatePath)) {
+        return { content: [{ type: 'text', text: `Template not found: ${template_type}` }], isError: true };
+      }
+
+      let content = fs.readFileSync(templatePath, 'utf-8');
+      const date = new Date().toISOString().split('T')[0];
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+      // Replace template variables
+      content = content.replace(/\{\{TITLE\}\}/g, title);
+      content = content.replace(/\{\{DATE\}\}/g, date);
+
+      const fileName = `${subdirMap[template_type]}/${date}-${slug}.md`;
+      const notePath = path.join(VAULT_DIR, fileName);
+      engine.writeNote(notePath, content);
+      engine.rebuild();
+
+      return { content: [{ type: 'text', text: `Created from ${template_type} template: ${fileName}\nTitle: ${title}\nEdit the note to fill in the details.` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Tool 2: ke_backlinks — Get backlinks pointing to a note
 // ---------------------------------------------------------------------------
 
