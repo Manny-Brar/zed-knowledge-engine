@@ -10,17 +10,30 @@ Every AI coding assistant has the same fatal flaw: context amnesia. You start a 
 
 ## Quick Start
 
-### Install
+### Install (Local / Dev Testing)
 
 ```bash
-# Add the marketplace
-/plugin marketplace add mannybrar/nelson-plugins
+# Clone the repo
+git clone https://github.com/Manny-Brar/nelson-knowledge-engine.git
+cd nelson-knowledge-engine
 
-# Install the plugin
+# Install dependencies
+# macOS 26 / Node 24 may need this prefix:
+# CXXFLAGS="-I$(xcrun --show-sdk-path)/usr/include/c++/v1 -isysroot $(xcrun --show-sdk-path)"
+npm install
+
+# Run setup (creates data directories + initializes DB)
+npm run setup
+
+# Launch Claude Code with the plugin loaded
+claude --plugin-dir .
+```
+
+### Install (From Marketplace — coming soon)
+
+```bash
+/plugin marketplace add Manny-Brar/nelson-plugins
 /plugin install nelson-knowledge-engine
-
-# Or install directly from Git
-/plugin install --git https://github.com/mannybrar/nelson-knowledge-engine.git
 ```
 
 ### First Run
