@@ -1,0 +1,23 @@
+{
+  "name": "nelson-knowledge-engine",
+  "version": "6.0.0",
+  "description": "Persistent knowledge graph for Claude Code — graph-boosted search, auto-capture, decision tracking, and visualization. Your AI co-founder's memory.",
+  "author": {
+    "name": "Manny Brar",
+    "url": "https://github.com/mannybrar"
+  },
+  "license": "PROPRIETARY",
+  "keywords": [
+    "knowledge-graph",
+    "memory",
+    "search",
+    "knowledge-management",
+    "second-brain",
+    "nelson"
+  ],
+  "commands": "./commands/",
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}

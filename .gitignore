@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Database files
+*.db
+*.db-wal
+*.db-shm
+
+# Plugin data (user-specific)
+.nelson-ke-data/
+
+# Nelson loop state (local only)
+.claude/*.local.*
+.claude/*.local.md
+.claude/*.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test artifacts
+.test-vault/

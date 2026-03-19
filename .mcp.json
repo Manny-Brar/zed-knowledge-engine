@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "nelson-knowledge-engine": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/mcp-server.mjs"],
+      "env": {
+        "CLAUDE_PLUGIN_DATA": "${CLAUDE_PLUGIN_DATA}"
+      }
+    }
+  }
+}

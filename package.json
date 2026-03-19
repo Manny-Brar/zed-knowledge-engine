@@ -1,0 +1,20 @@
+{
+  "name": "nelson-knowledge-engine",
+  "version": "6.0.0",
+  "description": "Persistent knowledge graph for Claude Code — graph-boosted search, auto-capture, decision tracking, and visualization.",
+  "main": "core/engine.cjs",
+  "scripts": {
+    "test": "cd core && node test.cjs",
+    "start": "node server/mcp-server.mjs",
+    "setup": "bash scripts/setup.sh"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "better-sqlite3": "^11.10.0",
+    "zod": "^4.3.6"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": true
+}
