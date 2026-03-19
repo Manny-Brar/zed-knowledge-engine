@@ -246,6 +246,61 @@ class SearchLayer {
   }
 
   /**
+   * Search with context snippets showing matching lines.
+   * Returns the lines containing query terms with surrounding context.
+   *
+   * @param {string} query - Search query
+   * @param {Object} [opts]
+   * @param {number} [opts.limit=10] - Max results
+   * @param {number} [opts.snippetLines=2] - Lines of context around each match
+   * @returns {Array<{ node: Object, score: number, snippets: string[] }>}
+   */
+  searchWithSnippets(query, opts = {}) {
+    const limit = opts.limit || 10;
+    const snippetLines = opts.snippetLines || 2;
+    const results = this.search(query, { limit });
+
+    // Extract search terms for matching
+    const terms = query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 2);
+
+    return results.map(r => {
+      const snippets = [];
+      try {
+        const note = fileLayer.readNote(r.node.path);
+        const lines = note.body.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+          const lineLower = lines[i].toLowerCase();
+          const hasMatch = terms.some(term => lineLower.includes(term));
+
+          if (hasMatch) {
+            // Gather context window
+            const start = Math.max(0, i - snippetLines);
+            const end = Math.min(lines.length - 1, i + snippetLines);
+            const snippet = lines.slice(start, end + 1).join('\n').trim();
+            if (snippet && snippets.length < 3) { // Max 3 snippets per note
+              snippets.push(snippet);
+            }
+            // Skip past this context window
+            i = end;
+          }
+        }
+      } catch {}
+
+      return {
+        node: r.node,
+        score: r.boostedScore,
+        backlinkCount: r.backlinkCount,
+        snippets,
+      };
+    });
+  }
+
+  /**
    * Sanitize a user query for FTS5.
    * Wraps each term to prevent syntax errors.
    *

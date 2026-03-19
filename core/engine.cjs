@@ -269,6 +269,16 @@ class KnowledgeEngine {
     return this.search.tieredSearch(query, opts);
   }
 
+  /**
+   * Search with context snippets showing matching lines.
+   * @param {string} query
+   * @param {Object} [opts]
+   * @returns {Array}
+   */
+  searchWithSnippets(query, opts) {
+    return this.search.searchWithSnippets(query, opts);
+  }
+
   // -------------------------------------------------------------------------
   // Stats & Utilities
   // -------------------------------------------------------------------------

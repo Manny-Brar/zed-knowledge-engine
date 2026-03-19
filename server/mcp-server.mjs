@@ -107,6 +107,35 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Tool 1b: ke_search_snippets — Search with context snippets
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_search_snippets',
+  {
+    query: z.string().describe('Search query'),
+    limit: z.number().int().positive().default(5).describe('Maximum number of results'),
+  },
+  async ({ query, limit }) => {
+    try {
+      const results = engine.searchWithSnippets(query, { limit });
+      if (results.length === 0) {
+        return { content: [{ type: 'text', text: `No results found for "${query}"` }] };
+      }
+      const formatted = results.map((r, i) => {
+        const snippetText = r.snippets.length > 0
+          ? r.snippets.map(s => `> ${s.replace(/\n/g, '\n> ')}`).join('\n\n')
+          : '> _No matching snippets_';
+        return `### ${i + 1}. ${r.node.title} (score: ${r.score.toFixed(3)})\n\n${snippetText}`;
+      }).join('\n\n---\n\n');
+      return { content: [{ type: 'text', text: `## Search Snippets: "${query}"\n\n${formatted}` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Tool 2: ke_backlinks — Get backlinks pointing to a note
 // ---------------------------------------------------------------------------
 
