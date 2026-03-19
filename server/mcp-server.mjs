@@ -987,7 +987,68 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 20: ke_global_search — Search across project + global vaults
+// Tool 20: ke_timeline — Chronological view of decisions and events
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'ke_timeline',
+  {
+    type_filter: z.string().default('').describe('Filter by type (decision, daily, pattern, postmortem). Empty for all.'),
+    limit: z.number().int().positive().default(20).describe('Max entries'),
+  },
+  async ({ type_filter, limit }) => {
+    try {
+      const notes = engine.listNotes();
+      const entries = [];
+
+      for (const notePath of notes) {
+        try {
+          const note = engine.readNote(notePath);
+          const type = note.frontmatter.type || 'note';
+          const date = note.frontmatter.date || null;
+
+          if (type_filter && type !== type_filter) continue;
+
+          entries.push({
+            title: note.title,
+            type,
+            date: date || 'undated',
+            path: notePath,
+          });
+        } catch {}
+      }
+
+      // Sort by date descending
+      entries.sort((a, b) => {
+        if (a.date === 'undated') return 1;
+        if (b.date === 'undated') return -1;
+        return b.date.localeCompare(a.date);
+      });
+
+      const limited = entries.slice(0, limit);
+
+      if (limited.length === 0) {
+        return { content: [{ type: 'text', text: type_filter ? `No ${type_filter} entries found.` : 'No dated entries found.' }] };
+      }
+
+      const typeEmoji = { decision: 'D', daily: 'S', pattern: 'P', postmortem: 'B', architecture: 'A', note: 'N', index: 'I', imported: 'i' };
+
+      const formatted = limited.map(e => {
+        const badge = typeEmoji[e.type] || 'N';
+        return `\`${e.date}\` [${badge}] **${e.title}**`;
+      }).join('\n');
+
+      const legend = 'Legend: [D]ecision [S]ession [P]attern [B]ug [A]rchitecture [N]ote';
+
+      return { content: [{ type: 'text', text: `## Timeline${type_filter ? ` (${type_filter})` : ''}\n\n${formatted}\n\n_${legend}_` }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 21: ke_global_search — Search across project + global vaults
 // ---------------------------------------------------------------------------
 
 server.tool(

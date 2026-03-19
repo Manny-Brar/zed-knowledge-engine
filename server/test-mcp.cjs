@@ -143,7 +143,7 @@ async function runTests() {
   // Tool listing
   await test('lists all 17 tools', async () => {
     const tools = await client.listTools();
-    assert.strictEqual(tools.length, 23);
+    assert.strictEqual(tools.length, 24);
     const names = tools.map(t => t.name);
     assert.ok(names.includes('ke_search'));
     assert.ok(names.includes('ke_stats'));
