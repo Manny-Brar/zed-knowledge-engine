@@ -8,10 +8,10 @@ If "$ARGUMENTS" is provided, filter by it (e.g., "decisions" shows only decision
 
 ## Steps
 
-1. Use `ke_stats` to get an overview
-2. Use `ke_hubs` (limit 20) to get the most important nodes
-3. Use `ke_clusters` to understand groupings
-4. For each hub, use `ke_backlinks` to get the connection details
+1. Use `zed_stats` to get an overview
+2. Use `zed_hubs` (limit 20) to get the most important nodes
+3. Use `zed_clusters` to understand groupings
+4. For each hub, use `zed_backlinks` to get the connection details
 
 ## Output Format
 

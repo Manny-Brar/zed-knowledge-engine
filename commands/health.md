@@ -2,7 +2,7 @@
 description: Check the health score and quality of your knowledge vault
 ---
 
-Use the `ke_health` MCP tool to get a health score for the knowledge vault.
+Use the `zed_health` MCP tool to get a health score for the knowledge vault.
 
 Present the results clearly — the score, grade, metrics, and any recommendations for improving the knowledge graph.
 

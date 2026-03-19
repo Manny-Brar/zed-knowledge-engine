@@ -7,7 +7,7 @@
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.nelson-ke-data}"
+DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
 VAULT_DIR="$DATA_DIR/vault"
 DB_PATH="$DATA_DIR/knowledge.db"
 
@@ -27,11 +27,11 @@ node -e "
   const stats = engine.getStats();
 
   if (stats.nodeCount > 0) {
-    console.log('[KE] Knowledge Engine: ' + stats.nodeCount + ' notes, ' + stats.edgeCount + ' connections, ' + stats.clusterCount + ' clusters');
+    console.log('[ZED] Knowledge Engine: ' + stats.nodeCount + ' notes, ' + stats.edgeCount + ' connections, ' + stats.clusterCount + ' clusters');
 
     const hubs = engine.findHubs(3);
     if (hubs.length > 0 && hubs[0].backlink_count > 0) {
-      console.log('[KE] Top hubs: ' + hubs.filter(h => h.backlink_count > 0).map(h => h.title + ' (' + h.backlink_count + ')').join(', '));
+      console.log('[ZED] Top hubs: ' + hubs.filter(h => h.backlink_count > 0).map(h => h.title + ' (' + h.backlink_count + ')').join(', '));
     }
   }
 

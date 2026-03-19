@@ -1,10 +1,10 @@
 ---
-description: Activate a Nelson Knowledge Engine license key
+description: Activate a ZED Knowledge Engine license key
 ---
 
 The user wants to activate a license key: "$ARGUMENTS"
 
-Use the `ke_license` MCP tool to activate the key. If no key was provided, ask the user for their license key in the format KE6-XXXX-XXXX-XXXX-XXXX.
+Use the `zed_license` MCP tool to activate the key. If no key was provided, ask the user for their license key in the format KE6-XXXX-XXXX-XXXX-XXXX.
 
 After activation, show the license status including tier and expiry.
 

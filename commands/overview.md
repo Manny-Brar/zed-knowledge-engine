@@ -4,17 +4,17 @@ description: Comprehensive vault dashboard — stats, health, hubs, recent notes
 
 Generate a comprehensive knowledge vault overview by calling multiple tools:
 
-1. `ke_stats` — vault statistics
-2. `ke_health` — health score and recommendations
-3. `ke_hubs` (limit 5) — most connected notes
-4. `ke_recent` (limit 5) — recently modified notes
-5. `ke_tags` — tag cloud
-6. `ke_suggest_links` (limit 3) — quick link suggestions
+1. `zed_stats` — vault statistics
+2. `zed_health` — health score and recommendations
+3. `zed_hubs` (limit 5) — most connected notes
+4. `zed_recent` (limit 5) — recently modified notes
+5. `zed_tags` — tag cloud
+6. `zed_suggest_links` (limit 3) — quick link suggestions
 
 Present as a clean dashboard:
 
 ```
-Nelson Knowledge Engine — Vault Overview
+ZED Knowledge Engine — Vault Overview
 ═════════════════════════════════════════
 Health: B (78/100) — Good
 

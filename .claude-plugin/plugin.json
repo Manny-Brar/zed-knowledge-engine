@@ -1,19 +1,20 @@
 {
-  "name": "nelson-knowledge-engine",
+  "name": "zed-knowledge-engine",
   "version": "6.0.0",
-  "description": "Persistent knowledge graph for Claude Code — graph-boosted search, auto-capture, decision tracking, and visualization. Your AI co-founder's memory.",
+  "description": "ZED — Persistent knowledge graph for Claude Code. Graph-boosted search, auto-capture, decision tracking, visualization. Powered by the Nelson Muntz Protocol.",
   "author": {
     "name": "Manny Brar",
-    "url": "https://github.com/mannybrar"
+    "url": "https://github.com/Manny-Brar"
   },
   "license": "PROPRIETARY",
   "keywords": [
+    "zed",
     "knowledge-graph",
     "memory",
     "search",
     "knowledge-management",
     "second-brain",
-    "nelson"
+    "nelson-muntz-protocol"
   ],
   "commands": "./commands/",
   "skills": "./skills/",

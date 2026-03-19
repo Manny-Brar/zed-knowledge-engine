@@ -1,6 +1,6 @@
-# Nelson Knowledge Engine v6 — Beta Tester Guide
+# ZED Knowledge Engine v6 — Beta Tester Guide
 
-Thanks for testing the Nelson Knowledge Engine! Here's how to get started.
+Thanks for testing the ZED Knowledge Engine! Here's how to get started.
 
 ## Installation
 
@@ -18,25 +18,25 @@ Or if installed from marketplace:
 ## Activate Your Beta Key
 
 ```bash
-/ke:activate KE6-XXXX-XXXX-XXXX-XXXX
+/zed:activate KE6-XXXX-XXXX-XXXX-XXXX
 ```
 
 Use one of your assigned beta keys. Each key works on one machine.
 
 ## Quick Start (2 minutes)
 
-1. **See your vault**: `/ke:overview`
-2. **Record a decision**: `/ke:decide "Why we chose React over Vue"`
-3. **Import project docs**: `/ke:import ./docs` (if you have a docs/ directory)
-4. **Search**: `/ke:search authentication`
-5. **Check health**: `/ke:health`
+1. **See your vault**: `/zed:overview`
+2. **Record a decision**: `/zed:decide "Why we chose React over Vue"`
+3. **Import project docs**: `/zed:import ./docs` (if you have a docs/ directory)
+4. **Search**: `/zed:search authentication`
+5. **Check health**: `/zed:health`
 
 ## Key Things to Test
 
 ### Does it work?
 - [ ] Plugin loads without errors
-- [ ] MCP tools appear (Claude can use `ke_search`, `ke_decide`, etc.)
-- [ ] Commands work (`/ke:status`, `/ke:daily`, etc.)
+- [ ] MCP tools appear (Claude can use `zed_search`, `zed_decide`, etc.)
+- [ ] Commands work (`/zed:status`, `/zed:daily`, etc.)
 
 ### Does it feel useful?
 - [ ] Does the knowledge graph actually help Claude give better answers?
@@ -53,19 +53,19 @@ Use one of your assigned beta keys. Each key works on one machine.
 
 | Command | What it does |
 |---------|-------------|
-| `/ke:overview` | Full dashboard |
-| `/ke:search <query>` | Search knowledge |
-| `/ke:decide <title>` | Record a decision |
-| `/ke:daily` | Today's session note |
-| `/ke:template <type> <title>` | Create from template |
-| `/ke:health` | Vault quality score |
-| `/ke:tags` | Browse by tags |
-| `/ke:graph` | Visualize the graph |
-| `/ke:import <dir>` | Import existing markdown |
-| `/ke:promote <note>` | Move to global vault |
-| `/ke:status` | Quick stats |
-| `/ke:help` | Full help guide |
-| `/ke:activate <key>` | Activate license |
+| `/zed:overview` | Full dashboard |
+| `/zed:search <query>` | Search knowledge |
+| `/zed:decide <title>` | Record a decision |
+| `/zed:daily` | Today's session note |
+| `/zed:template <type> <title>` | Create from template |
+| `/zed:health` | Vault quality score |
+| `/zed:tags` | Browse by tags |
+| `/zed:graph` | Visualize the graph |
+| `/zed:import <dir>` | Import existing markdown |
+| `/zed:promote <note>` | Move to global vault |
+| `/zed:status` | Quick stats |
+| `/zed:help` | Full help guide |
+| `/zed:activate <key>` | Activate license |
 
 ## Feedback
 
@@ -81,4 +81,4 @@ Send feedback to: [contact method]
 
 - macOS with Node 24 may need `CXXFLAGS` for initial `npm install` (see README)
 - First build on large vaults (1000+ notes) takes ~100ms — subsequent rebuilds are faster
-- Global vault (`~/.nelson-ke/global/`) is separate from project vault
+- Global vault (`~/.zed/global/`) is separate from project vault

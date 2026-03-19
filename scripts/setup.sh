@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup.sh — Nelson Knowledge Engine post-install setup
+# setup.sh — ZED Knowledge Engine post-install setup
 #
 # Creates data directories, installs dependencies, and initializes the database.
 # Uses ${CLAUDE_PLUGIN_DATA} for persistent storage across plugin updates.
@@ -8,12 +8,23 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
-DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.nelson-ke-data}"
+DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
 
-echo "Nelson Knowledge Engine v6 — Setup"
-echo "==================================="
+cat << 'BANNER'
+
+  ███████╗███████╗██████╗
+  ╚══███╔╝██╔════╝██╔══██╗
+    ███╔╝ █████╗  ██║  ██║
+   ███╔╝  ██╔══╝  ██║  ██║
+  ███████╗███████╗██████╔╝
+  ╚══════╝╚══════╝╚═════╝
+  Knowledge Engine v6
+  Powered by the Nelson Muntz Protocol
+
+BANNER
 echo "Plugin root: $PLUGIN_ROOT"
 echo "Data directory: $DATA_DIR"
+echo ""
 
 # Create data directories
 mkdir -p "$DATA_DIR/vault/decisions"
@@ -85,15 +96,15 @@ tags: [index, core]
 
 # Knowledge Index
 
-Welcome to your Nelson Knowledge Engine vault.
+Welcome to your ZED Knowledge Engine vault.
 
 ## Quick Start
 
-- Use `/ke:decide` to record a decision
-- Use `/ke:search` to find knowledge
-- Use `/ke:daily` to view today's session notes
-- Use `/ke:status` to see vault statistics
-- Use `/ke:graph` to visualize your knowledge graph
+- Use `/zed:decide` to record a decision
+- Use `/zed:search` to find knowledge
+- Use `/zed:daily` to view today's session notes
+- Use `/zed:status` to see vault statistics
+- Use `/zed:graph` to visualize your knowledge graph
 
 ## Structure
 
@@ -106,4 +117,4 @@ EOFINDEX
 fi
 
 echo ""
-echo "Setup complete! Start using the Knowledge Engine with /ke:help"
+echo "Setup complete! Start using the Knowledge Engine with /zed:help"

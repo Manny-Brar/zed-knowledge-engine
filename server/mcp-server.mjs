@@ -1,9 +1,8 @@
 /**
- * mcp-server.mjs — Nelson Knowledge Engine MCP Server
+ * mcp-server.mjs — ZED Knowledge Engine MCP Server
  *
- * Exposes the knowledge engine as MCP tools for Claude Code.
- * 12 tools: search, backlinks, related, hubs, clusters, shortest_path,
- * stats, read_note, write_note, decide, daily, rebuild.
+ * Exposes the ZED knowledge engine as MCP tools for Claude Code.
+ * Powered by the Nelson Muntz Protocol.
  *
  * Transport: stdio (standard for Claude Code plugins)
  */
@@ -23,13 +22,13 @@ const KnowledgeEngine = require('../core/engine.cjs');
 // Configuration
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = process.env.CLAUDE_PLUGIN_DATA || path.join(process.env.HOME, '.nelson-ke-data');
+const DATA_DIR = process.env.CLAUDE_PLUGIN_DATA || path.join(process.env.HOME, '.zed-data');
 const VAULT_DIR = path.join(DATA_DIR, 'vault');
 const DB_PATH = path.join(DATA_DIR, 'knowledge.db');
 
 // Global vault (cross-project patterns and learnings)
-const GLOBAL_DIR = path.join(process.env.HOME, '.nelson-ke', 'global');
-const GLOBAL_DB_PATH = path.join(process.env.HOME, '.nelson-ke', 'global.db');
+const GLOBAL_DIR = path.join(process.env.HOME, '.zed', 'global');
+const GLOBAL_DB_PATH = path.join(process.env.HOME, '.zed', 'global.db');
 
 // Ensure data directories exist
 for (const dir of [
@@ -76,16 +75,16 @@ globalEngine.build();
 // ---------------------------------------------------------------------------
 
 const server = new McpServer({
-  name: 'nelson-knowledge-engine',
+  name: 'zed-knowledge-engine',
   version: '6.0.0',
 });
 
 // ---------------------------------------------------------------------------
-// Tool 1: ke_search — Graph-boosted full-text search
+// ZED Tool 1: ke_search — Graph-boosted full-text search
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_search',
+  'zed_search',
   {
     query: z.string().describe('Search query (supports FTS5 operators: AND, OR, NOT, NEAR)'),
     limit: z.number().int().positive().default(10).describe('Maximum number of results'),
@@ -107,11 +106,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 1b: ke_search_snippets — Search with context snippets
+// ZED Tool 1b: ke_search_snippets — Search with context snippets
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_search_snippets',
+  'zed_search_snippets',
   {
     query: z.string().describe('Search query'),
     limit: z.number().int().positive().default(5).describe('Maximum number of results'),
@@ -136,11 +135,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 1c: ke_template — Create a note from a template
+// ZED Tool 1c: ke_template — Create a note from a template
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_template',
+  'zed_template',
   {
     template_type: z.enum(['decision', 'architecture', 'postmortem', 'pattern', 'daily']).describe('Template type to use'),
     title: z.string().describe('Title for the new note'),
@@ -191,11 +190,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 2: ke_backlinks — Get backlinks pointing to a note
+// ZED Tool 2: ke_backlinks — Get backlinks pointing to a note
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_backlinks',
+  'zed_backlinks',
   {
     note_path: z.string().describe('Absolute path to the note, or title to search for'),
   },
@@ -218,11 +217,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 3: ke_related — Find related notes within N hops
+// ZED Tool 3: ke_related — Find related notes within N hops
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_related',
+  'zed_related',
   {
     note_path: z.string().describe('Absolute path to the note, or title to search for'),
     max_hops: z.number().int().min(1).max(5).default(2).describe('Maximum number of hops in the graph'),
@@ -246,11 +245,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 4: ke_hubs — Find most-connected knowledge nodes
+// ZED Tool 4: ke_hubs — Find most-connected knowledge nodes
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_hubs',
+  'zed_hubs',
   {
     limit: z.number().int().positive().default(10).describe('Number of hubs to return'),
   },
@@ -271,11 +270,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 5: ke_clusters — Detect knowledge clusters
+// ZED Tool 5: ke_clusters — Detect knowledge clusters
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_clusters',
+  'zed_clusters',
   {},
   async () => {
     try {
@@ -294,11 +293,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 6: ke_shortest_path — Find connection between two notes
+// ZED Tool 6: ke_shortest_path — Find connection between two notes
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_shortest_path',
+  'zed_shortest_path',
   {
     from_note: z.string().describe('Source note path or title'),
     to_note: z.string().describe('Target note path or title'),
@@ -322,11 +321,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 7: ke_stats — Vault statistics
+// ZED Tool 7: ke_stats — Vault statistics
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_stats',
+  'zed_stats',
   {},
   async () => {
     try {
@@ -349,11 +348,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 8: ke_read_note — Read a knowledge note
+// ZED Tool 8: ke_read_note — Read a knowledge note
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_read_note',
+  'zed_read_note',
   {
     note_path: z.string().describe('Absolute path or title of the note to read'),
   },
@@ -382,11 +381,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 9: ke_write_note — Write/update a knowledge note
+// ZED Tool 9: ke_write_note — Write/update a knowledge note
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_write_note',
+  'zed_write_note',
   {
     file_name: z.string().describe('Filename (e.g., "my-decision.md") or relative path within vault (e.g., "decisions/auth-strategy.md")'),
     content: z.string().describe('Full markdown content including frontmatter'),
@@ -405,11 +404,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 10: ke_decide — Create a decision record
+// ZED Tool 10: ke_decide — Create a decision record
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_decide',
+  'zed_decide',
   {
     title: z.string().describe('Title of the decision (e.g., "Use JWT for authentication")'),
     context: z.string().describe('What is the context or problem?'),
@@ -458,11 +457,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 11: ke_daily — Get or create today's session note
+// ZED Tool 11: ke_daily — Get or create today's session note
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_daily',
+  'zed_daily',
   {
     append: z.string().default('').describe('Optional text to append to today\'s session note'),
   },
@@ -516,11 +515,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 12: ke_rebuild — Rebuild graph index
+// ZED Tool 12: ke_rebuild — Rebuild graph index
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_rebuild',
+  'zed_rebuild',
   {},
   async () => {
     try {
@@ -540,11 +539,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 13: ke_import — Import markdown files from a directory
+// ZED Tool 13: ke_import — Import markdown files from a directory
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_import',
+  'zed_import',
   {
     source_dir: z.string().describe('Directory path to scan for .md files to import'),
     subdirectory: z.string().default('imported').describe('Vault subdirectory to place imported files in'),
@@ -624,11 +623,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 14: ke_license — License management
+// ZED Tool 14: ke_license — License management
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_license',
+  'zed_license',
   {
     action: z.enum(['status', 'activate']).describe('Action: "status" to check license, "activate" to activate a key'),
     key: z.string().default('').describe('License key (required for activate action)'),
@@ -669,11 +668,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 14: ke_graph_data — Export graph data for visualization
+// ZED Tool 14: ke_graph_data — Export graph data for visualization
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_graph_data',
+  'zed_graph_data',
   {
     filter_type: z.string().default('').describe('Filter nodes by type (e.g., "decision", "pattern", "daily"). Empty for all.'),
     max_nodes: z.number().int().positive().default(50).describe('Maximum number of nodes to include'),
@@ -740,11 +739,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 16: ke_health — Knowledge vault health score and recommendations
+// ZED Tool 16: ke_health — Knowledge vault health score and recommendations
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_health',
+  'zed_health',
   {},
   async () => {
     try {
@@ -831,11 +830,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 17: ke_tags — List all tags and browse notes by tag
+// ZED Tool 17: ke_tags — List all tags and browse notes by tag
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_tags',
+  'zed_tags',
   {
     tag: z.string().default('').describe('Filter by specific tag (empty lists all tags with counts)'),
   },
@@ -878,11 +877,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 18: ke_recent — Show recently modified notes
+// ZED Tool 18: ke_recent — Show recently modified notes
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_recent',
+  'zed_recent',
   {
     limit: z.number().int().positive().default(10).describe('Number of recent notes to show'),
   },
@@ -919,11 +918,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 19: ke_suggest_links — Find unlinked mentions and suggest connections
+// ZED Tool 19: ke_suggest_links — Find unlinked mentions and suggest connections
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_suggest_links',
+  'zed_suggest_links',
   {
     note_path: z.string().default('').describe('Note to analyze (empty = analyze all notes)'),
     limit: z.number().int().positive().default(10).describe('Max suggestions'),
@@ -987,11 +986,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 20: ke_timeline — Chronological view of decisions and events
+// ZED Tool 20: ke_timeline — Chronological view of decisions and events
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_timeline',
+  'zed_timeline',
   {
     type_filter: z.string().default('').describe('Filter by type (decision, daily, pattern, postmortem). Empty for all.'),
     limit: z.number().int().positive().default(20).describe('Max entries'),
@@ -1048,11 +1047,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 21: ke_global_search — Search across project + global vaults
+// ZED Tool 21: ke_global_search — Search across project + global vaults
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_global_search',
+  'zed_global_search',
   {
     query: z.string().describe('Search query'),
     limit: z.number().int().positive().default(10).describe('Max results per vault'),
@@ -1088,11 +1087,11 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Tool 17: ke_promote — Promote a project note to global vault
+// ZED Tool 17: ke_promote — Promote a project note to global vault
 // ---------------------------------------------------------------------------
 
 server.tool(
-  'ke_promote',
+  'zed_promote',
   {
     note_path: z.string().describe('Path or title of the project note to promote to global'),
     global_subdir: z.string().default('patterns').describe('Subdirectory in global vault (patterns, learnings)'),

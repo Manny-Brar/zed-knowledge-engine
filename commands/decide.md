@@ -10,8 +10,8 @@ If the user provided a topic, ask them brief clarifying questions to fill in:
 3. **Alternatives**: What other options were considered?
 4. **Consequences**: What are the trade-offs?
 
-Then use the `ke_decide` MCP tool to create the record with all fields.
+Then use the `zed_decide` MCP tool to create the record with all fields.
 
 If no topic was provided, ask the user what decision they'd like to document.
 
-After creating the record, use `ke_related` to check if this decision connects to any existing knowledge.
+After creating the record, use `zed_related` to check if this decision connects to any existing knowledge.

@@ -7,7 +7,7 @@
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.nelson-ke-data}"
+DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
 VAULT_DIR="$DATA_DIR/vault"
 DB_PATH="$DATA_DIR/knowledge.db"
 DATE=$(date +%Y-%m-%d)

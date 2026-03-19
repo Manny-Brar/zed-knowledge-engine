@@ -14,10 +14,10 @@
 - Benchmarks: 1000 notes in 91ms, search <1ms
 
 **Claude Code Plugin (24 MCP Tools)**
-- ke_search, ke_search_snippets, ke_template, ke_backlinks, ke_related, ke_hubs, ke_clusters, ke_shortest_path, ke_stats, ke_read_note, ke_write_note, ke_decide, ke_daily, ke_rebuild, ke_import, ke_license, ke_health, ke_tags, ke_recent, ke_suggest_links, ke_timeline, ke_graph_data, ke_global_search, ke_promote
+- zed_search, zed_search_snippets, zed_template, zed_backlinks, zed_related, zed_hubs, zed_clusters, zed_shortest_path, zed_stats, zed_read_note, zed_write_note, zed_decide, zed_daily, zed_rebuild, zed_import, zed_license, zed_health, zed_tags, zed_recent, zed_suggest_links, zed_timeline, zed_graph_data, zed_global_search, zed_promote
 
 **13 Slash Commands**
-- /ke:overview, /ke:help, /ke:status, /ke:search, /ke:decide, /ke:daily, /ke:template, /ke:health, /ke:tags, /ke:graph, /ke:import, /ke:promote, /ke:activate
+- /zed:overview, /zed:help, /zed:status, /zed:search, /zed:decide, /zed:daily, /zed:template, /zed:health, /zed:tags, /zed:graph, /zed:import, /zed:promote, /zed:activate
 
 **Auto-Capture**
 - SessionStart hook: rebuilds graph, shows vault status
@@ -27,9 +27,9 @@
 - Onboarding skill: first-run guide + project scanner
 
 **Cross-Project Knowledge**
-- Global vault at ~/.nelson-ke/global/ for patterns that carry across projects
-- ke_global_search searches both project + global vaults
-- ke_promote copies project notes to global vault
+- Global vault at ~/.zed/global/ for patterns that carry across projects
+- zed_global_search searches both project + global vaults
+- zed_promote copies project notes to global vault
 
 **Knowledge Management**
 - 5 built-in templates (decision, architecture, postmortem, pattern, daily)

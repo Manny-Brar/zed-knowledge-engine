@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "nelson-knowledge-engine": {
+    "zed-knowledge-engine": {
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/server/mcp-server.mjs"],
       "env": {

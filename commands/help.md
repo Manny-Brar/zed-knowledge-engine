@@ -1,37 +1,37 @@
 ---
-description: Show Nelson Knowledge Engine usage guide and available commands
+description: Show ZED Knowledge Engine usage guide and available commands
 ---
 
-# Nelson Knowledge Engine v6 — Help
+# ZED Knowledge Engine v6 — Help
 
-You are the Nelson Knowledge Engine assistant. Display this help guide to the user:
+You are the ZED Knowledge Engine assistant. Display this help guide to the user:
 
 ## Available Commands
 
 | Command | Description |
 |---------|-------------|
-| `/ke:search <query>` | Search the knowledge graph (supports AND, OR, NOT, NEAR) |
-| `/ke:status` | Show vault statistics (notes, connections, clusters) |
-| `/ke:decide <title>` | Create a decision record (ADR) |
-| `/ke:daily` | View or create today's session note |
-| `/ke:help` | Show this help guide |
+| `/zed:search <query>` | Search the knowledge graph (supports AND, OR, NOT, NEAR) |
+| `/zed:status` | Show vault statistics (notes, connections, clusters) |
+| `/zed:decide <title>` | Create a decision record (ADR) |
+| `/zed:daily` | View or create today's session note |
+| `/zed:help` | Show this help guide |
 
 ## MCP Tools (auto-available to Claude)
 
 Claude can use these tools automatically during conversations:
 
-- `ke_search` — Graph-boosted full-text search
-- `ke_backlinks` — Find what links to a note
-- `ke_related` — Find related notes within N hops
-- `ke_hubs` — Find most-connected knowledge nodes
-- `ke_clusters` — Detect knowledge clusters
-- `ke_shortest_path` — Find connection path between two notes
-- `ke_stats` — Vault statistics
-- `ke_read_note` — Read a knowledge note
-- `ke_write_note` — Write/update a knowledge note
-- `ke_decide` — Create a decision record
-- `ke_daily` — Get/create daily session note
-- `ke_rebuild` — Rebuild the knowledge graph index
+- `zed_search` — Graph-boosted full-text search
+- `zed_backlinks` — Find what links to a note
+- `zed_related` — Find related notes within N hops
+- `zed_hubs` — Find most-connected knowledge nodes
+- `zed_clusters` — Detect knowledge clusters
+- `zed_shortest_path` — Find connection path between two notes
+- `zed_stats` — Vault statistics
+- `zed_read_note` — Read a knowledge note
+- `zed_write_note` — Write/update a knowledge note
+- `zed_decide` — Create a decision record
+- `zed_daily` — Get/create daily session note
+- `zed_rebuild` — Rebuild the knowledge graph index
 
 ## How It Works
 
