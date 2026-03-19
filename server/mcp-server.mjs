@@ -771,9 +771,25 @@ function resolveNotePath(input) {
 // Connect transport and start
 // ---------------------------------------------------------------------------
 
+// Global error handlers — MCP server must never crash
+process.on('uncaughtException', (err) => {
+  // Log but don't crash — the server must stay alive for Claude
+  fs.appendFileSync(
+    path.join(DATA_DIR, 'error.log'),
+    `[${new Date().toISOString()}] Uncaught: ${err.message}\n${err.stack}\n\n`
+  );
+});
+
+process.on('unhandledRejection', (reason) => {
+  fs.appendFileSync(
+    path.join(DATA_DIR, 'error.log'),
+    `[${new Date().toISOString()}] Unhandled rejection: ${reason}\n\n`
+  );
+});
+
 // Cleanup on exit
-process.on('SIGTERM', () => { engine.close(); globalEngine.close(); process.exit(0); });
-process.on('SIGINT', () => { engine.close(); globalEngine.close(); process.exit(0); });
+process.on('SIGTERM', () => { try { engine.close(); globalEngine.close(); } catch {} process.exit(0); });
+process.on('SIGINT', () => { try { engine.close(); globalEngine.close(); } catch {} process.exit(0); });
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -50,14 +50,60 @@ class KnowledgeEngine {
    * @returns {{ nodeCount: number, edgeCount: number }}
    */
   build() {
-    const result = this.graph.buildGraph(this.vaultPath, this.ignoreOpts);
-    this.search.indexVault(this.vaultPath);
+    try {
+      const result = this.graph.buildGraph(this.vaultPath, this.ignoreOpts);
+      this.search.indexVault(this.vaultPath);
 
-    if (this.watchEnabled && !this._watcher) {
-      this._startWatcher();
+      if (this.watchEnabled && !this._watcher) {
+        this._startWatcher();
+      }
+
+      this._ready = true;
+      return result;
+    } catch (err) {
+      // If database is corrupt, attempt recovery by deleting and rebuilding
+      if (err.message && (err.message.includes('database disk image is malformed') ||
+          err.message.includes('SQLITE_CORRUPT') ||
+          err.message.includes('file is not a database'))) {
+        return this._recoverCorruptDatabase();
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Recover from a corrupt database by deleting it and rebuilding.
+   * @private
+   * @returns {{ nodeCount: number, edgeCount: number }}
+   */
+  _recoverCorruptDatabase() {
+    const fs = require('fs');
+
+    // Close current connection
+    try { this.graph.close(); } catch {}
+
+    // Delete corrupt DB
+    if (this.dbPath !== ':memory:' && fs.existsSync(this.dbPath)) {
+      fs.unlinkSync(this.dbPath);
+      // Also remove WAL/SHM files
+      for (const suffix of ['-wal', '-shm']) {
+        const walPath = this.dbPath + suffix;
+        if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      }
     }
 
+    // Reinitialize
+    const GraphLayer = require('./graph-layer.cjs');
+    const SearchLayer = require('./search-layer.cjs');
+
+    this.graph = new GraphLayer(this.dbPath);
+    this.search = new SearchLayer(this.graph.db, this.graph);
+
+    // Rebuild from vault files
+    const result = this.graph.buildGraph(this.vaultPath, this.ignoreOpts);
+    this.search.indexVault(this.vaultPath);
     this._ready = true;
+
     return result;
   }
 
