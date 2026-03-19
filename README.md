@@ -14,9 +14,68 @@
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
-**Claude Code that remembers everything and connects the dots.**
+**Every prompt. Planned. Verified. Remembered.**
 
-A persistent knowledge graph plugin for Claude Code — graph-boosted search, auto-capture, decision tracking, and cross-project learning.
+ZED is a Claude Code plugin that gives Claude intelligent execution AND persistent memory. Install it once — every task automatically gets multi-phase planning, self-critical verification, and knowledge capture that compounds across sessions.
+
+---
+
+## What Makes ZED Different
+
+Most AI coding tools forget everything between sessions. ZED doesn't.
+
+| Without ZED | With ZED |
+|-------------|----------|
+| Claude forgets decisions between sessions | Claude remembers WHY you chose JWT, PostgreSQL, React |
+| No planning — Claude just starts coding | Every task gets complexity-assessed planning |
+| No verification — you hope it works | 3-stage verification: spec, quality, adversarial review |
+| No learning — same mistakes repeat | Patterns and anti-patterns captured automatically |
+| Context lost across projects | Global vault carries knowledge everywhere |
+
+## How It Works
+
+When you install ZED and type a prompt, this happens automatically:
+
+```
+You: "Add rate limiting to the API"
+
+ZED Protocol:
+╔═══════════════════════════════════════════════════════╗
+║ PHASE 0: KNOWLEDGE RETRIEVAL                          ║
+║ → Searches graph for "rate limiting", "API"           ║
+║ → Finds your prior API architecture decision          ║
+║ → Pulls in connected patterns and docs                ║
+╠═══════════════════════════════════════════════════════╣
+║ PHASE 1: ASSESS COMPLEXITY                            ║
+║ → Medium (5 steps) — brief plan, then execute         ║
+╠═══════════════════════════════════════════════════════╣
+║ PHASE 2: MULTI-PHASE PLANNING                         ║
+║ 1. Choose rate limiting strategy                      ║
+║ 2. Add middleware                                     ║
+║ 3. Configure limits per endpoint                      ║
+║ 4. Add tests                                          ║
+║ 5. Update API docs                                    ║
+║ (Adversarial: distributed systems? Redis needed?)     ║
+╠═══════════════════════════════════════════════════════╣
+║ PHASE 3: EXECUTE (step by step, commits at gates)     ║
+╠═══════════════════════════════════════════════════════╣
+║ PHASE 4: VERIFY                                       ║
+║ ✓ Spec check — matches requirements                  ║
+║ ✓ Quality check — tests pass, clean code             ║
+║ ✓ Adversarial review — edge cases handled            ║
+╠═══════════════════════════════════════════════════════╣
+║ PHASE 5: CAPTURE                                      ║
+║ → Records decision: "Use token bucket rate limiting"  ║
+║ → Appends to daily session note                       ║
+║ → Links to existing API architecture docs             ║
+║ → Knowledge graph grows stronger                      ║
+╚═══════════════════════════════════════════════════════╝
+```
+
+Simple tasks (rename a variable, fix a typo) skip straight to execute → verify → capture.
+Complex tasks get the full 5-level planning treatment.
+
+**The more you use ZED, the smarter it gets.** Session 1 it knows nothing. Session 12 it references your decisions, patterns, and architecture like a co-founder who's been there from day one.
 
 ---
 
@@ -24,8 +83,8 @@ A persistent knowledge graph plugin for Claude Code — graph-boosted search, au
 
 ```bash
 # Clone
-git clone https://github.com/Manny-Brar/nelson-knowledge-engine.git
-cd nelson-knowledge-engine
+git clone https://github.com/Manny-Brar/zed-knowledge-engine.git
+cd zed-knowledge-engine
 
 # Install (macOS may need CXXFLAGS — see Troubleshooting below)
 npm install
@@ -33,75 +92,79 @@ npm install
 # Setup (creates vault + initializes database)
 npm run setup
 
-# Launch Claude Code with ZED loaded
+# Launch Claude Code with ZED
 claude --plugin-dir .
 ```
 
-Then in Claude Code:
+That's it. ZED activates as the default agent. Every prompt now goes through the protocol.
+
+### First Session
+
 ```
-/zed:overview      → Full vault dashboard
+/zed:overview      → See your vault dashboard
 /zed:decide        → Record an architecture decision
 /zed:search auth   → Search your knowledge graph
 /zed:daily         → Today's session notes
-/zed:health        → Vault quality score
+/zed:health        → Vault quality score (A-F)
 /zed:help          → Full command reference
 ```
 
+Or just type normally — ZED handles everything automatically.
+
 ---
 
-## How It Works
+## The ZED Protocol
 
-ZED works in two ways: **you talk to it** via slash commands, and **Claude uses it automatically** via MCP tools in the background.
-
-### Day 1: Set Up Your Knowledge Base
-
+### For Simple Tasks (< 3 steps)
 ```
-You:  /zed:overview
-       → Shows your empty vault. Let's fill it.
-
-You:  /zed:import ./docs
-       → Imports any existing markdown docs into the knowledge graph.
-
-You:  /zed:decide "Use PostgreSQL over SQLite for production"
-       → Claude asks for context, alternatives, consequences.
-       → Creates a decision record linked into the graph.
-
-You:  /zed:daily
-       → Creates today's session note. Auto-captures what you work on.
+Retrieve relevant knowledge → Execute → Quick verify → Capture to daily note
 ```
 
-### Day-to-Day: Just Work Normally
-
-Once set up, ZED works **automatically in the background**:
-
-- **Session start**: Rebuilds the graph, shows status (`[ZED] 42 notes, 87 connections`)
-- **While you work**: Claude calls `zed_search`, `zed_backlinks`, `zed_related` automatically to pull relevant knowledge
-- **Session end**: Captures git activity to today's daily note
-
-### How Knowledge Compounds
-
+### For Medium Tasks (3-10 steps)
 ```
-Session 1:  You decide to use JWT. /zed:decide creates an ADR.
-Session 3:  You debug a token bug. Claude finds the JWT decision via
-            zed_search and references it automatically.
-Session 7:  You extract a "token refresh" pattern. /zed:template pattern.
-Session 12: New project. zed_global_search finds your JWT pattern in
-            the global vault — learned in a different project.
+Retrieve knowledge → Brief plan → Execute → Full verify → Capture decisions + patterns
 ```
 
-### Claude Uses It Automatically
-
+### For Complex Tasks (10+ steps, architecture decisions)
 ```
-You:  "I need to add authentication to this API"
-
-Claude: → calls zed_search("authentication")
-        → finds your JWT decision and token refresh pattern
-        → calls zed_related on the JWT decision
-        → finds connected architecture docs
-
-Claude: "Based on your previous decision, you chose JWT with refresh
-         tokens. Here's how to implement it..."
+Retrieve knowledge → 5-level planning → Execute with checkpoints →
+3-stage verification → Capture decisions, patterns, architecture docs →
+Link everything in the knowledge graph
 ```
+
+### 5-Level Planning (Complex Tasks)
+1. **Standard** — What needs to be done?
+2. **Deep** — Edge cases and dependencies?
+3. **Adversarial** — What could go wrong?
+4. **Meta** — Is this the simplest approach?
+5. **Compound** — What existing knowledge applies? How does this make the next task easier?
+
+### 3-Stage Verification
+1. **Spec Check** — Does it match what was asked?
+2. **Quality Check** — Tests pass? Code clean? No hacks?
+3. **Adversarial Review** — How would I break this? What would a hostile reviewer flag?
+
+---
+
+## Knowledge Graph
+
+Every note is a node. `[[Wikilinks]]` are edges. The graph reveals how your decisions, patterns, and architecture connect.
+
+### What Gets Captured Automatically
+- **Session notes** — What you worked on each day
+- **Decisions** — Architecture Decision Records (ADRs)
+- **Patterns** — Reusable approaches that worked
+- **Anti-patterns** — Approaches that failed and why
+
+### Cross-Project Knowledge
+Patterns learned in Project A are available in Project B via the global vault.
+Use `/zed:promote` to move knowledge from project to global scope.
+
+### Vault Health
+`/zed:health` grades your vault (A-F, 0-100) and gives specific recommendations:
+- Connect orphan notes
+- Add wikilinks between related knowledge
+- Bridge disconnected clusters
 
 ---
 
@@ -125,7 +188,7 @@ Claude: "Based on your previous decision, you chose JWT with refresh
 
 ## MCP Tools (24)
 
-Claude has access to these tools automatically:
+Claude uses these automatically — you don't need to call them:
 
 | Tool | Description |
 |------|-------------|
@@ -154,34 +217,35 @@ Claude has access to these tools automatically:
 | `zed_global_search` | Cross-project search |
 | `zed_promote` | Promote to global vault |
 
-## Features
-
-- **Knowledge Graph** — Notes are nodes, `[[wikilinks]]` are edges
-- **Graph-Boosted Search** — Backlinks boost ranking. Hub knowledge surfaces first
-- **Auto-Capture** — Session hooks log work automatically. Compound learner extracts patterns
-- **Decision Records** — ADRs with `/zed:decide`. Track what, why, alternatives, consequences
-- **Cross-Project Knowledge** — Global vault carries patterns across all projects
-- **Vault Health Scoring** — A-F grade (0-100) with specific improvement recommendations
-- **Templates** — Decision, architecture, postmortem, pattern, daily session
-- **Tag Navigation** — Browse by tag with `/zed:tags`
-- **Timeline** — Chronological view with type badges
-- **Link Suggestions** — Detects unlinked mentions, suggests connections
-- **Local-First** — SQLite + markdown. No cloud. No telemetry. Works offline
+---
 
 ## Architecture
 
 ```
 Claude Code Session
     │
-    ├── /zed: Commands (13)
-    ├── Skills (context-loader, compound-learner, onboarding)
-    ├── Agents (knowledge-indexer, graph-explorer)
-    ├── Hooks (SessionStart, Stop)
-    │
-    └── MCP Server (24 tools)
-         ├── Project Engine ──→ ~/.zed-data/ (per-project)
-         ├── Global Engine  ──→ ~/.zed/global/ (cross-project)
-         └── License Manager
+    └── ZED Agent (default thread)
+         │
+         │  ┌──────────────────────────────────────┐
+         │  │     THE ZED PROTOCOL                  │
+         │  │                                        │
+         │  │  0. Retrieve knowledge from graph      │
+         │  │  1. Assess complexity                  │
+         │  │  2. Multi-phase plan (if needed)       │
+         │  │  3. Execute step by step               │
+         │  │  4. 3-stage verification               │
+         │  │  5. Capture learnings to graph          │
+         │  └──────────────────────────────────────┘
+         │
+         ├── MCP Server (24 tools)
+         │    ├── Project Engine → ~/.zed-data/
+         │    ├── Global Engine  → ~/.zed/global/
+         │    └── License Manager
+         │
+         ├── Commands (13 slash commands)
+         ├── Skills (execution-protocol, context-loader, compound-learner, onboarding)
+         ├── Agents (knowledge-indexer, graph-explorer)
+         └── Hooks (SessionStart, Stop)
 ```
 
 ## Performance
@@ -216,5 +280,5 @@ npm start         # Start MCP server directly
 
 ---
 
-**ZED Knowledge Engine v6** — Powered by the Nelson Muntz Protocol.
-Built by Manny Brar.
+**ZED Knowledge Engine v6** — Every prompt. Planned. Verified. Remembered.
+Powered by the Nelson Muntz Protocol. Built by Manny Brar.
