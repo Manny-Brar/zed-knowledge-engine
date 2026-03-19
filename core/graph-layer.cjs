@@ -113,13 +113,19 @@ class GraphLayer {
     this.db.exec('DELETE FROM edges');
     this.db.exec('DELETE FROM nodes');
 
+    // Cache all parsed notes to avoid double file reads
+    const noteCache = new Map();
+    for (const filePath of files) {
+      noteCache.set(filePath, fileLayer.readNote(filePath));
+    }
+
     // Phase 1: Create all nodes
     const nodesByPath = new Map();
     const nodesByName = new Map(); // basename -> node path (for wikilink resolution)
 
     const insertNodes = this.db.transaction(() => {
       for (const filePath of files) {
-        const note = fileLayer.readNote(filePath);
+        const note = noteCache.get(filePath);
         const tags = note.frontmatter.tags || [];
         const type = note.frontmatter.type || 'note';
 
@@ -149,7 +155,7 @@ class GraphLayer {
     // Phase 2: Create edges from wikilinks
     const insertEdges = this.db.transaction(() => {
       for (const filePath of files) {
-        const note = fileLayer.readNote(filePath);
+        const note = noteCache.get(filePath);
         const sourceNode = nodesByPath.get(note.path);
         if (!sourceNode) continue;
 
@@ -400,9 +406,10 @@ class GraphLayer {
    * @returns {number}
    */
   getBacklinkCount(nodeId) {
-    const row = this.db.prepare(
-      'SELECT COUNT(*) AS c FROM edges WHERE target_id = ?'
-    ).get(nodeId);
+    if (!this._backlinkCountStmt) {
+      this._backlinkCountStmt = this.db.prepare('SELECT COUNT(*) AS c FROM edges WHERE target_id = ?');
+    }
+    const row = this._backlinkCountStmt.get(nodeId);
     return row ? row.c : 0;
   }
 
