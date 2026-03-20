@@ -10,7 +10,7 @@ Full mode combines deep context retrieval with active knowledge capture. Every o
 
 1. **L0 — Vault search**: Run `zed_search` with the user's task or query ("$ARGUMENTS") to find relevant notes. If no argument was provided, search for terms related to the current conversation context.
 2. **L1 — Read top results**: Use `zed_read_note` on the top 3–5 results to load full content into context.
-3. **L2 — Follow connections**: Use `zed_related` on each loaded note to discover second-degree connections. Load any that look relevant.
+3. **L2 — Follow connections**: Run `zed related <note>` via the Bash tool on each loaded note to discover second-degree connections. Load any that look relevant.
 
 ## Execute
 

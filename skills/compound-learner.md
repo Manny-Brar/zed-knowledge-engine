@@ -36,8 +36,8 @@ If a significant decision was made, use `zed_decide` to create an ADR.
 1. Use `zed_write_note` with the `patterns/` prefix for the filename
 2. Include [[wikilinks]] to related decisions, architecture docs, and other patterns
 3. Use descriptive tags in frontmatter for searchability
-4. Use `zed_daily` to append a summary to today's session note
-5. Run `zed_rebuild` if you created multiple notes to update the graph
+4. Run `zed daily "summary"` via the Bash tool to append a summary to today's session note
+5. Run `zed rebuild` via the Bash tool if you created multiple notes to update the graph
 
 ## Quality Rules
 

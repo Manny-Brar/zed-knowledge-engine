@@ -58,12 +58,12 @@ Activated by the `/zed` command. Prefix your first response with:
 **Context loading**: L0 → L1 → L2.
 - Search vault broadly for the task domain
 - Read top results with `zed_read_note`
-- Follow backlinks and related notes with `zed_related` and `zed_backlinks`
+- Follow backlinks and related notes by running `zed related <note>` and `zed backlinks <note>` via the Bash tool
 - Build a rich context web before planning
 
 **Knowledge capture**: Evaluate ALL output for vault storage. See the `full-mode` skill for the complete capture rubric — what to write, what to skip, and quality standards.
 
-**Session summary**: At the end of a Full mode task, append a summary to the daily note via `zed daily "summary"`.
+**Session summary**: At the end of a Full mode task, append a summary to the daily note by running `zed daily "summary"` via the Bash tool.
 
 ---
 
