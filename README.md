@@ -413,10 +413,10 @@ CXXFLAGS="-I$(xcrun --show-sdk-path)/usr/include/c++/v1 -isysroot $(xcrun --show
 ## Development
 
 ```bash
-npm test          # 35 core engine tests
+npm test          # 42 core engine tests
 npm run test:mcp  # 12 MCP server tests
-npm run test:cli  # 28 CLI integration tests
-npm run test:all  # 75 total
+npm run test:cli  # 37 CLI integration tests
+npm run test:all  # 91 total
 npm run bench     # Performance benchmarks
 ```
 
