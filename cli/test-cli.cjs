@@ -370,6 +370,25 @@ test('loop-status reports no loop after stop+promote or clean state', () => {
   assert(out.includes('No active evolve loop'), `Expected no loop, got: ${out}`);
 });
 
+// --- Visualize ---
+console.log('\nVisualize:');
+test('visualize generates Excalidraw JSON', () => {
+  const out = zed('visualize');
+  const data = JSON.parse(out);
+  assert(data.type === 'excalidraw', `Expected type=excalidraw, got ${data.type}`);
+  assert(data.version === 2, 'Should have version 2');
+  assert(Array.isArray(data.elements), 'Should have elements array');
+  assert(data.elements.length > 0, 'Should have at least one element');
+  // Should have rectangles and text elements for notes
+  const rects = data.elements.filter(e => e.type === 'rectangle');
+  const texts = data.elements.filter(e => e.type === 'text');
+  assert(rects.length >= 3, `Expected at least 3 rectangles, got ${rects.length}`);
+  assert(texts.length >= 3, `Expected at least 3 text elements, got ${texts.length}`);
+  // Should have arrows for edges
+  const arrows = data.elements.filter(e => e.type === 'arrow');
+  assert(arrows.length > 0, 'Should have at least one arrow');
+});
+
 // --- Edge Cases ---
 console.log('\nEdge Cases:');
 

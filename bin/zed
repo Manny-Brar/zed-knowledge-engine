@@ -1213,6 +1213,186 @@ Object.assign(commands, {
     lines.push(`Health: ${scoreBefore.grade} (${scoreBefore.score}/100) -> ${scoreAfter.grade} (${scoreAfter.score}/100)`);
     output(lines.join('\n'));
   },
+
+  // --- Visualize (Excalidraw graph) ---
+
+  visualize() {
+    const engine = getEngine();
+    const allNotes = engine.listNotes();
+    const stats = engine.getStats();
+    const hubs = engine.findHubs(allNotes.length || 50);
+
+    // Build backlink count lookup
+    const backlinkMap = new Map();
+    for (const hub of hubs) {
+      backlinkMap.set(hub.path, hub.backlink_count);
+    }
+
+    // Collect all nodes with metadata
+    const noteNodes = [];
+    const edgeList = [];
+
+    for (const notePath of allNotes) {
+      try {
+        const note = engine.readNote(notePath);
+        const type = (note.type || 'note').toLowerCase();
+        const backlinkCount = backlinkMap.get(notePath) || 0;
+        noteNodes.push({
+          id: note.id || notePath,
+          title: note.title || path.basename(notePath, '.md'),
+          type,
+          backlinkCount,
+          path: notePath,
+        });
+        const outlinks = engine.getOutlinks(notePath);
+        for (const link of outlinks) {
+          edgeList.push({
+            sourceTitle: note.title || path.basename(notePath, '.md'),
+            targetTitle: link.target_title,
+          });
+        }
+      } catch {}
+    }
+
+    // --- Color mapping by type ---
+    const typeColors = {
+      decision: '#a5d8ff',   // blue
+      pattern:  '#b2f2bb',   // green
+      project:  '#d0bfff',   // purple
+      session:  '#dee2e6',   // gray
+    };
+    const defaultColor = '#ffffff'; // white
+
+    // --- Group by type for grid layout ---
+    const typeGroups = {};
+    for (const node of noteNodes) {
+      if (!typeGroups[node.type]) typeGroups[node.type] = [];
+      typeGroups[node.type].push(node);
+    }
+
+    // Sort each group by backlink count descending
+    for (const type of Object.keys(typeGroups)) {
+      typeGroups[type].sort((a, b) => b.backlinkCount - a.backlinkCount);
+    }
+
+    // Assign grid positions: each type gets a column, nodes arranged vertically
+    const typeOrder = Object.keys(typeGroups).sort();
+    const SPACING_X = 300;
+    const SPACING_Y = 200;
+    const BASE_WIDTH = 180;
+    const BASE_HEIGHT = 50;
+
+    const elements = [];
+    const nodePositions = new Map(); // title -> { x, y, width, height, elementId }
+
+    let colIndex = 0;
+    for (const type of typeOrder) {
+      const group = typeGroups[type];
+      let rowIndex = 0;
+      for (const node of group) {
+        // Size by backlink count
+        const scale = 1 + Math.min(node.backlinkCount, 10) * 0.1;
+        const w = Math.round(BASE_WIDTH * scale);
+        const h = Math.round(BASE_HEIGHT * scale);
+        const x = 100 + colIndex * SPACING_X;
+        const y = 100 + rowIndex * SPACING_Y;
+
+        const rectId = `rect-${node.id}`.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const textId = `text-${node.id}`.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const bgColor = typeColors[node.type] || defaultColor;
+
+        // Rectangle element
+        elements.push({
+          type: 'rectangle',
+          id: rectId,
+          x,
+          y,
+          width: w,
+          height: h,
+          strokeColor: '#1e1e1e',
+          backgroundColor: bgColor,
+          fillStyle: 'solid',
+          strokeWidth: 1,
+          roundness: { type: 3 },
+          boundElements: [{ id: textId, type: 'text' }],
+        });
+
+        // Text element bound to rectangle
+        elements.push({
+          type: 'text',
+          id: textId,
+          x: x + 10,
+          y: y + h / 2 - 10,
+          width: w - 20,
+          height: 20,
+          text: node.title,
+          fontSize: 14,
+          fontFamily: 1,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+          containerId: rectId,
+        });
+
+        nodePositions.set(node.title, { x, y, width: w, height: h, elementId: rectId });
+        rowIndex++;
+      }
+      colIndex++;
+    }
+
+    // --- Arrows for edges ---
+    let arrowIndex = 0;
+    for (const edge of edgeList) {
+      const src = nodePositions.get(edge.sourceTitle);
+      const tgt = nodePositions.get(edge.targetTitle);
+      if (!src || !tgt) continue;
+
+      const arrowId = `arrow-${arrowIndex++}`;
+      elements.push({
+        type: 'arrow',
+        id: arrowId,
+        x: src.x + src.width,
+        y: src.y + src.height / 2,
+        width: tgt.x - (src.x + src.width),
+        height: tgt.y + tgt.height / 2 - (src.y + src.height / 2),
+        strokeColor: '#868e96',
+        strokeWidth: 1,
+        startBinding: { elementId: src.elementId, focus: 0, gap: 4 },
+        endBinding: { elementId: tgt.elementId, focus: 0, gap: 4 },
+        points: [
+          [0, 0],
+          [tgt.x - (src.x + src.width), tgt.y + tgt.height / 2 - (src.y + src.height / 2)],
+        ],
+      });
+    }
+
+    // Build Excalidraw file structure
+    const excalidrawData = {
+      type: 'excalidraw',
+      version: 2,
+      source: 'zed-knowledge-engine',
+      elements,
+      appState: {
+        viewBackgroundColor: '#ffffff',
+        gridSize: null,
+      },
+      files: {},
+    };
+
+    // Handle --out flag
+    const outIndex = commandArgs.indexOf('--out');
+    if (outIndex !== -1 && commandArgs[outIndex + 1]) {
+      const outFile = commandArgs[outIndex + 1];
+      fs.writeFileSync(outFile, JSON.stringify(excalidrawData, null, 2), 'utf-8');
+      if (jsonMode) {
+        output({ action: 'visualize', file: outFile, nodeCount: noteNodes.length, edgeCount: edgeList.length });
+      } else {
+        output(`Excalidraw graph written to ${outFile} (${noteNodes.length} nodes, ${edgeList.length} edges)`);
+      }
+    } else {
+      // Print to stdout
+      console.log(JSON.stringify(excalidrawData, null, 2));
+    }
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -1260,6 +1440,7 @@ Info:
   recent [limit]            Recently modified notes
   overview                  Full dashboard
   timeline [type] [limit]   Chronological view
+  visualize [--out file]    Excalidraw knowledge graph
 
 Content:
   daily [text]              Daily session note (create/append/read)
