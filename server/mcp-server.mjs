@@ -143,6 +143,10 @@ server.tool(
   async ({ file_name, content }) => {
     try {
       const notePath = path.join(VAULT_DIR, file_name);
+      const resolved = path.resolve(notePath);
+      if (!resolved.startsWith(path.resolve(VAULT_DIR) + path.sep) && resolved !== path.resolve(VAULT_DIR)) {
+        return { content: [{ type: 'text', text: 'Error: path escapes vault directory' }], isError: true };
+      }
       engine.writeNote(notePath, content);
       engine.incrementalBuild();
       return { content: [{ type: 'text', text: `Note written: ${file_name}\nGraph updated.` }] };
@@ -210,12 +214,24 @@ server.tool(
 // ---------------------------------------------------------------------------
 
 function resolveNotePath(input) {
-  if (path.isAbsolute(input) && fs.existsSync(input)) return input;
+  const resolvedVault = path.resolve(VAULT_DIR);
+
+  // Helper: check if a path is within the vault
+  function isInsideVault(p) {
+    const resolved = path.resolve(p);
+    return resolved.startsWith(resolvedVault + path.sep) || resolved === resolvedVault;
+  }
+
+  if (path.isAbsolute(input) && fs.existsSync(input)) {
+    if (!isInsideVault(input)) return null; // Path traversal: outside vault
+    return input;
+  }
   const vaultRelative = path.join(VAULT_DIR, input);
+  if (!isInsideVault(vaultRelative)) return null; // Path traversal: escapes vault
   if (fs.existsSync(vaultRelative)) return vaultRelative;
   if (!input.endsWith('.md')) {
     const withExt = path.join(VAULT_DIR, input + '.md');
-    if (fs.existsSync(withExt)) return withExt;
+    if (isInsideVault(withExt) && fs.existsSync(withExt)) return withExt;
   }
   const notes = engine.listNotes();
   for (const notePath of notes) {

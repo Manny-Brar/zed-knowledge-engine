@@ -133,12 +133,26 @@ function computeHealthScore(stats, clusterCount, hubsWithLinks) {
 // ---------------------------------------------------------------------------
 
 function resolveNotePath(input) {
-  if (path.isAbsolute(input) && fs.existsSync(input)) return input;
+  const resolvedVault = path.resolve(VAULT_DIR);
+  const resolvedGlobal = path.resolve(GLOBAL_DIR);
+
+  // Helper: check if a path is within the vault or global dir
+  function isInsideAllowedDir(p) {
+    const resolved = path.resolve(p);
+    return (resolved.startsWith(resolvedVault + path.sep) || resolved === resolvedVault) ||
+           (resolved.startsWith(resolvedGlobal + path.sep) || resolved === resolvedGlobal);
+  }
+
+  if (path.isAbsolute(input) && fs.existsSync(input)) {
+    if (!isInsideAllowedDir(input)) return null; // Path traversal: outside allowed dirs
+    return input;
+  }
   const vaultRelative = path.join(VAULT_DIR, input);
+  if (!isInsideAllowedDir(vaultRelative)) return null; // Path traversal: escapes vault
   if (fs.existsSync(vaultRelative)) return vaultRelative;
   if (!input.endsWith('.md')) {
     const withExt = path.join(VAULT_DIR, input + '.md');
-    if (fs.existsSync(withExt)) return withExt;
+    if (isInsideAllowedDir(withExt) && fs.existsSync(withExt)) return withExt;
   }
   const engine = getEngine();
   const notes = engine.listNotes();
@@ -432,9 +446,13 @@ const commands = {
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
     let imported = 0, skipped = 0;
+    const resolvedVaultDir = path.resolve(VAULT_DIR);
     for (const sourceFile of sourceFiles) {
       const relativeName = path.relative(resolvedSource, sourceFile);
       const targetFile = path.join(targetDir, relativeName);
+      // Path traversal guard: ensure target stays within vault
+      const resolvedTarget = path.resolve(targetFile);
+      if (!resolvedTarget.startsWith(resolvedVaultDir + path.sep)) { skipped++; continue; }
       if (fs.existsSync(targetFile)) { skipped++; continue; }
 
       const targetParent = path.dirname(targetFile);

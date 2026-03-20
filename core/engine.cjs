@@ -153,6 +153,12 @@ class KnowledgeEngine {
     const resolved = filePath.startsWith('/')
       ? filePath
       : path.join(this.vaultPath, filePath);
+    // Path traversal guard: ensure resolved path is within the vault
+    const resolvedAbsolute = path.resolve(resolved);
+    const resolvedVault = path.resolve(this.vaultPath);
+    if (!resolvedAbsolute.startsWith(resolvedVault + path.sep) && resolvedAbsolute !== resolvedVault) {
+      throw new Error('Path escapes vault directory');
+    }
     return fileLayer.readNote(resolved);
   }
 
@@ -165,6 +171,12 @@ class KnowledgeEngine {
     const resolved = filePath.startsWith('/')
       ? filePath
       : path.join(this.vaultPath, filePath);
+    // Path traversal guard: ensure resolved path is within the vault
+    const resolvedAbsolute = path.resolve(resolved);
+    const resolvedVault = path.resolve(this.vaultPath);
+    if (!resolvedAbsolute.startsWith(resolvedVault + path.sep) && resolvedAbsolute !== resolvedVault) {
+      throw new Error('Path escapes vault directory');
+    }
     fileLayer.writeNote(resolved, content);
   }
 

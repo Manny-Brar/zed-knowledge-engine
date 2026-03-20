@@ -526,6 +526,74 @@ test('KnowledgeEngine: getAllTags returns empty Map for untagged vault', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Security: Path traversal tests
+// ---------------------------------------------------------------------------
+
+console.log('\n── security: path traversal ──');
+
+test('readNote: rejects path traversal via ../..', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  assert.throws(() => engine.readNote(path.join(TEST_DIR, '../../etc/passwd')), /escapes vault/);
+  engine.close();
+  teardownVault();
+});
+
+test('readNote: rejects path traversal via relative ../', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  assert.throws(() => engine.readNote('../../../.bashrc'), /escapes vault/);
+  engine.close();
+  teardownVault();
+});
+
+test('writeNote: rejects path traversal via ../..', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  assert.throws(
+    () => engine.writeNote(path.join(TEST_DIR, '../../../tmp/evil.md'), '# Evil'),
+    /escapes vault/
+  );
+  engine.close();
+  teardownVault();
+});
+
+test('writeNote: rejects path traversal via relative ../', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  assert.throws(
+    () => engine.writeNote('../../../tmp/evil.md', '# Evil'),
+    /escapes vault/
+  );
+  engine.close();
+  teardownVault();
+});
+
+test('readNote: allows valid vault paths', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const note = engine.readNote(path.join(TEST_DIR, 'hub.md'));
+  assert.strictEqual(note.title, 'Hub Note');
+  engine.close();
+  teardownVault();
+});
+
+test('writeNote: allows valid vault paths', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  engine.writeNote(path.join(TEST_DIR, 'safe-note.md'), '# Safe\nContent');
+  assert.ok(fs.existsSync(path.join(TEST_DIR, 'safe-note.md')));
+  engine.close();
+  teardownVault();
+});
+
+// ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
 
