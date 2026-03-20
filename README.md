@@ -1,95 +1,8 @@
-```
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║     ███████╗███████╗██████╗                                  ║
-║     ╚══███╔╝██╔════╝██╔══██╗                                ║
-║       ███╔╝ █████╗  ██║  ██║                                ║
-║      ███╔╝  ██╔══╝  ██║  ██║                                ║
-║     ███████╗███████╗██████╔╝                                 ║
-║     ╚══════╝╚══════╝╚═════╝                                  ║
-║                                                              ║
-║     Always on. Always aware. Always compounding.             ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-```
+# ZED
 
-**ZED** is a Claude Code plugin that gives Claude persistent memory, structured execution, and self-improving autonomous loops.
+**Persistent memory for Claude Code.** ZED remembers your decisions, patterns, and architecture across sessions so Claude stops re-learning your codebase every conversation.
 
-Install it once. ZED silently checks your knowledge vault on every prompt, activates full knowledge capture when the work demands it, and can run overnight self-improvement loops that survive conversation death.
-
----
-
-## What ZED Does
-
-| Without ZED | With ZED |
-|-------------|----------|
-| Claude forgets everything between sessions | Remembers decisions, patterns, architecture forever |
-| No context from prior work | Silently loads relevant knowledge before every task |
-| Jumps straight into coding | Assesses complexity, plans first, executes step by step |
-| No verification — you hope it works | 3-stage verification: spec, quality, adversarial review |
-| Same mistakes repeat | Captures patterns and anti-patterns automatically |
-| Can't run autonomous improvement loops | `/evolve` runs scoped, self-assessing loops for hours |
-
----
-
-## Behavioral Modes
-
-ZED operates in three modes. Light is always on. Full and Evolve activate on demand or automatically.
-
-### Light Mode (always on)
-
-Every prompt, ZED silently:
-1. Searches your vault for relevant context (3 results, titles only)
-2. Loads the top matches if relevant
-3. Lets you work — no overhead you'd notice
-4. Writes to vault only when something is genuinely persistence-worthy
-
-**Overhead**: ~500 tokens, ~1-2 seconds. Skips entirely for trivial prompts (greetings, simple math).
-
-### Full Mode (`/zed`)
-
-Force deep engagement:
-
-```
-/zed "explain the auth architecture"
-```
-
-ZED does a deep context load (search → read → follow connections), executes the task, then evaluates everything for knowledge capture. Use this when you want ZED to really dig in.
-
-**Auto-activates** when ZED detects:
-- Multi-session work ("continuing from yesterday")
-- Architecture decisions ("should we use X or Y")
-- Complex plans (5+ steps)
-- Research tasks ("compare", "evaluate", "options for")
-- Post-mortems or audits
-
-### Evolve Mode (`/evolve`)
-
-Run structured, autonomous self-improvement loops:
-
-```
-/evolve "harden the test suite"           # runs till stopped
-/evolve "refactor auth module" --max 10   # caps at 10 iterations
-/evolve --status                           # check progress
-/evolve --resume                           # continue after interruption
-/evolve --stop                             # graceful shutdown
-```
-
-Each iteration:
-1. Re-reads the objective (scope lock — prevents drift)
-2. Reads progress (catches up on prior work)
-3. Does one unit of work
-4. Updates progress
-5. Drift-checks: "Does this serve the objective?"
-6. Every 3rd iteration: full self-assessment
-
-**Survives conversation death.** All loop state lives in the vault. Start a new session and `/evolve --resume` picks up exactly where it left off.
-
----
-
-## Installation
-
-### Quick Start
+## Install
 
 ```bash
 git clone https://github.com/Manny-Brar/zed-knowledge-engine.git
@@ -97,243 +10,150 @@ cd zed-knowledge-engine
 ./install.sh
 ```
 
-The installer handles everything: npm dependencies, marketplace creation, plugin registration, JSON config updates, and absolute path resolution.
-
-### Restart Claude Code
-
-Restart your Claude Code session. ZED activates automatically in Light mode on every prompt.
-
-### Verify installation
-
-After restart, these commands should appear in your available skills:
-
-```
-/zed                → Activate Full mode
-/zed:help           → Full command reference
-/zed:overview       → Vault dashboard
-/zed:search <query> → Search your knowledge graph
-/zed:health         → Vault quality score (A-F)
-```
-
-### Quick start (development mode)
-
-If you just want to try ZED without full plugin registration:
-
-```bash
-claude --plugin-dir /path/to/zed-knowledge-engine
-```
-
-This loads ZED for a single session only.
-
-### First Session
-
-```
-/zed:overview      → See your vault dashboard
-/zed:decide        → Record an architecture decision
-/zed:search auth   → Search your knowledge graph
-/zed:daily         → Today's session notes
-/zed:health        → Vault quality score (A-F)
-/zed:help          → Full command reference
-```
-
-Or just type normally — ZED works in the background.
+Restart Claude Code. Done.
 
 ---
 
-## The Protocol
+## How it works
 
-### Simple Tasks (fix a bug, rename something)
-```
-Context check → Execute → Quick verify → Log to session note
-```
+ZED runs in the background. You don't need to do anything different — just work normally.
 
-### Medium Tasks (add a feature, refactor a module)
-```
-Context check → Plan → Execute → Verify → Capture decisions + patterns
-```
+Every prompt, ZED silently checks if anything in your knowledge vault is relevant to what you're doing. If it finds something, Claude uses it. If not, it stays out of the way. When you make a decision worth remembering, ZED saves it.
 
-### Complex Tasks (design a system, major architecture change)
-```
-Deep context load → 5-level plan → Execute with checkpoints →
-3-stage verify → Capture everything → Link in knowledge graph
-```
-
-### Planning (scales with complexity)
-
-| Level | Question |
-|-------|----------|
-| Standard | What needs to be done? |
-| Deep | Edge cases and dependencies? |
-| Adversarial | What could go wrong? |
-| Meta | Is this the simplest approach? |
-| Compound | What do I already know that applies? |
-
-### Verification (every task gets at least a quick check)
-
-| Stage | Check |
-|-------|-------|
-| Spec | Does it match what was asked? |
-| Quality | Tests pass? Code clean? No hacks? |
-| Adversarial | How would I break this? What would a reviewer flag? |
+That's it. No commands required for daily use.
 
 ---
 
-## Knowledge Graph
+## The 4 commands you'll actually use
 
-ZED maintains a knowledge graph that grows with every session. Notes are nodes. `[[Wikilinks]]` are edges. Search results are boosted by graph connectivity.
+Most of the time you won't use commands at all. When you do, it's one of these:
 
-### What Gets Captured
-- **Decisions** — Why you chose X over Y (Architecture Decision Records)
-- **Patterns** — Approaches that worked and when to use them
-- **Anti-patterns** — What failed and why
+| Command | When to use it | Example |
+|---------|---------------|---------|
+| `/zed:search <query>` | Find something you know ZED captured before | `/zed:search "auth architecture"` |
+| `/zed:decide <title>` | You just made a decision worth recording | `/zed:decide "Use Stripe over Square"` |
+| `/zed:health` | Curious how your vault is doing | `/zed:health` |
+| `/zed:overview` | Want the full dashboard | `/zed:overview` |
+
+## When you need more
+
+### Deep mode — `/zed`
+
+When you're doing complex work and want Claude to really dig into your vault first:
+
+```
+/zed "explain how our auth system works"
+```
+
+ZED loads all related notes, follows connections between them, then works on your task with full context. Use this for architecture discussions, multi-session work, or research tasks.
+
+### Self-improvement loops — `/zed:evolve`
+
+Run a scoped, autonomous loop that works toward an objective:
+
+```
+/zed:evolve "harden the test suite"
+/zed:evolve "refactor the payment module" --max 10
+```
+
+Each iteration: do one unit of work, check progress, drift-check against the objective. Survives conversation death — `/zed:evolve --resume` picks up where it left off.
+
+### Everything else
+
+These exist but you'll rarely need them:
+
+| Command | What it does |
+|---------|-------------|
+| `/zed:daily` | Open today's session note |
+| `/zed:tags` | Browse notes by tag |
+| `/zed:graph` | ASCII visualization of note connections |
+| `/zed:template <type> <title>` | Create a note from a template |
+| `/zed:import <dir>` | Bulk import markdown files |
+| `/zed:promote <note>` | Copy a note to the global vault (shared across projects) |
+| `/zed:status` | Quick stats |
+| `/zed:activate <key>` | Activate a license |
+| `/zed:help` | Full command reference |
+
+---
+
+## What gets saved
+
+ZED captures knowledge automatically during Full and Evolve modes. In Light mode (default), it only saves when something is clearly worth persisting. You'll never see it save junk.
+
+- **Decisions** — Why you chose X over Y (as Architecture Decision Records)
+- **Patterns** — Approaches that worked, with context on when to reuse them
+- **Anti-patterns** — What failed and why, so it doesn't happen again
 - **Session notes** — What you worked on each day
 - **Architecture** — How your system is structured
 
-### Cross-Project
-Knowledge learned in one project is available in all projects. Use `/zed:promote` to move patterns to the global vault.
-
-### Vault Health
-`/zed:health` scores your vault (A-F, 0-100) with specific recommendations to strengthen your knowledge graph.
+All notes live in a knowledge graph. Notes link to each other with `[[wikilinks]]`. Search results are ranked by both text relevance and graph connectivity — well-connected notes surface first.
 
 ---
 
-## Commands
+## Cross-project knowledge
 
-### Mode Commands
-
-| Command | What it does |
-|---------|-------------|
-| `/zed [task]` | Force Full mode — deep context + knowledge capture |
-| `/evolve "objective"` | Start structured self-improvement loop |
-| `/evolve --status` | Check current evolve loop state |
-| `/evolve --resume` | Resume an interrupted evolve loop |
-| `/evolve --stop` | Stop loop and promote findings to vault |
-
-### Knowledge Commands
-
-| Command | What it does |
-|---------|-------------|
-| `/zed:overview` | Full dashboard |
-| `/zed:search <query>` | Search knowledge graph |
-| `/zed:decide <title>` | Record a decision |
-| `/zed:daily` | Today's session note |
-| `/zed:template <type> <title>` | Create from template |
-| `/zed:health` | Vault quality score |
-| `/zed:tags [tag]` | Browse by tags |
-| `/zed:graph` | Visualize the graph |
-| `/zed:import <dir>` | Import existing docs |
-| `/zed:promote <note>` | Move to global vault |
-| `/zed:status` | Quick stats |
-| `/zed:activate <key>` | Activate license |
-| `/zed:help` | Full reference |
+Knowledge from one project is available in all your projects. Use `/zed:promote <note>` to move a pattern or decision to the global vault.
 
 ---
 
-## Under the Hood
+## Under the hood
 
-ZED uses a **hybrid architecture** for maximum token efficiency:
+ZED is a Claude Code plugin with three layers:
 
-### MCP Tools (4) — Claude uses these automatically
-| Tool | Purpose |
-|------|---------|
-| `zed_search` | Graph-boosted full-text search |
-| `zed_read_note` | Read a knowledge note |
-| `zed_write_note` | Create/update notes |
-| `zed_decide` | Create decision records |
+**4 MCP tools** — Claude calls these automatically, no action needed from you:
+- `zed_search` — full-text search with graph boosting
+- `zed_read_note` — read a note
+- `zed_write_note` — create or update a note
+- `zed_decide` — create a decision record
 
-### CLI (26 subcommands) — via `zed <command>`
-Everything else runs through the CLI, saving ~3,500 tokens per turn:
-
+**27 CLI subcommands** — run via `zed <command>` in the terminal:
 ```
-Graph:                         Info:
-  backlinks <note>               stats
-  related <note> [hops]          health
-  hubs [limit]                   tags [tag]
-  clusters                       recent [limit]
-  path <from> <to>               overview
-                                 timeline [type]
-Content:
-  daily [text]                 Maintenance:
-  template <type> <title>        rebuild
-  snippets <query>               import <dir> [subdir]
-  suggest-links [note]           promote <note> [subdir]
-                                 global-search <query>
-Evolve Loop:                     license [status|activate]
-  loop-init "obj" [--max N]      graph [max_nodes]
-  loop-tick "progress"
-  loop-status
-  loop-stop "reason"
-  loop-promote
+zed stats          zed backlinks <note>     zed rebuild
+zed health         zed related <note>       zed backup
+zed tags [tag]     zed hubs 10              zed fix
+zed recent 5       zed clusters             zed version
+zed overview       zed path <from> <to>     zed import <dir>
+zed daily "text"   zed suggest-links        zed promote <note>
+zed snippets <q>   zed timeline [type]      zed graph 50
 ```
 
-Add `--json` to any CLI command for structured output.
+Add `--json` to any command for structured output.
 
-### Skills (7) — Behavioral control layer
-
-| Skill | Purpose |
-|-------|---------|
-| `behavior-controller` | Root controller — Light/Full/Evolve modes, auto-escalation |
-| `full-mode` | Capture evaluation rubric for Full mode |
-| `evolve-mode` | Drift guard, scope lock, self-assessment for Evolve loops |
-| `context-loader` | L0/L1/L2 tiered context retrieval |
-| `execution-protocol` | Multi-phase planning + verification |
-| `compound-learner` | Post-task knowledge extraction |
-| `onboarding` | First-session initialization |
+**7 behavioral skills** — loaded automatically, govern how Claude behaves when ZED is installed.
 
 ---
-
-## Architecture
-
-```
-Claude Code + ZED
-    │
-    └── ZED Agent
-         │
-         ├── Behavioral Controller (always-on)
-         │    ├── Light mode  → silent vault check every prompt
-         │    ├── Full mode   → /zed or auto-detected
-         │    └── Evolve mode → /evolve (autonomous loops)
-         │
-         ├── Protocol Engine
-         │    ├── Retrieve → Plan → Execute → Verify → Remember
-         │    ├── Complexity assessment (simple / medium / complex)
-         │    ├── 5-level planning
-         │    └── 3-stage verification
-         │
-         ├── Knowledge Graph (SQLite + FTS5)
-         │    ├── Project vault → ~/.zed-data/vault/
-         │    ├── Global vault  → ~/.zed/global/
-         │    └── Loop state    → ~/.zed-data/vault/_loop/
-         │
-         ├── MCP Server (4 tools — token efficient)
-         ├── CLI (26 subcommands — zed <cmd>)
-         ├── 16 slash commands
-         ├── 7 skills
-         ├── Session hooks (auto-rebuild on start)
-         └── 7 templates
-```
 
 ## Performance
 
-| Vault Size | Build | Search |
-|-----------|-------|--------|
+| Vault size | Full build | Search |
+|-----------|-----------|--------|
 | 100 notes | ~10ms | <1ms |
 | 500 notes | ~43ms | <1ms |
-| 1000 notes | ~91ms | <1ms |
+| 1000 notes | ~75ms | <1ms |
 
-Light mode overhead: ~500 tokens, ~1-2 seconds per prompt.
+Light mode overhead: ~500 tokens per prompt.
+
+---
 
 ## Pricing
 
 - **14-day free trial** — no credit card
 - **$9/mo** or **$89/yr**
 
+---
+
 ## Troubleshooting
 
-**macOS + Node 24**: better-sqlite3 needs C++ headers:
+**macOS + Node 24** — better-sqlite3 needs C++ headers:
 ```bash
 CXXFLAGS="-I$(xcrun --show-sdk-path)/usr/include/c++/v1 -isysroot $(xcrun --show-sdk-path)" npm install
 ```
+
+**Plugin not loading** — verify with `/zed:help`. If missing, re-run `./install.sh` and restart Claude Code.
+
+**Vault location** — project vault: `~/.zed-data/vault/`, global vault: `~/.zed/global/`
+
+---
 
 ## Development
 
@@ -347,6 +167,4 @@ npm run bench     # Performance benchmarks
 
 ---
 
-**ZED** — Always on. Always aware. Always compounding.
-
-Built by Manny Brar. Based on the [Nelson Muntz Protocol](https://github.com/Manny-Brar).
+Built by [Manny Brar](https://github.com/Manny-Brar).
