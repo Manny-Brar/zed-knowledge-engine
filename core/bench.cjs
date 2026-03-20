@@ -17,7 +17,12 @@ const fs = require('fs');
 const path = require('path');
 const KnowledgeEngine = require('./engine.cjs');
 
-const NOTE_COUNT = parseInt(process.argv[2] || '500', 10);
+const TIERS = [
+  { notes: 500, targets: { 'Full build': 500, 'Search ("knowledge")': 50 } },
+  { notes: 1000, targets: { 'Full build': 200, 'Search ("knowledge")': 2, 'getRelated (2 hops)': 1, 'getClusters': 5 } },
+];
+// Allow running a single tier via CLI arg (e.g. `node bench.cjs 500`)
+const ONLY = process.argv[2] ? parseInt(process.argv[2], 10) : null;
 const VAULT_DIR = path.join(__dirname, '.bench-vault');
 
 // ---------------------------------------------------------------------------
@@ -98,83 +103,95 @@ function bench(name, fn, iterations = 1) {
 // Main
 // ---------------------------------------------------------------------------
 
-console.log(`\nNelson Knowledge Engine v6 — Benchmark`);
-console.log(`═══════════════════════════════════════`);
-console.log(`Notes: ${NOTE_COUNT}\n`);
+// ---------------------------------------------------------------------------
+// Run a full benchmark tier for a given note count
+// ---------------------------------------------------------------------------
 
-console.log('Generating vault...');
-const genStart = process.hrtime.bigint();
-generateVault(NOTE_COUNT);
-const genEnd = process.hrtime.bigint();
-console.log(`  Generated ${NOTE_COUNT} notes in ${(Number(genEnd - genStart) / 1e6).toFixed(0)}ms\n`);
+function runTier(noteCount) {
+  console.log(`\nNelson Knowledge Engine v6 — Benchmark`);
+  console.log(`═══════════════════════════════════════`);
+  console.log(`Notes: ${noteCount}\n`);
 
-const engine = new KnowledgeEngine({ vaultPath: VAULT_DIR, dbPath: ':memory:' });
+  console.log('Generating vault...');
+  const genStart = process.hrtime.bigint();
+  generateVault(noteCount);
+  const genEnd = process.hrtime.bigint();
+  console.log(`  Generated ${noteCount} notes in ${(Number(genEnd - genStart) / 1e6).toFixed(0)}ms\n`);
 
-console.log('Benchmarks:');
+  const engine = new KnowledgeEngine({ vaultPath: VAULT_DIR, dbPath: ':memory:' });
 
-const results = [];
+  console.log('Benchmarks:');
 
-// Full build
-results.push(bench('Full build', () => engine.build()));
+  const results = [];
 
-// Stats
-results.push(bench('getStats', () => engine.getStats(), 3));
+  // Full build
+  results.push(bench('Full build', () => engine.build()));
 
-// Search
-results.push(bench('Search ("knowledge")', () => engine.searchNotes('knowledge', { limit: 10 }), 5));
-results.push(bench('Search ("topic 5")', () => engine.searchNotes('topic 5', { limit: 10 }), 5));
+  // Stats
+  results.push(bench('getStats', () => engine.getStats(), 3));
 
-// Backlinks (on a hub note)
-const hubs = engine.findHubs(1);
-if (hubs.length > 0) {
-  results.push(bench('getBacklinks (top hub)', () => engine.getBacklinks(hubs[0].path), 5));
+  // Search
+  results.push(bench('Search ("knowledge")', () => engine.searchNotes('knowledge', { limit: 10 }), 5));
+  results.push(bench('Search ("topic 5")', () => engine.searchNotes('topic 5', { limit: 10 }), 5));
+
+  // Backlinks (on a hub note)
+  const hubs = engine.findHubs(1);
+  if (hubs.length > 0) {
+    results.push(bench('getBacklinks (top hub)', () => engine.getBacklinks(hubs[0].path), 5));
+  }
+
+  // Shortest path (between two random notes)
+  const notes = engine.listNotes();
+  if (notes.length >= 2) {
+    results.push(bench('shortestPath', () => engine.shortestPath(notes[0], notes[Math.floor(notes.length / 2)]), 3));
+  }
+
+  // Related
+  if (notes.length > 0) {
+    results.push(bench('getRelated (2 hops)', () => engine.getRelated(notes[0], 2), 3));
+  }
+
+  // Clusters
+  results.push(bench('getClusters', () => engine.getClusters(), 3));
+
+  // Find hubs
+  results.push(bench('findHubs (10)', () => engine.findHubs(10), 5));
+
+  // Rebuild (second time, same data)
+  results.push(bench('Rebuild (second pass)', () => engine.rebuild()));
+
+  engine.close();
+
+  // Cleanup
+  fs.rmSync(VAULT_DIR, { recursive: true, force: true });
+
+  return results;
 }
 
-// Shortest path (between two random notes)
-const notes = engine.listNotes();
-if (notes.length >= 2) {
-  results.push(bench('shortestPath', () => engine.shortestPath(notes[0], notes[Math.floor(notes.length / 2)]), 3));
-}
+// ---------------------------------------------------------------------------
+// Main — run all tiers and check targets
+// ---------------------------------------------------------------------------
 
-// Related
-if (notes.length > 0) {
-  results.push(bench('getRelated (2 hops)', () => engine.getRelated(notes[0], 2), 3));
-}
+const activeTiers = ONLY ? TIERS.filter(t => t.notes === ONLY) : TIERS;
+let allPass = true;
 
-// Clusters
-results.push(bench('getClusters', () => engine.getClusters(), 3));
+for (const tier of activeTiers) {
+  const results = runTier(tier.notes);
 
-// Find hubs
-results.push(bench('findHubs (10)', () => engine.findHubs(10), 5));
+  console.log(`\n═══════════════════════════════════════`);
 
-// Rebuild (second time, same data)
-results.push(bench('Rebuild (second pass)', () => engine.rebuild()));
-
-engine.close();
-
-// Cleanup
-fs.rmSync(VAULT_DIR, { recursive: true, force: true });
-
-console.log(`\n═══════════════════════════════════════`);
-
-// Pass/fail against targets
-const targets = {
-  'Full build': NOTE_COUNT <= 500 ? 500 : 1000,
-  'Search ("knowledge")': 50,
-};
-
-let pass = true;
-for (const [name, maxMs] of Object.entries(targets)) {
-  const result = results.find(r => r.name === name);
-  if (result && result.avg > maxMs) {
-    console.log(`FAIL: ${name} exceeded ${maxMs}ms target (${result.avg.toFixed(0)}ms)`);
-    pass = false;
+  for (const [name, maxMs] of Object.entries(tier.targets)) {
+    const result = results.find(r => r.name === name);
+    if (result && result.avg > maxMs) {
+      console.log(`FAIL [${tier.notes} notes]: ${name} exceeded ${maxMs}ms target (${result.avg.toFixed(1)}ms)`);
+      allPass = false;
+    }
   }
 }
 
-if (pass) {
+if (allPass) {
   console.log(`All benchmarks within targets.`);
 }
 console.log();
 
-process.exit(pass ? 0 : 1);
+process.exit(allPass ? 0 : 1);
