@@ -4,7 +4,7 @@ description: Show vault statistics, top hubs, and orphan notes
 
 Run `zed stats` via the Bash tool to get current vault statistics, then present them clearly to the user.
 
-Also run `zed hubs --limit 5` via the Bash tool to show the most connected notes, and check for orphan notes using `zed clusters`.
+Also run `zed hubs 5` via the Bash tool to show the most connected notes, and check for orphan notes using `zed clusters`.
 
 Present a concise dashboard like:
 

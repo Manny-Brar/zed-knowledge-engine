@@ -32,7 +32,7 @@ fi
 # Append to daily note if it exists
 if [ -f "$DAILY_NOTE" ] && [ -n "$GIT_INFO" ]; then
   echo "" >> "$DAILY_NOTE"
-  echo -e "$GIT_INFO" >> "$DAILY_NOTE"
+  printf '%s\n' "$GIT_INFO" >> "$DAILY_NOTE"
 fi
 
 # Rebuild graph to pick up any new notes

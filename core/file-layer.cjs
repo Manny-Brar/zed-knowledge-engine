@@ -218,6 +218,9 @@ function readNote(filePath) {
  * @param {string} content - Full file content (including frontmatter if desired)
  */
 function writeNote(filePath, content) {
+  if (!content || !content.trim()) {
+    throw new Error('writeNote: content must not be empty');
+  }
   const resolved = path.resolve(filePath);
   const dir = path.dirname(resolved);
 

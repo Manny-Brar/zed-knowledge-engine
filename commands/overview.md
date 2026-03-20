@@ -10,10 +10,10 @@ Alternatively, gather the data piecemeal via individual CLI calls:
 
 1. `zed stats` — vault statistics
 2. `zed health` — health score and recommendations
-3. `zed hubs --limit 5` — most connected notes
-4. `zed recent --limit 5` — recently modified notes
+3. `zed hubs 5` — most connected notes
+4. `zed recent 5` — recently modified notes
 5. `zed tags` — tag cloud
-6. `zed suggest-links --limit 3` — quick link suggestions
+6. `zed suggest-links 3` — quick link suggestions
 
 Present as a clean dashboard:
 

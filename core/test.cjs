@@ -160,6 +160,13 @@ test('readNote: falls back to filename for title', () => {
   teardownVault();
 });
 
+test('writeNote: rejects empty content', () => {
+  assert.throws(() => fileLayer.writeNote('/tmp/test-empty.md', ''), /content must not be empty/);
+  assert.throws(() => fileLayer.writeNote('/tmp/test-empty.md', '   '), /content must not be empty/);
+  assert.throws(() => fileLayer.writeNote('/tmp/test-empty.md', null), /content must not be empty/);
+  assert.throws(() => fileLayer.writeNote('/tmp/test-empty.md', undefined), /content must not be empty/);
+});
+
 test('writeNote: creates file and parent dirs', () => {
   setupVault();
   const p = path.join(TEST_DIR, 'new-dir', 'new-note.md');

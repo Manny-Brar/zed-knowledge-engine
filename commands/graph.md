@@ -9,7 +9,7 @@ If "$ARGUMENTS" is provided, filter by it (e.g., "decisions" shows only decision
 ## Steps
 
 1. Run `zed stats` via the Bash tool to get an overview
-2. Run `zed hubs --limit 20` via the Bash tool to get the most important nodes
+2. Run `zed hubs 20` via the Bash tool to get the most important nodes
 3. Run `zed clusters` via the Bash tool to understand groupings
 4. For each hub, run `zed backlinks <note>` via the Bash tool to get the connection details
 
