@@ -441,6 +441,42 @@ const commands = {
 
   // --- Maintenance ---
 
+  backup() {
+    const { execSync } = require('child_process');
+    const outputDir = commandArgs[0] ? path.resolve(commandArgs[0]) : process.cwd();
+
+    if (!fs.existsSync(outputDir)) error(`Output directory not found: ${outputDir}`);
+
+    // Count notes before archiving
+    const engine = getEngine();
+    const notes = engine.listNotes();
+    const noteCount = notes.length;
+
+    // Generate timestamped filename
+    const now = new Date();
+    const ts = now.toISOString().replace(/T/, '-').replace(/:/g, '').replace(/\..+/, '').slice(0, 17);
+    const fileName = `zed-vault-backup-${ts}.tar.gz`;
+    const filePath = path.join(outputDir, fileName);
+
+    // Create tar.gz of vault directory, excluding SQLite database files
+    try {
+      execSync(
+        `tar -czf ${JSON.stringify(filePath)} --exclude='*.db' --exclude='*.db-journal' --exclude='*.db-wal' --exclude='*.db-shm' -C ${JSON.stringify(path.dirname(VAULT_DIR))} ${JSON.stringify(path.basename(VAULT_DIR))}`,
+        { stdio: 'pipe' }
+      );
+    } catch (tarErr) {
+      error(`Backup failed: ${tarErr.message}`);
+    }
+
+    const stat = fs.statSync(filePath);
+    const sizeKB = (stat.size / 1024).toFixed(1);
+
+    if (jsonMode) {
+      return output({ action: 'backup', file: filePath, noteCount, sizeBytes: stat.size });
+    }
+    output(`Backup created: ${filePath} (${noteCount} notes, ${sizeKB} KB)`);
+  },
+
   rebuild() {
     const start = Date.now();
     const engine = getEngine();
@@ -1010,6 +1046,7 @@ Content:
   suggest-links [note]      Find unlinked mentions
 
 Maintenance:
+  backup [dir]              Create timestamped vault backup (.tar.gz)
   rebuild                   Rebuild graph index
   import <dir> [subdir]     Import markdown files
   promote <note> [subdir]   Promote to global vault

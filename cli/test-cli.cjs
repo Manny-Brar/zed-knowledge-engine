@@ -496,6 +496,37 @@ test('help prints help text without error', () => {
   assert(out.includes('--json'), 'Should mention --json option');
 });
 
+// --- Backup ---
+console.log('\nBackup:');
+test('backup creates tar.gz archive', () => {
+  const backupDir = path.join(tmpDir, 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const out = zed(`backup ${backupDir}`);
+  assert(out.includes('Backup created'), `Expected backup message, got: ${out}`);
+  assert(out.includes('.tar.gz'), 'Should mention tar.gz file');
+  assert(out.includes('KB'), 'Should show file size');
+  // Verify archive was created
+  const files = fs.readdirSync(backupDir);
+  const backups = files.filter(f => f.startsWith('zed-vault-backup-') && f.endsWith('.tar.gz'));
+  assert(backups.length === 1, `Expected 1 backup file, got ${backups.length}`);
+});
+
+test('backup --json returns structured data', () => {
+  const backupDir = path.join(tmpDir, 'backups-json');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const data = zedJson(`backup ${backupDir}`);
+  assert(data.action === 'backup', `Expected action=backup, got ${data.action}`);
+  assert(data.file.endsWith('.tar.gz'), 'File should end with .tar.gz');
+  assert(typeof data.noteCount === 'number', 'Should have noteCount');
+  assert(data.noteCount >= 3, `Expected at least 3 notes, got ${data.noteCount}`);
+  assert(typeof data.sizeBytes === 'number', 'Should have sizeBytes');
+});
+
+test('backup to nonexistent dir errors', () => {
+  const out = zed('backup /nonexistent/path/for/testing', { expectError: true });
+  assert(out.includes('not found') || out.includes('Error'), `Expected error, got: ${out}`);
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
