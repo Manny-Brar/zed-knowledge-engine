@@ -527,6 +527,72 @@ test('backup to nonexistent dir errors', () => {
   assert(out.includes('not found') || out.includes('Error'), `Expected error, got: ${out}`);
 });
 
+// --- Fix ---
+console.log('\nFix:');
+
+// Add a note without tags and with a broken wikilink for fix to resolve
+fs.writeFileSync(path.join(vaultDir, 'no-tags-note.md'), `---
+title: "No Tags Note"
+date: 2026-03-10
+type: note
+---
+
+# No Tags Note
+
+This note has no tags and links to [[Nonexistent Page]].
+`);
+
+// Rebuild so the engine picks up the new note
+zed('rebuild');
+
+test('fix resolves vault issues', () => {
+  const out = zed('fix');
+  assert(out.includes('Fixed'), `Expected fix output, got: ${out}`);
+  assert(out.includes('Health:'), 'Should show health score');
+});
+
+test('fix --json returns structured data', () => {
+  // Re-create the tagless note for a fresh fix run
+  fs.writeFileSync(path.join(vaultDir, 'another-no-tags.md'), `---
+title: "Another No Tags"
+date: 2026-03-11
+type: note
+---
+
+# Another No Tags
+
+Content without tags.
+`);
+  zed('rebuild');
+  const data = zedJson('fix');
+  assert(Array.isArray(data.fixed), 'Should have fixed array');
+  assert(data.score, 'Should have score object');
+  assert(typeof data.score.before === 'number', 'Should have before score');
+  assert(typeof data.score.after === 'number', 'Should have after score');
+});
+
+test('fix on empty vault reports nothing to fix', () => {
+  const env = {
+    ...process.env,
+    ZED_DATA_DIR: path.join(tmpDir, 'empty-env'),
+    CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
+  };
+  try {
+    const result = execSync(`node ${BIN} fix`, {
+      env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    }).trim();
+    assert(result.includes('empty') || result.includes('Nothing'), `Expected empty message, got: ${result}`);
+  } catch (err) {
+    const msg = (err.stderr || err.stdout || err.message).trim();
+    assert(false, `fix on empty vault crashed: ${msg}`);
+  }
+});
+
+test('fix appears in help', () => {
+  const out = zed('help');
+  assert(out.includes('fix'), 'Help should list fix command');
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------

@@ -124,6 +124,7 @@ function error(msg) {
 // ---------------------------------------------------------------------------
 
 function computeHealthScore(stats, clusterCount, hubsWithLinks) {
+  if (stats.nodeCount === 0) return { score: 0, grade: 'N/A', connectivityRatio: 0, orphanRatio: 0 };
   const connectivityRatio = stats.edgeCount / stats.nodeCount;
   const orphanRatio = stats.orphanCount / stats.nodeCount;
 
@@ -387,7 +388,7 @@ const commands = {
       if (append) {
         const existing = fs.readFileSync(notePath, 'utf-8');
         fs.writeFileSync(notePath, existing + '\n' + append + '\n', 'utf-8');
-        engine.rebuild();
+        engine.incrementalBuild();
         return output(jsonMode ? { action: 'appended', file: fileName } : `Appended to ${fileName}`);
       }
       const note = engine.readNote(notePath);
@@ -402,7 +403,7 @@ const commands = {
     ].join('\n');
 
     engine.writeNote(notePath, content);
-    engine.rebuild();
+    engine.incrementalBuild();
     output(jsonMode ? { action: 'created', file: fileName } : `Daily note created: ${fileName}`);
   },
 
@@ -435,7 +436,7 @@ const commands = {
     const notePath = path.join(VAULT_DIR, fileName);
     const engine = getEngine();
     engine.writeNote(notePath, content);
-    engine.rebuild();
+    engine.incrementalBuild();
     output(jsonMode ? { action: 'created', template: templateType, file: fileName } : `Created ${templateType}: ${fileName}`);
   },
 
@@ -528,7 +529,7 @@ const commands = {
     }
 
     const engine = getEngine();
-    engine.rebuild();
+    engine.incrementalBuild();
     output(jsonMode ? { imported, skipped, source: resolvedSource, target: targetDir } : `Imported ${imported} files (${skipped} skipped)`);
   },
 
@@ -659,7 +660,7 @@ const commands = {
 
     fs.writeFileSync(targetFile, note.content, 'utf-8');
     const globalEngine = getGlobalEngine();
-    globalEngine.rebuild();
+    globalEngine.incrementalBuild();
     output(jsonMode
       ? { action: 'promoted', file: `${subdir}/${path.basename(resolved)}` }
       : `Promoted to global: ${subdir}/${path.basename(resolved)}`
@@ -984,12 +985,181 @@ const commands = {
 
     // Rebuild graph
     const engine = getEngine();
-    engine.rebuild();
+    engine.incrementalBuild();
 
     output(jsonMode
       ? { action: 'loop-promote', promoted }
       : `Promoted ${promoted.length} file(s) to sessions/:\n${promoted.map(f => '  ' + f).join('\n')}`
     );
+  },
+
+  // --- Auto-fix ---
+
+  fix() {
+    const engine = getEngine();
+    const stats = engine.getStats();
+
+    if (stats.nodeCount === 0) {
+      return output(jsonMode ? { fixed: [], score: { before: 0, after: 0 } } : 'Nothing to fix: vault is empty');
+    }
+
+    // Compute before-score
+    const hubsBefore = engine.findHubs(100);
+    const clustersBefore = engine.getClusters();
+    const hubsWithLinksBefore = hubsBefore.filter(h => h.backlink_count > 0).length;
+    const scoreBefore = computeHealthScore(stats, clustersBefore.length, hubsWithLinksBefore);
+
+    const fixed = [];
+
+    // --- Fix 1: Missing tags — add "untagged" to notes without tags ---
+    const allNotes = engine.listNotes();
+    for (const notePath of allNotes) {
+      try {
+        const note = engine.readNote(notePath);
+        const tags = note.frontmatter.tags;
+        const hasTags = Array.isArray(tags) ? tags.length > 0 : (typeof tags === 'string' && tags.length > 0);
+
+        if (!hasTags) {
+          let content = note.content;
+          if (content.match(/^---\r?\n[\s\S]*?\r?\n---/)) {
+            // Has frontmatter — insert tags line before closing ---
+            content = content.replace(/\n---(\r?\n)/, '\ntags: [untagged]\n---$1');
+          } else {
+            // No frontmatter at all — prepend minimal frontmatter
+            const title = note.title || path.basename(notePath, '.md');
+            content = `---\ntitle: "${title}"\ntags: [untagged]\n---\n\n${content}`;
+          }
+          fs.writeFileSync(notePath, content, 'utf-8');
+          fixed.push({ type: 'missing-tags', note: path.basename(notePath, '.md'), action: 'added tag "untagged"' });
+        }
+      } catch { /* skip unreadable notes */ }
+    }
+
+    // --- Fix 2: Broken wikilinks — create stub notes for missing targets ---
+    const allNotePaths = new Set(allNotes.map(p => path.resolve(p)));
+    const allTitles = new Map();
+    for (const np of allNotes) {
+      try {
+        const note = engine.readNote(np);
+        allTitles.set(note.title.toLowerCase(), np);
+      } catch {}
+    }
+
+    const stubsCreated = new Set();
+    for (const notePath of allNotes) {
+      try {
+        const note = engine.readNote(notePath);
+        for (const link of note.wikilinks) {
+          const target = link.target;
+          // Strip heading/block refs for resolution
+          const cleanTarget = target.split('#')[0].split('^')[0].trim();
+          if (!cleanTarget) continue;
+
+          // Check if target exists by title or filename
+          const targetLower = cleanTarget.toLowerCase();
+          if (allTitles.has(targetLower)) continue;
+
+          // Check by filename
+          const possiblePath = path.join(VAULT_DIR, cleanTarget + '.md');
+          const possiblePathResolved = path.resolve(possiblePath);
+          if (allNotePaths.has(possiblePathResolved)) continue;
+
+          // Also check subdirectories
+          let found = false;
+          for (const np of allNotes) {
+            const basename = path.basename(np, '.md').toLowerCase();
+            if (basename === targetLower) { found = true; break; }
+          }
+          if (found) continue;
+
+          // Target does not exist — create stub (avoid duplicates)
+          if (stubsCreated.has(targetLower)) continue;
+          stubsCreated.add(targetLower);
+
+          const stubPath = path.join(VAULT_DIR, cleanTarget.replace(/[/\\]/g, '-') + '.md');
+          // Only create if inside vault (safety check)
+          const resolvedStub = path.resolve(stubPath);
+          if (!resolvedStub.startsWith(path.resolve(VAULT_DIR) + path.sep)) continue;
+
+          if (!fs.existsSync(stubPath)) {
+            const date = new Date().toISOString().split('T')[0];
+            const stubContent = [
+              '---',
+              `title: "${cleanTarget}"`,
+              `date: ${date}`,
+              'type: stub',
+              'tags: [stub]',
+              '---',
+              '',
+              `# ${cleanTarget}`,
+              '',
+              '_Stub note created by `zed fix`. Add content here._',
+              '',
+            ].join('\n');
+            fs.writeFileSync(stubPath, stubContent, 'utf-8');
+            fixed.push({ type: 'broken-wikilink', note: cleanTarget, action: 'created stub note' });
+          }
+        }
+      } catch { /* skip unreadable notes */ }
+    }
+
+    // --- Fix 3: Orphan notes — add backlink index entry ---
+    // Re-read after stubs may have been created
+    engine.rebuild();
+    const orphans = engine.getOrphans();
+    if (orphans.length > 0) {
+      const date = new Date().toISOString().split('T')[0];
+      const indexPath = path.join(VAULT_DIR, `_index-${date}.md`);
+      const orphanLinks = orphans.map(o => `- [[${o.title}]]`);
+      const indexContent = [
+        '---',
+        `title: "Index ${date}"`,
+        `date: ${date}`,
+        'type: index',
+        'tags: [index, auto-generated]',
+        '---',
+        '',
+        `# Daily Index — ${date}`,
+        '',
+        'Notes connected by `zed fix`:',
+        '',
+        ...orphanLinks,
+        '',
+      ].join('\n');
+      fs.writeFileSync(indexPath, indexContent, 'utf-8');
+      for (const o of orphans) {
+        fixed.push({ type: 'orphan-note', note: o.title, action: `linked from index ${date}` });
+      }
+    }
+
+    // Rebuild graph after all fixes and compute after-score
+    engine.rebuild();
+    const statsAfter = engine.getStats();
+    const hubsAfter = engine.findHubs(100);
+    const clustersAfter = engine.getClusters();
+    const hubsWithLinksAfter = hubsAfter.filter(h => h.backlink_count > 0).length;
+    const scoreAfter = computeHealthScore(statsAfter, clustersAfter.length, hubsWithLinksAfter);
+
+    if (jsonMode) {
+      return output({
+        fixed,
+        score: { before: scoreBefore.score, after: scoreAfter.score },
+      });
+    }
+
+    if (fixed.length === 0) {
+      return output(`No issues to fix. Health: ${scoreBefore.grade} (${scoreBefore.score}/100)`);
+    }
+
+    const lines = [
+      `Fixed ${fixed.length} issue(s):`,
+    ];
+    for (const f of fixed) {
+      lines.push(`  [${f.type}] ${f.note} — ${f.action}`);
+    }
+    lines.push('');
+    lines.push(`Health: ${scoreBefore.grade} (${scoreBefore.score}/100) -> ${scoreAfter.grade} (${scoreAfter.score}/100)`);
+    output(lines.join('\n'));
   },
 };
 
@@ -1046,6 +1216,7 @@ Content:
   suggest-links [note]      Find unlinked mentions
 
 Maintenance:
+  fix                       Auto-fix vault health issues
   backup [dir]              Create timestamped vault backup (.tar.gz)
   rebuild                   Rebuild graph index
   import <dir> [subdir]     Import markdown files
