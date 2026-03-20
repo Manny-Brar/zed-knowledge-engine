@@ -370,6 +370,132 @@ test('loop-status reports no loop after stop+promote or clean state', () => {
   assert(out.includes('No active evolve loop'), `Expected no loop, got: ${out}`);
 });
 
+// --- Edge Cases ---
+console.log('\nEdge Cases:');
+
+test('unknown command shows error and exits non-zero', () => {
+  let exitedWithError = false;
+  try {
+    execSync(`node ${BIN} nonexistent`, {
+      env: { ...process.env, ZED_DATA_DIR: tmpDir, CLAUDE_PLUGIN_DATA: tmpDir },
+      encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    });
+  } catch (err) {
+    exitedWithError = true;
+    assert(err.stderr.includes('Unknown command'), `Expected unknown command error, got stderr: ${err.stderr}`);
+    // Help text is printed to stdout alongside the error
+    assert(err.stdout.includes('backlinks') || err.stdout.includes('stats'),
+      'Should print help with valid commands to stdout');
+  }
+  assert(exitedWithError, 'Unknown command should exit with non-zero code');
+});
+
+test('version outputs version number', () => {
+  const out = zed('version');
+  assert(/^zed v\d+\.\d+\.\d+$/.test(out), `Expected version format, got: ${out}`);
+});
+
+test('stats on empty vault handles gracefully', () => {
+  // Create a separate empty vault
+  const emptyVaultDir = path.join(tmpDir, 'empty-vault');
+  fs.mkdirSync(emptyVaultDir, { recursive: true });
+  const emptyDbPath = path.join(tmpDir, 'empty-test.db');
+  const env = {
+    ...process.env,
+    ZED_DATA_DIR: path.join(tmpDir, 'empty-env'),
+    CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
+  };
+  try {
+    const result = execSync(`node ${BIN} stats`, {
+      env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    }).trim();
+    assert(result.includes('Notes: 0'), `Expected 0 notes, got: ${result}`);
+  } catch (err) {
+    // Should not crash; if it does, the assertion below will fail
+    const msg = (err.stderr || err.stdout || err.message).trim();
+    assert(false, `stats on empty vault crashed: ${msg}`);
+  }
+});
+
+test('health on empty vault shows empty message', () => {
+  const env = {
+    ...process.env,
+    ZED_DATA_DIR: path.join(tmpDir, 'empty-env'),
+    CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
+  };
+  try {
+    const result = execSync(`node ${BIN} health`, {
+      env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    }).trim();
+    assert(result.includes('Empty') || result.includes('0'), `Expected empty vault message, got: ${result}`);
+  } catch (err) {
+    const msg = (err.stderr || err.stdout || err.message).trim();
+    assert(false, `health on empty vault crashed: ${msg}`);
+  }
+});
+
+test('snippets with special characters does not crash', () => {
+  const out = zed('snippets "test & <script>"');
+  // Should either return results or "No results" — not crash
+  assert(typeof out === 'string', 'Should return string output');
+  assert(out.includes('No results') || out.includes('Snippets'), 'Should handle special chars gracefully');
+});
+
+test('tags with no tagged notes returns no tags', () => {
+  const env = {
+    ...process.env,
+    ZED_DATA_DIR: path.join(tmpDir, 'empty-env'),
+    CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
+  };
+  try {
+    const result = execSync(`node ${BIN} tags`, {
+      env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    }).trim();
+    assert(result.includes('No tags found') || result.includes('Tags'), `Expected no-tags message, got: ${result}`);
+  } catch (err) {
+    const msg = (err.stderr || err.stdout || err.message).trim();
+    assert(false, `tags on empty vault crashed: ${msg}`);
+  }
+});
+
+test('timeline with invalid type shows error with valid types', () => {
+  const out = zed('timeline invalid', { expectError: true });
+  assert(out.includes('Invalid type') || out.includes('Valid types'), `Expected invalid type error, got: ${out}`);
+  assert(out.includes('decision') && out.includes('pattern'), 'Should list valid types');
+});
+
+test('graph on empty vault handles no nodes', () => {
+  const env = {
+    ...process.env,
+    ZED_DATA_DIR: path.join(tmpDir, 'empty-env'),
+    CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
+  };
+  try {
+    const result = execSync(`node ${BIN} graph --json`, {
+      env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    }).trim();
+    const data = JSON.parse(result);
+    assert(Array.isArray(data.nodes), 'Should have nodes array');
+    assert(data.nodes.length === 0, `Expected 0 nodes, got ${data.nodes.length}`);
+    assert(Array.isArray(data.edges), 'Should have edges array');
+  } catch (err) {
+    const msg = (err.stderr || err.stdout || err.message).trim();
+    assert(false, `graph on empty vault crashed: ${msg}`);
+  }
+});
+
+test('snippets with no matching results returns empty', () => {
+  const out = zed('snippets "xyznonexistent123"');
+  assert(out.includes('No results'), `Expected no results message, got: ${out}`);
+});
+
+test('help prints help text without error', () => {
+  const out = zed('help');
+  assert(out.includes('ZED Knowledge Engine CLI'), 'Should show CLI title');
+  assert(out.includes('Usage:'), 'Should show usage');
+  assert(out.includes('--json'), 'Should mention --json option');
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
