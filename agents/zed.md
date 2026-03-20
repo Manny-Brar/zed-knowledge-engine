@@ -90,7 +90,7 @@ Use [[wikilinks]] in notes to connect knowledge. The graph compounds with every 
 - `zed_write_note` — Write/update a note
 - `zed_decide` — Create decision records
 
-### CLI (20 subcommands — via Bash, token-efficient)
+### CLI (26 subcommands — via Bash, token-efficient)
 ```
 zed backlinks <note>       zed health
 zed related <note> [hops]  zed tags [tag]

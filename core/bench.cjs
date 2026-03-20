@@ -112,41 +112,43 @@ const engine = new KnowledgeEngine({ vaultPath: VAULT_DIR, dbPath: ':memory:' })
 
 console.log('Benchmarks:');
 
+const results = [];
+
 // Full build
-const buildResult = bench('Full build', () => engine.build());
+results.push(bench('Full build', () => engine.build()));
 
 // Stats
-bench('getStats', () => engine.getStats(), 3);
+results.push(bench('getStats', () => engine.getStats(), 3));
 
 // Search
-bench('Search ("knowledge")', () => engine.searchNotes('knowledge', { limit: 10 }), 5);
-bench('Search ("topic 5")', () => engine.searchNotes('topic 5', { limit: 10 }), 5);
+results.push(bench('Search ("knowledge")', () => engine.searchNotes('knowledge', { limit: 10 }), 5));
+results.push(bench('Search ("topic 5")', () => engine.searchNotes('topic 5', { limit: 10 }), 5));
 
 // Backlinks (on a hub note)
 const hubs = engine.findHubs(1);
 if (hubs.length > 0) {
-  bench('getBacklinks (top hub)', () => engine.getBacklinks(hubs[0].path), 5);
+  results.push(bench('getBacklinks (top hub)', () => engine.getBacklinks(hubs[0].path), 5));
 }
 
 // Shortest path (between two random notes)
 const notes = engine.listNotes();
 if (notes.length >= 2) {
-  bench('shortestPath', () => engine.shortestPath(notes[0], notes[Math.floor(notes.length / 2)]), 3);
+  results.push(bench('shortestPath', () => engine.shortestPath(notes[0], notes[Math.floor(notes.length / 2)]), 3));
 }
 
 // Related
 if (notes.length > 0) {
-  bench('getRelated (2 hops)', () => engine.getRelated(notes[0], 2), 3);
+  results.push(bench('getRelated (2 hops)', () => engine.getRelated(notes[0], 2), 3));
 }
 
 // Clusters
-bench('getClusters', () => engine.getClusters(), 3);
+results.push(bench('getClusters', () => engine.getClusters(), 3));
 
 // Find hubs
-bench('findHubs (10)', () => engine.findHubs(10), 5);
+results.push(bench('findHubs (10)', () => engine.findHubs(10), 5));
 
 // Rebuild (second time, same data)
-bench('Rebuild (second pass)', () => engine.rebuild());
+results.push(bench('Rebuild (second pass)', () => engine.rebuild()));
 
 engine.close();
 
@@ -163,8 +165,9 @@ const targets = {
 
 let pass = true;
 for (const [name, maxMs] of Object.entries(targets)) {
-  if (buildResult.name === name && buildResult.avg > maxMs) {
-    console.log(`FAIL: ${name} exceeded ${maxMs}ms target (${buildResult.avg.toFixed(0)}ms)`);
+  const result = results.find(r => r.name === name);
+  if (result && result.avg > maxMs) {
+    console.log(`FAIL: ${name} exceeded ${maxMs}ms target (${result.avg.toFixed(0)}ms)`);
     pass = false;
   }
 }
