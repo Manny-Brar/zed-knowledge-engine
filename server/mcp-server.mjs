@@ -144,8 +144,8 @@ server.tool(
     try {
       const notePath = path.join(VAULT_DIR, file_name);
       engine.writeNote(notePath, content);
-      engine.rebuild();
-      return { content: [{ type: 'text', text: `Note written: ${file_name}\nGraph rebuilt.` }] };
+      engine.incrementalBuild();
+      return { content: [{ type: 'text', text: `Note written: ${file_name}\nGraph updated.` }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
     }

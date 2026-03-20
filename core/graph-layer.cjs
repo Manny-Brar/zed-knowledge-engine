@@ -58,6 +58,9 @@ class GraphLayer {
     this.db.pragma('foreign_keys = ON');
     this.db.exec(SCHEMA_SQL);
 
+    // Cached adjacency list — invalidated on buildGraph()
+    this._adjCache = null;
+
     // Prepare frequently-used statements
     this._stmts = {
       insertNode: this.db.prepare(`
@@ -89,6 +92,7 @@ class GraphLayer {
         LEFT JOIN edges e ON e.target_id = n.id
         GROUP BY n.id
         ORDER BY backlink_count DESC
+        LIMIT ?
       `),
       orphans: this.db.prepare(`
         SELECT n.*
@@ -111,6 +115,10 @@ class GraphLayer {
    * @returns {{ nodeCount: number, edgeCount: number }}
    */
   buildGraph(vaultPath, opts = {}) {
+    // Invalidate adjacency/edge cache on rebuild
+    this._adjCache = null;
+    this._edgeCache = null;
+
     const resolvedVault = path.resolve(vaultPath);
     const files = fileLayer.listNotes(resolvedVault, opts);
 
@@ -268,6 +276,29 @@ class GraphLayer {
   }
 
   /**
+   * Build or return cached undirected adjacency list from edges.
+   * Also caches raw edge pairs for use by getClusters union-find.
+   * @returns {Map<number, number[]>}
+   */
+  _getAdjList() {
+    if (this._adjCache) return this._adjCache;
+
+    const edges = this.db.prepare('SELECT source_id, target_id FROM edges').all();
+    this._edgeCache = edges;
+
+    const adj = new Map();
+    for (const e of edges) {
+      if (!adj.has(e.source_id)) adj.set(e.source_id, []);
+      if (!adj.has(e.target_id)) adj.set(e.target_id, []);
+      adj.get(e.source_id).push(e.target_id);
+      adj.get(e.target_id).push(e.source_id);
+    }
+
+    this._adjCache = adj;
+    return adj;
+  }
+
+  /**
    * Get all backlinks pointing TO a note.
    *
    * @param {string} notePath - Absolute path of the target note
@@ -298,7 +329,7 @@ class GraphLayer {
    * @returns {Array<{ id: number, path: string, title: string, backlink_count: number }>}
    */
   findHubs(limit = 10) {
-    return this._stmts.backlinkCount.all().slice(0, limit);
+    return this._stmts.backlinkCount.all(limit);
   }
 
   /**
@@ -314,16 +345,8 @@ class GraphLayer {
     if (!fromNode || !toNode) return null;
     if (fromNode.id === toNode.id) return [fromNode];
 
-    // Build adjacency list (undirected)
-    const edges = this.db.prepare('SELECT source_id, target_id FROM edges').all();
-    const adj = new Map();
-
-    for (const e of edges) {
-      if (!adj.has(e.source_id)) adj.set(e.source_id, []);
-      if (!adj.has(e.target_id)) adj.set(e.target_id, []);
-      adj.get(e.source_id).push(e.target_id);
-      adj.get(e.target_id).push(e.source_id);
-    }
+    // Use cached adjacency list (undirected)
+    const adj = this._getAdjList();
 
     // BFS
     const visited = new Set([fromNode.id]);
@@ -368,16 +391,8 @@ class GraphLayer {
     const startNode = this._stmts.getNodeByPath.get(path.resolve(notePath));
     if (!startNode) return [];
 
-    // Build adjacency list (undirected)
-    const edges = this.db.prepare('SELECT source_id, target_id FROM edges').all();
-    const adj = new Map();
-
-    for (const e of edges) {
-      if (!adj.has(e.source_id)) adj.set(e.source_id, []);
-      if (!adj.has(e.target_id)) adj.set(e.target_id, []);
-      adj.get(e.source_id).push(e.target_id);
-      adj.get(e.target_id).push(e.source_id);
-    }
+    // Use cached adjacency list (undirected)
+    const adj = this._getAdjList();
 
     // BFS with distance tracking
     const visited = new Map([[startNode.id, 0]]);
@@ -426,9 +441,12 @@ class GraphLayer {
    */
   getClusters() {
     const nodes = this._stmts.getAllNodes.all();
-    const edges = this.db.prepare('SELECT source_id, target_id FROM edges').all();
 
     if (nodes.length === 0) return [];
+
+    // Use cached edge data (populates cache if needed)
+    this._getAdjList();
+    const edges = this._edgeCache;
 
     // Union-Find
     const parentMap = new Map();
