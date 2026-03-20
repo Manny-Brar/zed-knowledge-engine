@@ -1,5 +1,5 @@
 ---
-description: Show ZED Knowledge Engine usage guide and available commands
+description: Show available commands and usage guide
 ---
 
 # ZED Knowledge Engine v6 — Help

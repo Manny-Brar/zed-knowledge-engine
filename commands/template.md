@@ -1,5 +1,5 @@
 ---
-description: Create a new knowledge note from a template
+description: Create a note from a template (decision, pattern, etc.)
 ---
 
 Run `zed template` via the Bash tool to create a new note from a template.

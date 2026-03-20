@@ -1,5 +1,5 @@
 ---
-description: Visualize the knowledge graph showing notes and their connections
+description: Visualize note connections as an ASCII knowledge graph
 ---
 
 Generate a visual representation of the knowledge graph. Run `zed graph` via the Bash tool to gather the data, then create a visualization.

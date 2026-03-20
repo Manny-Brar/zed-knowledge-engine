@@ -1,5 +1,5 @@
 ---
-description: Import existing markdown files into the knowledge vault
+description: Import markdown files into the knowledge vault
 ---
 
 Run `zed import <directory>` via the Bash tool to import markdown files from the specified directory into the knowledge vault.

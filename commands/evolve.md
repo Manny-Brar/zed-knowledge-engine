@@ -1,5 +1,5 @@
 ---
-description: Run a structured self-improvement loop — iterates until objective is met or stopped
+description: Run a self-improvement loop toward a stated objective
 ---
 
 Parse the arguments from "$ARGUMENTS" to determine the action:

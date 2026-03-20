@@ -1,5 +1,5 @@
 ---
-description: Promote a project-specific knowledge note to the global vault (available across all projects)
+description: Promote a note from project vault to global vault
 ---
 
 Run `zed promote "$ARGUMENTS"` via the Bash tool to promote the note from the project vault to the global vault.

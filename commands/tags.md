@@ -1,5 +1,5 @@
 ---
-description: Browse knowledge by tags — list all tags or filter by a specific tag
+description: List all tags or filter notes by a specific tag
 ---
 
 Run `zed tags` via the Bash tool to browse knowledge by tags.

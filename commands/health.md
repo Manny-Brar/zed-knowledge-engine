@@ -1,5 +1,5 @@
 ---
-description: Check the health score and quality of your knowledge vault
+description: Score your vault's health and get improvement tips
 ---
 
 Run `zed health` via the Bash tool to get a health score for the knowledge vault.

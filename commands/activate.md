@@ -1,5 +1,5 @@
 ---
-description: Activate a ZED Knowledge Engine license key
+description: Activate a license key for the Knowledge Engine
 ---
 
 The user wants to activate a license key: "$ARGUMENTS"

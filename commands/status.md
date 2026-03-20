@@ -1,5 +1,5 @@
 ---
-description: Show ZED Knowledge Engine vault statistics and health
+description: Show vault statistics, top hubs, and orphan notes
 ---
 
 Run `zed stats` via the Bash tool to get current vault statistics, then present them clearly to the user.

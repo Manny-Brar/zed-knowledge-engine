@@ -1,5 +1,5 @@
 ---
-description: Activate Full mode — deep context load, active knowledge capture, and vault persistence
+description: Activate Full mode (alias for /zed:zed)
 ---
 
 Announce: **"ZED: Full mode active"**

@@ -1,5 +1,5 @@
 ---
-description: Comprehensive vault dashboard — stats, health, hubs, recent notes, and recommendations in one view
+description: Show a full vault dashboard with stats, health, and hubs
 ---
 
 Generate a comprehensive knowledge vault overview by running `zed overview` via the Bash tool, which gathers all data in one call:

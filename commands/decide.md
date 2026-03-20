@@ -1,5 +1,5 @@
 ---
-description: Create a decision record (Architecture Decision Record)
+description: Create an architecture decision record (ADR)
 ---
 
 Help the user create a decision record. The topic is: "$ARGUMENTS"

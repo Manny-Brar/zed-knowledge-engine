@@ -1,5 +1,5 @@
 ---
-description: Search the knowledge graph with graph-boosted ranking
+description: Search notes with graph-boosted ranking
 ---
 
 Use the `zed_search` MCP tool to search the knowledge graph for "$ARGUMENTS".
