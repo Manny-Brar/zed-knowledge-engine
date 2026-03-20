@@ -89,92 +89,17 @@ Each iteration:
 
 ## Installation
 
-### 1. Clone and install dependencies
+### Quick Start
 
 ```bash
 git clone https://github.com/Manny-Brar/zed-knowledge-engine.git
 cd zed-knowledge-engine
-npm install
+./install.sh
 ```
 
-### 2. Register as a Claude Code plugin
+The installer handles everything: npm dependencies, marketplace creation, plugin registration, JSON config updates, and absolute path resolution.
 
-ZED installs as a proper Claude Code plugin via a local marketplace — the same way official plugins work.
-
-**Create the marketplace directory:**
-
-```bash
-mkdir -p ~/.claude/plugins/repos/zed-marketplace/.claude-plugin
-```
-
-**Create the marketplace manifest** at `~/.claude/plugins/repos/zed-marketplace/.claude-plugin/marketplace.json`:
-
-```json
-{
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "zed-marketplace",
-  "version": "1.0.0",
-  "description": "ZED Knowledge Engine marketplace",
-  "owner": { "name": "Your Name" },
-  "plugins": [
-    {
-      "name": "zed",
-      "description": "ZED Knowledge Engine — persistent memory + structured execution for Claude Code",
-      "version": "6.2.0",
-      "source": "./zed-knowledge-engine"
-    }
-  ]
-}
-```
-
-**Symlink the plugin source into the marketplace:**
-
-```bash
-ln -s /path/to/zed-knowledge-engine ~/.claude/plugins/repos/zed-marketplace/zed-knowledge-engine
-```
-
-**Register the marketplace** — add to `~/.claude/plugins/known_marketplaces.json`:
-
-```json
-{
-  "zed-marketplace": {
-    "source": {
-      "source": "directory",
-      "path": "/Users/YOU/.claude/plugins/repos/zed-marketplace"
-    },
-    "installLocation": "/Users/YOU/.claude/plugins/repos/zed-marketplace",
-    "lastUpdated": "2026-01-01T00:00:00.000Z"
-  }
-}
-```
-
-**Register the plugin** — add to `~/.claude/plugins/installed_plugins.json` under `"plugins"`:
-
-```json
-{
-  "zed@zed-marketplace": [
-    {
-      "scope": "user",
-      "installPath": "/path/to/zed-knowledge-engine",
-      "version": "6.2.0",
-      "installedAt": "2026-01-01T00:00:00.000Z",
-      "lastUpdated": "2026-01-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Enable the plugin** — add to `~/.claude/settings.json` under `"enabledPlugins"`:
-
-```json
-{
-  "enabledPlugins": {
-    "zed@zed-marketplace": true
-  }
-}
-```
-
-### 3. Restart Claude Code
+### Restart Claude Code
 
 Restart your Claude Code session. ZED activates automatically in Light mode on every prompt.
 
