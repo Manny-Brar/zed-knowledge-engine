@@ -477,12 +477,12 @@ const commands = {
       if (suggestions.length >= limit) break;
       try {
         const note = engine.readNote(np);
+        const bodyLower = note.body.toLowerCase();
         const existingLinks = new Set(note.wikilinks.map(l => l.target.toLowerCase()));
         for (const [titleLower, target] of noteTitles) {
           if (suggestions.length >= limit) break;
           if (target.path === np) continue;
           if (existingLinks.has(titleLower)) continue;
-          const bodyLower = note.body.toLowerCase();
           if (bodyLower.includes(titleLower) && titleLower.length > 3) {
             suggestions.push({ from: note.title, to: target.title });
           }
