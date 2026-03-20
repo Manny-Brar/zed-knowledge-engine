@@ -125,11 +125,17 @@ class SearchLayer {
       rows = this._stmts.searchRaw.all(safeQuery, limit * 3); // overfetch for re-ranking
     } catch (err) {
       // FTS5 query syntax error — try as plain terms
+      if (this.debug) {
+        console.error(`[search] FTS5 query failed: "${safeQuery}" — ${err.message}. Falling back to plain terms.`);
+      }
       const plainQuery = query.replace(/[^\w\s]/g, ' ').trim();
       if (!plainQuery) return [];
       try {
         rows = this._stmts.searchRaw.all(plainQuery, limit * 3);
-      } catch {
+      } catch (fallbackErr) {
+        if (this.debug) {
+          console.error(`[search] Fallback query also failed: "${plainQuery}" — ${fallbackErr.message}`);
+        }
         return [];
       }
     }
@@ -309,9 +315,21 @@ class SearchLayer {
    * @returns {string}
    */
   _sanitizeQuery(query) {
-    // If it already looks like an FTS5 query (has operators), pass through
+    // If it already looks like an FTS5 query (has operators), validate and pass through
     if (/\b(AND|OR|NOT|NEAR)\b/.test(query) || query.includes('"')) {
-      return query;
+      // Reject bare operators with no real terms (e.g. "NOT" alone, "AND OR")
+      const stripped = query.replace(/\b(AND|OR|NOT|NEAR(\/\d+)?)\b/g, '').replace(/[^\w*]/g, ' ').trim();
+      if (!stripped) {
+        // No actual search terms — fall through to normal sanitization
+      } else {
+        // Reject NEAR with excessive distance (> 1000)
+        const nearMatch = query.match(/\bNEAR\/(\d+)\b/);
+        if (nearMatch && parseInt(nearMatch[1]) > 1000) {
+          // Cap NEAR distance — fall through to normal sanitization
+        } else {
+          return query;
+        }
+      }
     }
 
     // Split into terms and join with implicit AND

@@ -619,12 +619,28 @@ const commands = {
     const nodes = [];
     const edges = [];
 
-    for (const hub of hubs.slice(0, maxNodes)) {
-      nodes.push({ id: hub.id, title: hub.title, type: hub.type || 'note', backlinks: hub.backlink_count });
-      const outlinks = engine.getOutlinks(hub.path);
-      for (const link of outlinks) {
-        edges.push({ from: hub.title, to: link.target_title, label: link.link_text });
-      }
+    // Build a backlink count lookup from hubs for display purposes
+    const backlinkMap = new Map();
+    for (const hub of hubs) {
+      backlinkMap.set(hub.path, hub.backlink_count);
+    }
+
+    // Include ALL vault notes, not just hubs, capped by maxNodes
+    const allNotes = engine.listNotes();
+    for (const notePath of allNotes.slice(0, maxNodes)) {
+      try {
+        const note = engine.readNote(notePath);
+        nodes.push({
+          id: note.id || notePath,
+          title: note.title,
+          type: note.type || 'note',
+          backlinks: backlinkMap.get(notePath) || 0,
+        });
+        const outlinks = engine.getOutlinks(notePath);
+        for (const link of outlinks) {
+          edges.push({ from: note.title, to: link.target_title, label: link.link_text });
+        }
+      } catch {}
     }
 
     output({
@@ -844,13 +860,21 @@ Object.assign(commands, {
 
     let progressContent = fs.readFileSync(progressPath, 'utf-8');
 
-    // Parse current iteration from frontmatter
-    const iterMatch = progressContent.match(/^iteration:\s*(\d+)/m);
-    const currentIteration = iterMatch ? parseInt(iterMatch[1]) : 0;
+    // Parse current iteration from frontmatter only (between --- markers)
+    const fmParts = progressContent.split('---');
+    let currentIteration = 0;
+    if (fmParts.length >= 3) {
+      const frontmatter = fmParts[1];
+      const iterMatch = frontmatter.match(/^iteration:\s*(\d+)/m);
+      currentIteration = iterMatch ? parseInt(iterMatch[1]) : 0;
+    }
     const newIteration = currentIteration + 1;
 
-    // Update iteration in frontmatter
-    progressContent = progressContent.replace(/^iteration:\s*\d+/m, `iteration: ${newIteration}`);
+    // Update iteration in frontmatter only
+    if (fmParts.length >= 3) {
+      fmParts[1] = fmParts[1].replace(/^iteration:\s*\d+/m, `iteration: ${newIteration}`);
+      progressContent = fmParts.join('---');
+    }
 
     // Append new entry
     const timestamp = new Date().toISOString();

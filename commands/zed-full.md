@@ -1,3 +1,4 @@
+<!-- KEEP IN SYNC WITH commands/zed.md -->
 ---
 description: Activate Full mode (alias for /zed:zed)
 ---
