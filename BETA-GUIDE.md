@@ -75,7 +75,7 @@ Please share:
 3. What features you'd want added
 4. Would you pay $9/mo for this? Why or why not?
 
-Send feedback to: [contact method]
+Send feedback to: https://github.com/Manny-Brar/zed-knowledge-engine/issues
 
 ## Known Issues
 

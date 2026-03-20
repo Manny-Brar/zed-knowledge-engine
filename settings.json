@@ -4,6 +4,9 @@
     "behavior-controller",
     "context-loader",
     "execution-protocol",
-    "compound-learner"
+    "compound-learner",
+    "full-mode",
+    "evolve-mode",
+    "onboarding"
   ]
 }
