@@ -210,6 +210,41 @@ async function runTests() {
     assert.ok(read.content[0].text.includes('Updated'));
   });
 
+  // ---------------------------------------------------------------------------
+  // Edge case tests: error handling hardening
+  // ---------------------------------------------------------------------------
+
+  // zed_search with empty query
+  await test('zed_search rejects empty query', async () => {
+    const result = await client.callTool('zed_search', { query: '   ', limit: 5 });
+    assert.ok(result.isError, 'Expected isError to be true');
+    assert.ok(result.content[0].text.includes('empty'), `Expected "empty" in: ${result.content[0].text}`);
+  });
+
+  // zed_read_note with non-existent note (should return error, not crash)
+  await test('zed_read_note returns error for non-existent note', async () => {
+    const result = await client.callTool('zed_read_note', { note_path: 'this-note-does-not-exist-ever.md' });
+    assert.ok(result.isError, 'Expected isError to be true');
+    assert.ok(result.content[0].text.includes('not found'), `Expected "not found" in: ${result.content[0].text}`);
+  });
+
+  // zed_write_note with empty content
+  await test('zed_write_note rejects empty content', async () => {
+    const result = await client.callTool('zed_write_note', { file_name: 'test-empty.md', content: '' });
+    assert.ok(result.isError, 'Expected isError to be true');
+    assert.ok(result.content[0].text.includes('empty'), `Expected "empty" in: ${result.content[0].text}`);
+  });
+
+  // zed_write_note with path traversal attempt
+  await test('zed_write_note blocks path traversal', async () => {
+    const result = await client.callTool('zed_write_note', {
+      file_name: '../../../etc/hosts',
+      content: '---\ntitle: "Evil"\n---\nmalicious content',
+    });
+    assert.ok(result.isError, 'Expected isError to be true');
+    assert.ok(result.content[0].text.includes('escapes vault'), `Expected "escapes vault" in: ${result.content[0].text}`);
+  });
+
   // zed_decide — with empty optionals
   await test('zed_decide handles empty alternatives/consequences', async () => {
     const result = await client.callTool('zed_decide', {

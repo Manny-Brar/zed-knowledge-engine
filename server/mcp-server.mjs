@@ -41,27 +41,48 @@ const VAULT_DIR = path.join(DATA_DIR, 'vault');
 const DB_PATH = path.join(DATA_DIR, 'knowledge.db');
 
 // Ensure data directories exist
-for (const dir of [
-  VAULT_DIR,
-  path.join(VAULT_DIR, 'decisions'),
-  path.join(VAULT_DIR, 'patterns'),
-  path.join(VAULT_DIR, 'sessions'),
-  path.join(VAULT_DIR, 'architecture'),
-  path.join(VAULT_DIR, '_loop'),
-]) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+try {
+  for (const dir of [
+    VAULT_DIR,
+    path.join(VAULT_DIR, 'decisions'),
+    path.join(VAULT_DIR, 'patterns'),
+    path.join(VAULT_DIR, 'sessions'),
+    path.join(VAULT_DIR, 'architecture'),
+    path.join(VAULT_DIR, '_loop'),
+  ]) {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  }
+} catch (err) {
+  process.stderr.write(`[ZED] Warning: could not create vault directories: ${err.message}\n`);
 }
 
 // ---------------------------------------------------------------------------
 // Initialize Engine
 // ---------------------------------------------------------------------------
 
-const engine = new KnowledgeEngine({
-  vaultPath: VAULT_DIR,
-  dbPath: DB_PATH,
-});
+let engine;
+let engineError = null;
 
-engine.build();
+try {
+  engine = new KnowledgeEngine({
+    vaultPath: VAULT_DIR,
+    dbPath: DB_PATH,
+  });
+  engine.build();
+} catch (err) {
+  engineError = `Engine failed to initialize: ${err.message}`;
+  process.stderr.write(`[ZED] ${engineError}\n`);
+}
+
+/**
+ * Guard: returns an error response if the engine is not available.
+ */
+function requireEngine() {
+  if (!engine) {
+    return { content: [{ type: 'text', text: `Error: ${engineError || 'Engine not available'}` }], isError: true };
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // MCP Server
@@ -83,8 +104,13 @@ server.tool(
     limit: z.number().int().positive().default(10).describe('Max results'),
   },
   async ({ query, limit }) => {
+    const guard = requireEngine();
+    if (guard) return guard;
     try {
-      const results = engine.searchNotes(query, { limit });
+      if (!query || !query.trim()) {
+        return { content: [{ type: 'text', text: 'Error: search query must not be empty' }], isError: true };
+      }
+      const results = engine.searchNotes(query.trim(), { limit });
       if (results.length === 0) {
         return { content: [{ type: 'text', text: `No results for "${query}"` }] };
       }
@@ -108,8 +134,13 @@ server.tool(
     note_path: z.string().describe('Absolute path, vault-relative path, or title of the note'),
   },
   async ({ note_path }) => {
+    const guard = requireEngine();
+    if (guard) return guard;
     try {
-      const resolved = resolveNotePath(note_path);
+      if (!note_path || !note_path.trim()) {
+        return { content: [{ type: 'text', text: 'Error: note_path must not be empty' }], isError: true };
+      }
+      const resolved = resolveNotePath(note_path.trim());
       if (!resolved) return { content: [{ type: 'text', text: `Note not found: ${note_path}` }], isError: true };
       const note = engine.readNote(resolved);
       const text = [
@@ -141,8 +172,16 @@ server.tool(
     content: z.string().describe('Full markdown content including frontmatter'),
   },
   async ({ file_name, content }) => {
+    const guard = requireEngine();
+    if (guard) return guard;
     try {
-      const notePath = path.join(VAULT_DIR, file_name);
+      if (!file_name || !file_name.trim()) {
+        return { content: [{ type: 'text', text: 'Error: file_name must not be empty' }], isError: true };
+      }
+      if (!content || !content.trim()) {
+        return { content: [{ type: 'text', text: 'Error: content must not be empty' }], isError: true };
+      }
+      const notePath = path.join(VAULT_DIR, file_name.trim());
       const resolved = path.resolve(notePath);
       if (!resolved.startsWith(path.resolve(VAULT_DIR) + path.sep) && resolved !== path.resolve(VAULT_DIR)) {
         return { content: [{ type: 'text', text: 'Error: path escapes vault directory' }], isError: true };
@@ -170,7 +209,18 @@ server.tool(
     consequences: z.string().default('').describe('Consequences of this decision'),
   },
   async ({ title, context, decision, alternatives, consequences }) => {
+    const guard = requireEngine();
+    if (guard) return guard;
     try {
+      if (!title || !title.trim()) {
+        return { content: [{ type: 'text', text: 'Error: title must not be empty' }], isError: true };
+      }
+      if (!context || !context.trim()) {
+        return { content: [{ type: 'text', text: 'Error: context must not be empty' }], isError: true };
+      }
+      if (!decision || !decision.trim()) {
+        return { content: [{ type: 'text', text: 'Error: decision must not be empty' }], isError: true };
+      }
       const date = new Date().toISOString().split('T')[0];
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       const fileName = `decisions/${date}-${slug}.md`;
