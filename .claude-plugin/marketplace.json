@@ -1,0 +1,33 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "zed-marketplace",
+  "version": "1.0.0",
+  "description": "ZED Knowledge Engine - Intelligent execution agent with persistent knowledge graph for Claude Code",
+  "owner": {
+    "name": "Manny Brar",
+    "email": "dev@projectaurora.ai"
+  },
+  "plugins": [
+    {
+      "name": "zed",
+      "description": "ZED — Every prompt. Planned. Verified. Remembered. Knowledge engine + execution protocol for Claude Code with persistent knowledge graph, graph-boosted search, and structured decision records.",
+      "version": "6.2.0",
+      "author": {
+        "name": "Manny Brar",
+        "email": "dev@projectaurora.ai"
+      },
+      "source": ".",
+      "category": "knowledge-management",
+      "keywords": [
+        "zed",
+        "knowledge-graph",
+        "knowledge-engine",
+        "memory",
+        "search",
+        "second-brain",
+        "execution-protocol",
+        "decision-records"
+      ]
+    }
+  ]
+}
