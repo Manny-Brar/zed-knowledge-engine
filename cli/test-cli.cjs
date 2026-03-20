@@ -372,9 +372,12 @@ test('loop-status reports no loop after stop+promote or clean state', () => {
 
 // --- Visualize ---
 console.log('\nVisualize:');
-test('visualize generates Excalidraw JSON', () => {
-  const out = zed('visualize');
-  const data = JSON.parse(out);
+test('visualize --out writes valid Excalidraw JSON', () => {
+  const outFile = path.join(tmpDir, 'test-graph.json');
+  const out = zed(`visualize --out ${outFile}`);
+  assert(out.includes('Excalidraw graph written'), `Expected write confirmation, got: ${out}`);
+  assert(fs.existsSync(outFile), 'Output file should exist');
+  const data = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
   assert(data.type === 'excalidraw', `Expected type=excalidraw, got ${data.type}`);
   assert(data.version === 2, 'Should have version 2');
   assert(Array.isArray(data.elements), 'Should have elements array');

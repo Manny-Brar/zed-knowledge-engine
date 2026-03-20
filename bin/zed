@@ -1389,8 +1389,22 @@ Object.assign(commands, {
         output(`Excalidraw graph written to ${outFile} (${noteNodes.length} nodes, ${edgeList.length} edges)`);
       }
     } else {
-      // Print to stdout
-      console.log(JSON.stringify(excalidrawData, null, 2));
+      // Launch interactive graph in browser
+      const os = require('os');
+      const { spawn } = require('child_process');
+      const tmpFile = path.join(os.tmpdir(), `zed-graph-${Date.now()}.json`);
+      fs.writeFileSync(tmpFile, JSON.stringify(excalidrawData, null, 2), 'utf-8');
+
+      const serverScript = path.join(__dirname, '..', 'scripts', 'graph-server.cjs');
+      const child = spawn(process.execPath, [serverScript, tmpFile], {
+        detached: true,
+        stdio: 'inherit',
+      });
+      child.unref();
+
+      if (jsonMode) {
+        output({ action: 'visualize', mode: 'browser', nodeCount: noteNodes.length, edgeCount: edgeList.length });
+      }
     }
   },
 });
@@ -1768,7 +1782,7 @@ Info:
   recent [limit]            Recently modified notes
   overview                  Full dashboard
   timeline [type] [limit]   Chronological view
-  visualize [--out file]    Excalidraw knowledge graph
+  visualize [--out file]    Open interactive graph in browser (or write Excalidraw JSON with --out)
 
 Content:
   daily [text]              Daily session note (create/append/read)
