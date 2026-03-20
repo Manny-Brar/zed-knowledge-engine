@@ -1396,6 +1396,334 @@ Object.assign(commands, {
 });
 
 // ---------------------------------------------------------------------------
+// Scan command — learn an existing codebase and populate the knowledge graph
+// ---------------------------------------------------------------------------
+
+Object.assign(commands, {
+  scan() {
+    const targetDir = commandArgs[0] ? path.resolve(commandArgs[0]) : process.cwd();
+
+    if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+      error(`Directory not found: ${targetDir}`);
+    }
+
+    // --- Determine project name ---
+    const pkgPath = path.join(targetDir, 'package.json');
+    let pkg = null;
+    let projectName;
+    if (fs.existsSync(pkgPath)) {
+      try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')); } catch {}
+    }
+    projectName = (pkg && pkg.name) ? pkg.name : path.basename(targetDir);
+    // Sanitize for filenames
+    const safeName = projectName.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/--+/g, '-');
+
+    // --- Read README (first 50 lines) ---
+    let readmeSnippet = '';
+    const readmePath = path.join(targetDir, 'README.md');
+    if (fs.existsSync(readmePath)) {
+      try {
+        const lines = fs.readFileSync(readmePath, 'utf-8').split('\n').slice(0, 50);
+        readmeSnippet = lines.join('\n');
+      } catch {}
+    }
+
+    // --- Scan directory tree (top 2 levels) ---
+    const SKIP_DIRS = new Set([
+      'node_modules', '.git', 'dist', 'build', '.next', '.nuxt', '__pycache__',
+      '.cache', 'coverage', '.vscode', '.idea', '.DS_Store', '.env', 'vendor',
+      'tmp', 'temp', '.turbo', '.output', '.svelte-kit',
+    ]);
+
+    function scanDir(dir, depth) {
+      if (depth > 2) return [];
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return []; }
+      const result = [];
+      for (const entry of entries) {
+        if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+        const fullPath = path.join(dir, entry.name);
+        const isDir = entry.isDirectory();
+        const rel = path.relative(targetDir, fullPath);
+        result.push({ name: entry.name, rel, isDir });
+        if (isDir && depth < 2) {
+          const children = scanDir(fullPath, depth + 1);
+          result.push(...children);
+        }
+      }
+      return result;
+    }
+
+    const tree = scanDir(targetDir, 0);
+
+    // --- Detect tech stack from package.json ---
+    const depCategories = {
+      framework: ['react', 'next', 'vue', 'nuxt', 'angular', 'svelte', 'express', 'fastify', 'koa', 'hono', 'remix', 'gatsby', 'astro'],
+      database: ['better-sqlite3', 'sqlite3', 'pg', 'mysql2', 'mongoose', 'prisma', 'drizzle-orm', 'sequelize', 'typeorm', 'knex', 'redis', 'ioredis'],
+      testing: ['jest', 'vitest', 'mocha', 'chai', 'ava', 'tap', 'playwright', 'cypress', 'puppeteer', '@testing-library'],
+      types: ['typescript', 'zod', 'joi', 'yup', 'ajv', '@types/node'],
+      tooling: ['eslint', 'prettier', 'webpack', 'vite', 'rollup', 'esbuild', 'turbo', 'nx', 'tsup', 'babel'],
+      api: ['axios', 'node-fetch', 'got', 'superagent', 'graphql', '@apollo', 'trpc'],
+      auth: ['passport', 'jsonwebtoken', 'bcrypt', 'next-auth', 'clerk', 'lucia'],
+      ui: ['tailwindcss', 'styled-components', '@emotion', 'sass', 'less', 'radix-ui', 'shadcn', 'mui', 'chakra-ui'],
+    };
+
+    function categorizeDep(depName) {
+      for (const [cat, patterns] of Object.entries(depCategories)) {
+        for (const p of patterns) {
+          if (depName === p || depName.startsWith(p + '/') || depName.startsWith('@' + p)) return cat;
+        }
+      }
+      return 'other';
+    }
+
+    const allDeps = {};
+    if (pkg) {
+      const merged = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      for (const [name, version] of Object.entries(merged)) {
+        const cat = categorizeDep(name);
+        if (!allDeps[cat]) allDeps[cat] = [];
+        allDeps[cat].push({ name, version });
+      }
+    }
+
+    // --- Detect tech from file extensions ---
+    const extensions = new Set();
+    for (const entry of tree) {
+      if (!entry.isDir) {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (ext) extensions.add(ext);
+      }
+    }
+
+    // --- Identify code directories (modules) ---
+    const CODE_DIR_HINTS = new Set([
+      'src', 'lib', 'api', 'components', 'pages', 'app', 'routes', 'controllers',
+      'models', 'services', 'utils', 'helpers', 'hooks', 'middleware', 'config',
+      'core', 'modules', 'features', 'views', 'layouts', 'stores', 'plugins',
+      'commands', 'handlers', 'resolvers', 'schemas', 'types', 'interfaces',
+      'tests', 'test', '__tests__', 'specs', 'e2e', 'scripts', 'bin',
+      'server', 'client', 'shared', 'common', 'assets', 'public', 'static',
+      'agents', 'skills', 'templates', 'cli',
+    ]);
+
+    const topLevelDirs = tree.filter(e => e.isDir && !e.rel.includes(path.sep));
+    const codeDirs = topLevelDirs.filter(e => CODE_DIR_HINTS.has(e.name.toLowerCase()));
+
+    // Cap at 20 modules
+    const moduleEntries = codeDirs.slice(0, 20);
+
+    // --- Ensure vault/projects dir ---
+    const projectsDir = path.join(VAULT_DIR, 'projects');
+    if (!fs.existsSync(projectsDir)) fs.mkdirSync(projectsDir, { recursive: true });
+
+    // --- Build note filenames ---
+    const archFile = `${safeName}-architecture.md`;
+    const techFile = `${safeName}-tech-stack.md`;
+    const moduleFiles = moduleEntries.map(m => ({
+      dir: m,
+      file: `${safeName}-module-${m.name.toLowerCase()}.md`,
+    }));
+
+    const allNoteNames = [
+      archFile.replace('.md', ''),
+      techFile.replace('.md', ''),
+      ...moduleFiles.map(m => m.file.replace('.md', '')),
+    ];
+
+    const generatedNotes = [];
+
+    // --- Helper: build note title from filename ---
+    function noteTitle(filename) {
+      return filename.replace('.md', '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    // --- 1. Architecture Overview note ---
+    const archTitle = noteTitle(archFile);
+    const techTitle = noteTitle(techFile);
+
+    // Directory tree (top 2 levels)
+    const treeLines = [];
+    for (const e of tree) {
+      if (!e.rel.includes(path.sep)) {
+        treeLines.push(e.isDir ? `${e.rel}/` : e.rel);
+      } else {
+        const depth = e.rel.split(path.sep).length - 1;
+        const indent = '  '.repeat(depth);
+        treeLines.push(`${indent}${e.isDir ? e.rel.split(path.sep).pop() + '/' : e.rel.split(path.sep).pop()}`);
+      }
+    }
+
+    // Key entry points
+    const entryPoints = [];
+    if (pkg && pkg.main) entryPoints.push(pkg.main);
+    if (pkg && pkg.bin) {
+      if (typeof pkg.bin === 'string') entryPoints.push(pkg.bin);
+      else Object.values(pkg.bin).forEach(v => entryPoints.push(v));
+    }
+    if (pkg && pkg.scripts && pkg.scripts.start) entryPoints.push(`npm start -> ${pkg.scripts.start}`);
+
+    // Tech stack summary
+    const techSummary = [];
+    if (extensions.has('.ts') || extensions.has('.tsx')) techSummary.push('TypeScript');
+    if (extensions.has('.js') || extensions.has('.jsx') || extensions.has('.mjs') || extensions.has('.cjs')) techSummary.push('JavaScript');
+    if (extensions.has('.py')) techSummary.push('Python');
+    if (extensions.has('.go')) techSummary.push('Go');
+    if (extensions.has('.rs')) techSummary.push('Rust');
+    if (extensions.has('.java')) techSummary.push('Java');
+    if (extensions.has('.rb')) techSummary.push('Ruby');
+    if (pkg) techSummary.push('Node.js');
+
+    // Module wikilinks
+    const moduleWikilinks = moduleFiles.map(m => `- [[${m.file.replace('.md', '')}]]`).join('\n');
+
+    const archContent = `---
+title: "${archTitle}"
+date: ${new Date().toISOString().split('T')[0]}
+type: architecture
+tags: [architecture, ${projectName}]
+---
+
+# ${archTitle}
+
+## Tech Stack
+${techSummary.join(', ') || 'Unknown'}
+
+See [[${techFile.replace('.md', '')}]] for full dependency details.
+
+## Directory Structure
+\`\`\`
+${treeLines.join('\n')}
+\`\`\`
+
+## Key Entry Points
+${entryPoints.length > 0 ? entryPoints.map(e => `- \`${e}\``).join('\n') : '- (none detected)'}
+
+${readmeSnippet ? `## README Excerpt\n${readmeSnippet.slice(0, 500)}\n` : ''}
+## Modules
+${moduleWikilinks || '(no code directories detected)'}
+`;
+
+    fs.writeFileSync(path.join(projectsDir, archFile), archContent, 'utf-8');
+    generatedNotes.push({ file: `projects/${archFile}`, type: 'architecture' });
+
+    // --- 2. Tech Stack note ---
+    const depSections = [];
+    for (const [cat, deps] of Object.entries(allDeps)) {
+      depSections.push(`### ${cat.charAt(0).toUpperCase() + cat.slice(1)}`);
+      for (const d of deps) {
+        depSections.push(`- ${d.name}: ${d.version}`);
+      }
+      depSections.push('');
+    }
+
+    const techContent = `---
+title: "${techTitle}"
+date: ${new Date().toISOString().split('T')[0]}
+type: tech-stack
+tags: [tech-stack, ${projectName}]
+---
+
+# ${techTitle}
+
+See [[${archFile.replace('.md', '')}]] for architecture overview.
+
+## Languages
+${techSummary.join(', ') || 'Unknown'}
+
+## File Extensions
+${[...extensions].sort().join(', ') || 'None detected'}
+
+## Dependencies
+${depSections.length > 0 ? depSections.join('\n') : '(no package.json found)'}
+`;
+
+    fs.writeFileSync(path.join(projectsDir, techFile), techContent, 'utf-8');
+    generatedNotes.push({ file: `projects/${techFile}`, type: 'tech-stack' });
+
+    // --- 3. Module notes ---
+    for (const mod of moduleFiles) {
+      const modDir = path.join(targetDir, mod.dir.name);
+      let fileCount = 0;
+      let modFiles = [];
+      try {
+        const entries = fs.readdirSync(modDir, { withFileTypes: true });
+        for (const e of entries) {
+          if (e.isFile()) {
+            fileCount++;
+            modFiles.push(e.name);
+          } else if (e.isDirectory() && !SKIP_DIRS.has(e.name)) {
+            fileCount++; // count subdirs as 1
+            modFiles.push(e.name + '/');
+          }
+        }
+      } catch {}
+
+      // Related module wikilinks (other modules)
+      const relatedModules = moduleFiles
+        .filter(m => m.file !== mod.file)
+        .map(m => `- [[${m.file.replace('.md', '')}]]`)
+        .join('\n');
+
+      const modTitle = noteTitle(mod.file);
+      const modContent = `---
+title: "${modTitle}"
+date: ${new Date().toISOString().split('T')[0]}
+type: module
+tags: [module, ${projectName}]
+---
+
+# ${modTitle}
+
+Part of [[${archFile.replace('.md', '')}]].
+
+## Overview
+- Directory: \`${mod.dir.name}/\`
+- Files: ${fileCount}
+
+## Key Files
+${modFiles.slice(0, 15).map(f => `- \`${f}\``).join('\n') || '(empty)'}
+
+## Related Modules
+${relatedModules || '(none)'}
+
+## Tech Stack
+See [[${techFile.replace('.md', '')}]] for dependencies.
+`;
+
+      fs.writeFileSync(path.join(projectsDir, mod.file), modContent, 'utf-8');
+      generatedNotes.push({ file: `projects/${mod.file}`, type: 'module' });
+    }
+
+    // --- 4. Rebuild graph ---
+    const engine = getEngine();
+    const rebuildResult = engine.rebuild();
+
+    // --- Output ---
+    if (jsonMode) {
+      return output({
+        action: 'scan',
+        project: projectName,
+        directory: targetDir,
+        notes: generatedNotes,
+        noteCount: generatedNotes.length,
+        graphNodes: rebuildResult.nodeCount,
+        graphEdges: rebuildResult.edgeCount,
+      });
+    }
+
+    const lines = [`Scanned: ${targetDir}`, `Project: ${projectName}`, ''];
+    lines.push(`Generated ${generatedNotes.length} notes:`);
+    for (const n of generatedNotes) {
+      lines.push(`  [${n.type}] ${n.file}`);
+    }
+    lines.push('');
+    lines.push(`Graph rebuilt: ${rebuildResult.nodeCount} nodes, ${rebuildResult.edgeCount} edges`);
+    output(lines.join('\n'));
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -1452,6 +1780,7 @@ Maintenance:
   fix                       Auto-fix vault health issues
   backup [dir]              Create timestamped vault backup (.tar.gz)
   rebuild                   Rebuild graph index
+  scan [dir]                Scan codebase, generate linked knowledge notes
   import <dir> [subdir]     Import markdown files
   promote <note> [subdir]   Promote to global vault
   global-search <query>     Search project + global vaults

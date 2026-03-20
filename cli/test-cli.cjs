@@ -612,6 +612,65 @@ test('fix appears in help', () => {
   assert(out.includes('fix'), 'Help should list fix command');
 });
 
+// --- Scan ---
+console.log('\nScan:');
+
+test('scan generates architecture notes', () => {
+  // Create a temp project directory with a package.json
+  const scanTarget = path.join(tmpDir, 'scan-project');
+  fs.mkdirSync(path.join(scanTarget, 'src'), { recursive: true });
+  fs.mkdirSync(path.join(scanTarget, 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(scanTarget, 'package.json'), JSON.stringify({
+    name: 'test-scan-project',
+    version: '1.0.0',
+    dependencies: { express: '^4.18.0', pg: '^8.11.0' },
+    devDependencies: { jest: '^29.0.0' },
+  }));
+  fs.writeFileSync(path.join(scanTarget, 'src', 'index.js'), '// entry');
+  fs.writeFileSync(path.join(scanTarget, 'lib', 'utils.js'), '// utils');
+  fs.writeFileSync(path.join(scanTarget, 'README.md'), '# Test Project\nA test project for scanning.');
+
+  const out = zed(`scan ${scanTarget}`);
+  assert(out.includes('test-scan-project'), `Expected project name, got: ${out}`);
+  assert(out.includes('architecture'), 'Should mention architecture note');
+  assert(out.includes('tech-stack'), 'Should mention tech-stack note');
+
+  // Verify the notes were actually created
+  const projectsVault = path.join(vaultDir, 'projects');
+  const archNote = path.join(projectsVault, 'test-scan-project-architecture.md');
+  assert(fs.existsSync(archNote), 'Architecture note should exist');
+  const archContent = fs.readFileSync(archNote, 'utf-8');
+  assert(archContent.includes('[[test-scan-project-tech-stack]]'), 'Architecture should link to tech stack');
+  assert(archContent.includes('tags: [architecture, test-scan-project]'), 'Should have architecture tags');
+
+  // Verify module notes have wikilinks
+  const modSrc = path.join(projectsVault, 'test-scan-project-module-src.md');
+  assert(fs.existsSync(modSrc), 'Module src note should exist');
+  const modContent = fs.readFileSync(modSrc, 'utf-8');
+  assert(modContent.includes('[[test-scan-project-architecture]]'), 'Module should link to architecture');
+  assert(modContent.includes('[[test-scan-project-tech-stack]]'), 'Module should link to tech stack');
+});
+
+test('scan --json returns structured data', () => {
+  const scanTarget = path.join(tmpDir, 'scan-project-json');
+  fs.mkdirSync(path.join(scanTarget, 'api'), { recursive: true });
+  fs.writeFileSync(path.join(scanTarget, 'package.json'), JSON.stringify({
+    name: 'json-scan-test',
+    version: '0.1.0',
+    dependencies: { react: '^18.0.0' },
+  }));
+  fs.writeFileSync(path.join(scanTarget, 'api', 'handler.ts'), '// handler');
+
+  const data = zedJson(`scan ${scanTarget}`);
+  assert(data.action === 'scan', `Expected action=scan, got ${data.action}`);
+  assert(data.project === 'json-scan-test', `Expected project name, got ${data.project}`);
+  assert(data.noteCount >= 3, `Expected at least 3 notes, got ${data.noteCount}`);
+  assert(Array.isArray(data.notes), 'Should have notes array');
+  assert(data.notes.some(n => n.type === 'architecture'), 'Should have architecture note');
+  assert(data.notes.some(n => n.type === 'tech-stack'), 'Should have tech-stack note');
+  assert(typeof data.graphNodes === 'number', 'Should have graphNodes count');
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
