@@ -434,6 +434,97 @@ test('KnowledgeEngine: readNote with vault-relative path', () => {
   teardownVault();
 });
 
+test('KnowledgeEngine: incrementalBuild returns stats on first call', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const result = engine.incrementalBuild();
+  assert.ok(result.nodeCount >= 8, 'Should have nodes');
+  assert.ok(typeof result.edgeCount === 'number');
+  assert.ok(['none', 'incremental', 'full'].includes(result.mode), 'mode should be valid');
+  assert.ok(typeof result.changedFiles === 'number');
+  engine.close();
+  teardownVault();
+});
+
+test('KnowledgeEngine: incrementalBuild returns mode=none when nothing changed', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  // First incremental after build — files already indexed, nothing changed
+  const result = engine.incrementalBuild();
+  assert.strictEqual(result.mode, 'none', 'Should detect no changes');
+  assert.strictEqual(result.changedFiles, 0);
+  engine.close();
+  teardownVault();
+});
+
+test('KnowledgeEngine: incrementalBuild detects new file', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  // Add a new file after initial build
+  fs.writeFileSync(path.join(TEST_DIR, 'new-note.md'), '# New Note\nFresh content.');
+  const result = engine.incrementalBuild();
+  assert.ok(result.mode !== 'none', 'Should detect the new file');
+  assert.ok(result.changedFiles >= 1);
+  engine.close();
+  teardownVault();
+});
+
+test('KnowledgeEngine: searchWithSnippets returns snippets', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const results = engine.searchWithSnippets('knowledge');
+  assert.ok(results.length > 0, 'Should find results');
+  assert.ok(Array.isArray(results[0].snippets), 'Should have snippets array');
+  assert.ok(results[0].snippets.length > 0, 'Should have at least one snippet');
+  assert.ok(typeof results[0].score === 'number', 'Should have score');
+  assert.ok(results[0].node, 'Should have node object');
+  engine.close();
+  teardownVault();
+});
+
+test('KnowledgeEngine: searchWithSnippets handles empty query', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const results = engine.searchWithSnippets('');
+  assert.deepStrictEqual(results, []);
+  engine.close();
+  teardownVault();
+});
+
+test('KnowledgeEngine: getAllTags returns Map with correct counts', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const tags = engine.getAllTags();
+  assert.ok(tags instanceof Map, 'Should return a Map');
+  assert.ok(tags.size > 0, 'Should have tags');
+  // hub.md has tags: [core, important], alpha.md has tags: [research]
+  assert.strictEqual(tags.get('core'), 1, 'core tag should appear once');
+  assert.strictEqual(tags.get('important'), 1, 'important tag should appear once');
+  assert.strictEqual(tags.get('research'), 1, 'research tag should appear once');
+  engine.close();
+  teardownVault();
+});
+
+test('KnowledgeEngine: getAllTags returns empty Map for untagged vault', () => {
+  const noTagDir = path.join(__dirname, '.test-vault-notags');
+  fs.rmSync(noTagDir, { recursive: true, force: true });
+  fs.mkdirSync(noTagDir, { recursive: true });
+  fs.writeFileSync(path.join(noTagDir, 'plain.md'), '# Plain\nNo tags here.');
+  const engine = new KnowledgeEngine({ vaultPath: noTagDir });
+  engine.build();
+  const tags = engine.getAllTags();
+  assert.ok(tags instanceof Map);
+  assert.strictEqual(tags.size, 0);
+  engine.close();
+  fs.rmSync(noTagDir, { recursive: true, force: true });
+});
+
 // ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------

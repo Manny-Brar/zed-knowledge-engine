@@ -296,6 +296,80 @@ test('recent --json returns array', () => {
   assert(Array.isArray(data.recent), 'Should have recent array');
 });
 
+// --- Evolve Loop ---
+console.log('\nEvolve Loop:');
+test('loop-init creates loop state files', () => {
+  const out = zed('loop-init "test objective" --max 3');
+  assert(out.includes('Evolve loop initialized'), `Expected init message, got: ${out}`);
+  assert(out.includes('test objective'), 'Should echo objective');
+  // Verify files were created
+  const loopDir = path.join(vaultDir, '_loop');
+  assert(fs.existsSync(path.join(loopDir, 'objective.md')), 'objective.md should exist');
+  assert(fs.existsSync(path.join(loopDir, 'progress.md')), 'progress.md should exist');
+});
+
+test('loop-init --json returns structured data', () => {
+  // Re-init to test JSON mode
+  const data = zedJson('loop-init "json test objective" --max 5');
+  assert(data.action === 'loop-init', 'Should have action');
+  assert(data.objective === 'json test objective', 'Should have objective');
+  assert(data.max_iterations === 5, 'Should have max_iterations');
+});
+
+test('loop-status reports active loop', () => {
+  const out = zed('loop-status');
+  assert(out.includes('Evolve Loop Status'), `Expected status header, got: ${out}`);
+  assert(out.includes('Objective:'), 'Should show objective');
+  assert(out.includes('Iteration:'), 'Should show iteration');
+});
+
+test('loop-status --json has active flag', () => {
+  const data = zedJson('loop-status');
+  assert(data.active === true, 'Should be active');
+  assert(data.objective, 'Should have objective');
+  assert(typeof data.iteration === 'number', 'Should have iteration number');
+});
+
+test('loop-tick advances iteration', () => {
+  const out = zed('loop-tick "completed first step"');
+  assert(out.includes('Iteration 1'), `Expected iteration 1, got: ${out}`);
+  assert(out.includes('Continue:'), 'Should indicate whether to continue');
+});
+
+test('loop-tick --json returns iteration data', () => {
+  const data = zedJson('loop-tick "completed second step"');
+  assert(data.iteration === 2, `Expected iteration 2, got ${data.iteration}`);
+  assert(typeof data.continue === 'boolean', 'Should have continue flag');
+});
+
+test('loop-stop marks loop as completed', () => {
+  const out = zed('loop-stop "test complete"');
+  assert(out.includes('Evolve loop stopped'), `Expected stop message, got: ${out}`);
+  // Verify objective was updated
+  const objectiveContent = fs.readFileSync(path.join(vaultDir, '_loop', 'objective.md'), 'utf-8');
+  assert(objectiveContent.includes('completed: true'), 'Should mark completed');
+  assert(objectiveContent.includes('test complete'), 'Should include stop reason');
+});
+
+test('loop-stop --json returns structured data', () => {
+  // Re-init a new loop to test JSON stop
+  zed('loop-init "another objective" --max 2');
+  const data = zedJson('loop-stop "json stop test"');
+  assert(data.action === 'loop-stop', 'Should have action');
+  assert(data.reason === 'json stop test', 'Should have reason');
+  assert(data.timestamp, 'Should have timestamp');
+});
+
+test('loop-status reports no loop after stop+promote or clean state', () => {
+  // Clean up loop dir to simulate no active loop
+  const loopDir = path.join(vaultDir, '_loop');
+  for (const f of fs.readdirSync(loopDir)) {
+    fs.rmSync(path.join(loopDir, f), { recursive: true, force: true });
+  }
+  const out = zed('loop-status');
+  assert(out.includes('No active evolve loop'), `Expected no loop, got: ${out}`);
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
