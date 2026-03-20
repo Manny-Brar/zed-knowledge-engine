@@ -103,6 +103,32 @@ function error(msg) {
 }
 
 // ---------------------------------------------------------------------------
+// Health score computation (shared by health + overview commands)
+// ---------------------------------------------------------------------------
+
+function computeHealthScore(stats, clusterCount, hubsWithLinks) {
+  const connectivityRatio = stats.edgeCount / stats.nodeCount;
+  const orphanRatio = stats.orphanCount / stats.nodeCount;
+
+  let score = 50;
+  score += Math.min(20, connectivityRatio * 10);
+  score -= Math.min(20, orphanRatio * 30);
+  score += Math.min(15, hubsWithLinks * 3);
+  const clusterPenalty = clusterCount > 1 ? Math.min(15, (clusterCount - 1) * 2) : 0;
+  score += 15 - clusterPenalty;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  let grade;
+  if (score >= 90) grade = 'A';
+  else if (score >= 75) grade = 'B';
+  else if (score >= 60) grade = 'C';
+  else if (score >= 40) grade = 'D';
+  else grade = 'F';
+
+  return { score, grade, connectivityRatio, orphanRatio };
+}
+
+// ---------------------------------------------------------------------------
 // Note path resolution (same logic as MCP server)
 // ---------------------------------------------------------------------------
 
@@ -228,25 +254,10 @@ const commands = {
       return output(jsonMode ? { score: 0, grade: 'N/A', message: 'Empty vault' } : 'Vault Health: Empty — no notes yet');
     }
 
-    const connectivityRatio = stats.edgeCount / stats.nodeCount;
-    const orphanRatio = stats.orphanCount / stats.nodeCount;
     const hubsWithLinks = hubs.filter(h => h.backlink_count > 0).length;
     const avgBacklinks = hubs.length > 0 ? hubs.reduce((sum, h) => sum + h.backlink_count, 0) / hubs.length : 0;
 
-    let score = 50;
-    score += Math.min(20, connectivityRatio * 10);
-    score -= Math.min(20, orphanRatio * 30);
-    score += Math.min(15, hubsWithLinks * 3);
-    const clusterPenalty = clusters.length > 1 ? Math.min(15, (clusters.length - 1) * 2) : 0;
-    score += 15 - clusterPenalty;
-    score = Math.max(0, Math.min(100, Math.round(score)));
-
-    let grade;
-    if (score >= 90) grade = 'A';
-    else if (score >= 75) grade = 'B';
-    else if (score >= 60) grade = 'C';
-    else if (score >= 40) grade = 'D';
-    else grade = 'F';
+    const { score, grade, connectivityRatio, orphanRatio } = computeHealthScore(stats, clusters.length, hubsWithLinks);
 
     const recs = [];
     if (orphanRatio > 0.3) recs.push('Connect orphan notes');
@@ -624,18 +635,14 @@ const commands = {
       return output('ZED Vault: Empty\n  Get started: zed daily, zed template decision "My First Decision"');
     }
 
-    const hubs = engine.findHubs(5);
+    const allHubs = engine.findHubs(100);
+    const hubs = allHubs.slice(0, 5);
     const orphans = engine.getOrphans();
     const clusters = engine.getClusters();
 
-    // Health score (inline)
-    const connectivityRatio = stats.edgeCount / stats.nodeCount;
-    const orphanRatio = stats.orphanCount / stats.nodeCount;
-    let score = 50 + Math.min(20, connectivityRatio * 10) - Math.min(20, orphanRatio * 30);
-    score += Math.min(15, hubs.filter(h => h.backlink_count > 0).length * 3);
-    score += 15 - (clusters.length > 1 ? Math.min(15, (clusters.length - 1) * 2) : 0);
-    score = Math.max(0, Math.min(100, Math.round(score)));
-    let grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F';
+    // Health score (shared with health command)
+    const hubsWithLinks = allHubs.filter(h => h.backlink_count > 0).length;
+    const { score, grade } = computeHealthScore(stats, clusters.length, hubsWithLinks);
 
     if (jsonMode) return output({ stats, score, grade, hubs: hubs.map(h => h.title), orphanCount: orphans.length, clusterCount: clusters.length });
 
@@ -883,9 +890,9 @@ const commands = {
       promoted.push(assessment);
     }
 
-    // Clear _loop/ directory
+    // Clear _loop/ directory (handles both files and subdirectories)
     for (const file of loopFiles) {
-      fs.unlinkSync(path.join(loopDir, file));
+      fs.rmSync(path.join(loopDir, file), { recursive: true, force: true });
     }
 
     // Rebuild graph
