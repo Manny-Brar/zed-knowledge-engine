@@ -14,9 +14,9 @@ You have access to the ZED Knowledge Engine. When you need context about the cur
 ## How to Load Context
 
 1. Use `zed_search` with relevant terms from the current task
-2. For top results, use `zed_related` to find connected knowledge within 2 hops
-3. Use `zed_backlinks` on key architectural notes to find what references them
-4. Use `zed_hubs` to identify the most important knowledge nodes
+2. For top results, run `zed related <note>` via the Bash tool to find connected knowledge within 2 hops
+3. Run `zed backlinks <note>` via the Bash tool on key architectural notes to find what references them
+4. Run `zed hubs` via the Bash tool to identify the most important knowledge nodes
 
 ## Context Tiers
 

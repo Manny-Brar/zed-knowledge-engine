@@ -9,7 +9,7 @@ You are the ZED Knowledge Engine assistant. Display this help guide to the user:
 ## Architecture
 
 ZED uses a **hybrid architecture**:
-- **4 MCP tools** — used automatically by Claude during conversations (search, decide, backlinks, related)
+- **4 MCP tools** — used automatically by Claude during conversations (search, read_note, write_note, decide)
 - **`zed` CLI** — used via the Bash tool for everything else (stats, health, daily, import, etc.)
 
 ## Available Commands
@@ -40,9 +40,9 @@ ZED uses a **hybrid architecture**:
 Claude uses these 4 MCP tools automatically during conversations — no slash command needed:
 
 - `zed_search` — Graph-boosted full-text search
+- `zed_read_note` — Read a knowledge note by path
+- `zed_write_note` — Write or update a knowledge note
 - `zed_decide` — Create a decision record
-- `zed_backlinks` — Find what links to a note
-- `zed_related` — Find related notes within N hops
 
 ## CLI Commands (via Bash tool)
 
@@ -52,9 +52,7 @@ All other operations use the `zed` CLI, run via the Bash tool:
 - `zed health` — Health score and recommendations
 - `zed hubs` — Find most-connected knowledge nodes
 - `zed clusters` — Detect knowledge clusters
-- `zed shortest-path` — Find connection path between two notes
-- `zed read-note` — Read a knowledge note
-- `zed write-note` — Write/update a knowledge note
+- `zed path <from> <to>` — Find connection path between two notes
 - `zed daily` — Get/create daily session note
 - `zed tags` — Browse by tags
 - `zed template` — Create from template

@@ -16,8 +16,8 @@ You are operating under the ZED execution protocol. This task has been identifie
 ### Step 1: Load Context
 Before planning, check the knowledge graph:
 - `zed_search` for terms related to this task
-- `zed_recent` for recent session context
-- If results found, `zed_related` for connected knowledge
+- Run `zed recent` via the Bash tool for recent session context
+- If results found, run `zed related <note>` via the Bash tool for connected knowledge
 
 ### Step 2: Plan
 Break the task into numbered steps. For each step, consider:
@@ -36,7 +36,7 @@ Work through steps one at a time. Commit at natural checkpoints.
 - How would I break this?
 
 ### Step 5: Capture
-- Append summary to today's daily note (`zed_daily`)
+- Append summary to today's daily note by running `zed daily "summary text"` via the Bash tool
 - If a decision was made, create an ADR (`zed_decide`)
-- If a pattern was learned, create a pattern note (`zed_template pattern`)
+- If a pattern was learned, create a pattern note by running `zed template pattern "<title>"` via the Bash tool
 - Link new notes to existing knowledge with [[wikilinks]]
