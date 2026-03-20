@@ -299,12 +299,19 @@ const commands = {
   recent() {
     const limit = parseInt(commandArgs[0]) || 10;
     const engine = getEngine();
+    // Use DB for titles, filesystem only for mtime
+    const dbNodes = engine.graph && engine.graph._stmts
+      ? engine.graph._stmts.getAllNodes.all()
+      : null;
+    const titleMap = new Map();
+    if (dbNodes) dbNodes.forEach(n => titleMap.set(n.path, n.title));
+
     const notes = engine.listNotes();
     const noteStats = notes.map(notePath => {
       try {
         const stat = fs.statSync(notePath);
-        const note = engine.readNote(notePath);
-        return { path: notePath, title: note.title, mtime: stat.mtimeMs };
+        const title = titleMap.get(notePath) || titleMap.get(path.relative(engine.vaultPath, notePath)) || path.basename(notePath, '.md');
+        return { path: notePath, title, mtime: stat.mtimeMs };
       } catch { return null; }
     }).filter(Boolean);
 
@@ -491,6 +498,10 @@ const commands = {
 
   timeline() {
     const typeFilter = commandArgs[0] || '';
+    const validTypes = ['decision', 'daily', 'pattern', 'postmortem', 'architecture', 'note'];
+    if (typeFilter && !validTypes.includes(typeFilter)) {
+      error(`Invalid type "${typeFilter}". Valid types: ${validTypes.join(', ')}`);
+    }
     const limit = parseInt(commandArgs[1]) || 20;
     const engine = getEngine();
     const notes = engine.listNotes();
@@ -561,7 +572,14 @@ const commands = {
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
     const targetFile = path.join(targetDir, path.basename(resolved));
-    if (fs.existsSync(targetFile)) error(`Already exists in global vault: ${path.basename(resolved)}`);
+    if (fs.existsSync(targetFile)) {
+      if (jsonMode) {
+        output({ alreadyExists: true, file: `${subdir}/${path.basename(resolved)}` });
+      } else {
+        error(`Already exists in global vault: ${path.basename(resolved)}`);
+      }
+      return;
+    }
 
     fs.writeFileSync(targetFile, note.content, 'utf-8');
     const globalEngine = getGlobalEngine();
