@@ -387,7 +387,8 @@ const commands = {
     if (fs.existsSync(notePath)) {
       if (append) {
         const existing = fs.readFileSync(notePath, 'utf-8');
-        fs.writeFileSync(notePath, existing + '\n' + append + '\n', 'utf-8');
+        const timeStamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+        fs.writeFileSync(notePath, existing + `\n\n**${timeStamp}** — ${append}\n`, 'utf-8');
         engine.incrementalBuild();
         return output(jsonMode ? { action: 'appended', file: fileName } : `Appended to ${fileName}`);
       }
@@ -745,6 +746,31 @@ const commands = {
 
   // --- Evolve Loop ---
 
+  // Shared helper: validate that both loop state files exist
+  // Returns { valid, objectivePath, progressPath, missing }
+};
+
+function _validateLoopState() {
+  const loopDir = path.join(VAULT_DIR, '_loop');
+  const objectivePath = path.join(loopDir, 'objective.md');
+  const progressPath = path.join(loopDir, 'progress.md');
+
+  const missing = [];
+  if (!fs.existsSync(objectivePath)) missing.push('objective.md');
+  if (!fs.existsSync(progressPath)) missing.push('progress.md');
+
+  return {
+    valid: missing.length === 0,
+    loopDir,
+    objectivePath,
+    progressPath,
+    missing,
+  };
+}
+
+// Re-open commands object to add loop commands
+Object.assign(commands, {
+
   'loop-init'() {
     const objective = commandArgs[0];
     if (!objective) error('Usage: zed loop-init "objective text" [--max N]');
@@ -811,11 +837,10 @@ const commands = {
     const note = commandArgs[0];
     if (!note) error('Usage: zed loop-tick "what was accomplished this iteration"');
 
-    const loopDir = path.join(VAULT_DIR, '_loop');
-    const progressPath = path.join(loopDir, 'progress.md');
-    const objectivePath = path.join(loopDir, 'objective.md');
+    const state = _validateLoopState();
+    if (!state.valid) error(`Loop state is corrupt: missing ${state.missing.join(', ')}. Run \`zed loop-init\` to start fresh.`);
 
-    if (!fs.existsSync(progressPath)) error('No active evolve loop. Run: zed loop-init "objective"');
+    const { loopDir, progressPath, objectivePath } = state;
 
     let progressContent = fs.readFileSync(progressPath, 'utf-8');
 
@@ -853,13 +878,16 @@ const commands = {
   },
 
   'loop-status'() {
-    const loopDir = path.join(VAULT_DIR, '_loop');
-    const objectivePath = path.join(loopDir, 'objective.md');
-    const progressPath = path.join(loopDir, 'progress.md');
-
-    if (!fs.existsSync(objectivePath) || !fs.existsSync(progressPath)) {
-      return output(jsonMode ? { active: false, message: 'No active evolve loop' } : 'No active evolve loop');
+    const state = _validateLoopState();
+    if (!state.valid) {
+      // If both are missing, it's simply no loop. If only one is missing, it's corrupt.
+      if (state.missing.length === 2) {
+        return output(jsonMode ? { active: false, message: 'No active evolve loop' } : 'No active evolve loop');
+      }
+      return error(`Loop state is corrupt: missing ${state.missing.join(', ')}. Run \`zed loop-init\` to start fresh.`);
     }
+
+    const { loopDir, objectivePath, progressPath } = state;
 
     const objectiveContent = fs.readFileSync(objectivePath, 'utf-8');
     const progressContent = fs.readFileSync(progressPath, 'utf-8');
@@ -903,10 +931,10 @@ const commands = {
     const reason = commandArgs[0];
     if (!reason) error('Usage: zed loop-stop "reason for stopping"');
 
-    const loopDir = path.join(VAULT_DIR, '_loop');
-    const objectivePath = path.join(loopDir, 'objective.md');
+    const state = _validateLoopState();
+    if (!state.valid) error(`Loop state is corrupt: missing ${state.missing.join(', ')}. Run \`zed loop-init\` to start fresh.`);
 
-    if (!fs.existsSync(objectivePath)) error('No active evolve loop');
+    const { objectivePath } = state;
 
     let content = fs.readFileSync(objectivePath, 'utf-8');
 
@@ -1161,7 +1189,7 @@ const commands = {
     lines.push(`Health: ${scoreBefore.grade} (${scoreBefore.score}/100) -> ${scoreAfter.grade} (${scoreAfter.score}/100)`);
     output(lines.join('\n'));
   },
-};
+});
 
 // ---------------------------------------------------------------------------
 // Dispatch
