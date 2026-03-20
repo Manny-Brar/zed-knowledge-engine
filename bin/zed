@@ -63,18 +63,35 @@ let _globalEngine = null;
 
 function getEngine() {
   if (!_engine) {
-    const KnowledgeEngine = require('../core/engine.cjs');
-    _engine = new KnowledgeEngine({ vaultPath: VAULT_DIR, dbPath: DB_PATH });
-    _engine.build();
+    try {
+      const KnowledgeEngine = require('../core/engine.cjs');
+      _engine = new KnowledgeEngine({ vaultPath: VAULT_DIR, dbPath: DB_PATH });
+      _engine.build();
+    } catch (err) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        console.error('Error: ZED engine not installed. Run: npm install');
+      } else {
+        console.error(`Error: Could not initialize vault at ${VAULT_DIR}`);
+        console.error(`  ${err.message}`);
+        console.error('\nTry: zed rebuild — or check that the vault directory is accessible.');
+      }
+      process.exit(1);
+    }
   }
   return _engine;
 }
 
 function getGlobalEngine() {
   if (!_globalEngine) {
-    const KnowledgeEngine = require('../core/engine.cjs');
-    _globalEngine = new KnowledgeEngine({ vaultPath: GLOBAL_DIR, dbPath: GLOBAL_DB_PATH });
-    _globalEngine.build();
+    try {
+      const KnowledgeEngine = require('../core/engine.cjs');
+      _globalEngine = new KnowledgeEngine({ vaultPath: GLOBAL_DIR, dbPath: GLOBAL_DB_PATH });
+      _globalEngine.build();
+    } catch (err) {
+      console.error(`Error: Could not initialize global vault at ${GLOBAL_DIR}`);
+      console.error(`  ${err.message}`);
+      process.exit(1);
+    }
   }
   return _globalEngine;
 }
@@ -184,6 +201,11 @@ function formatTimeAgo(ms) {
 // ---------------------------------------------------------------------------
 
 const commands = {
+
+  version() {
+    const pkg = require('../package.json');
+    output(jsonMode ? { name: pkg.name, version: pkg.version } : `zed v${pkg.version}`);
+  },
 
   // --- Graph queries ---
 
@@ -1001,6 +1023,9 @@ Evolve Loop:
   loop-status                 Check loop state
   loop-stop "reason"          Stop loop gracefully
   loop-promote                Promote findings to vault
+
+Other:
+  version                   Show ZED version
 
 Options:
   --json                    Output as JSON (for machine parsing)
