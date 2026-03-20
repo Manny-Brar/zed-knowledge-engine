@@ -16,9 +16,6 @@
     "second-brain",
     "nelson-muntz-protocol"
   ],
-  "commands": "./commands/",
-  "skills": "./skills/",
-  "agents": "./agents/",
-  "hooks": "./hooks/hooks.json",
-  "mcpServers": "./.mcp.json"
+  "repository": "https://github.com/Manny-Brar/zed-knowledge-engine",
+  "homepage": "https://github.com/Manny-Brar/zed-knowledge-engine#readme"
 }
