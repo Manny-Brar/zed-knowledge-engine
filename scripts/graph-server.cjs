@@ -138,13 +138,13 @@ const nodes = rectElements.map(r => {
   const type = excalidrawColorToType[origColor] || 'note';
   return {
     id: r.id,
-    x: r.x,
-    y: r.y,
+    x: 0, y: 0, // will be set by force layout
     w: r.width,
     h: r.height,
     color: nodeColors[type] || defaultNodeColor,
     type: type,
     label: textByContainer[r.id] || r.id,
+    vx: 0, vy: 0, // velocity for force sim
   };
 });
 
@@ -166,6 +166,77 @@ for (const e of edges) {
   adjacency[e.src].add(e.tgt);
   adjacency[e.tgt].add(e.src);
 }
+
+// --- Force-directed layout ---
+// Seed positions in a circle by type cluster
+const typeGroups = {};
+for (const n of nodes) {
+  if (!typeGroups[n.type]) typeGroups[n.type] = [];
+  typeGroups[n.type].push(n);
+}
+const typeKeys = Object.keys(typeGroups);
+const radius = Math.max(300, nodes.length * 12);
+typeKeys.forEach((type, ti) => {
+  const groupAngle = (ti / typeKeys.length) * 2 * Math.PI;
+  const cx = Math.cos(groupAngle) * radius;
+  const cy = Math.sin(groupAngle) * radius;
+  const group = typeGroups[type];
+  group.forEach((n, ni) => {
+    const spread = Math.min(200, group.length * 15);
+    const a = (ni / group.length) * 2 * Math.PI;
+    n.x = cx + Math.cos(a) * spread + (Math.random() - 0.5) * 50;
+    n.y = cy + Math.sin(a) * spread + (Math.random() - 0.5) * 50;
+  });
+});
+
+// Run force simulation (synchronous, ~200 iterations)
+const SIM_ITERATIONS = 250;
+const REPULSION = 80000;
+const ATTRACTION = 0.0008;
+const IDEAL_LENGTH = 180;
+const DAMPING = 0.92;
+const CENTER_PULL = 0.001;
+
+for (let iter = 0; iter < SIM_ITERATIONS; iter++) {
+  const cooling = 1 - iter / SIM_ITERATIONS;
+  // Repulsion (all pairs)
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const force = REPULSION / (dist * dist) * cooling;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      a.vx -= fx; a.vy -= fy;
+      b.vx += fx; b.vy += fy;
+    }
+  }
+  // Attraction (edges)
+  for (const e of edges) {
+    const a = nodeById[e.src], b = nodeById[e.tgt];
+    if (!a || !b) continue;
+    let dx = b.x - a.x, dy = b.y - a.y;
+    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const force = (dist - IDEAL_LENGTH) * ATTRACTION * cooling;
+    const fx = (dx / dist) * force;
+    const fy = (dy / dist) * force;
+    a.vx += fx; a.vy += fy;
+    b.vx -= fx; b.vy -= fy;
+  }
+  // Center pull
+  for (const n of nodes) {
+    n.vx -= n.x * CENTER_PULL * cooling;
+    n.vy -= n.y * CENTER_PULL * cooling;
+  }
+  // Apply velocity
+  for (const n of nodes) {
+    n.vx *= DAMPING; n.vy *= DAMPING;
+    n.x += n.vx; n.y += n.vy;
+  }
+}
+// Clean up velocity props
+for (const n of nodes) { delete n.vx; delete n.vy; }
 
 // --- Stats bar ---
 const typeCounts = {};
@@ -337,9 +408,10 @@ function draw() {
     ctx.strokeStyle = dimmed ? 'rgba(255,255,255,0.05)' : (highlighted ? edgeHighlight : edgeColor);
     ctx.lineWidth = highlighted ? 2 : 0.8;
     ctx.beginPath();
-    const sx = src.x + src.w;
+    // Connect from center to center, clipped to node edges
+    const sx = src.x + src.w / 2;
     const sy = src.y + src.h / 2;
-    const ex = tgt.x;
+    const ex = tgt.x + tgt.w / 2;
     const ey = tgt.y + tgt.h / 2;
     ctx.moveTo(sx, sy);
     ctx.lineTo(ex, ey);
