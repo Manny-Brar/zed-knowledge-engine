@@ -183,7 +183,7 @@ class LicenseManager {
     return {
       valid: false,
       tier: 'expired',
-      reason: 'Trial expired. Activate a license with /ke:activate',
+      reason: 'Trial expired. Activate a license with /zed:activate',
       daysRemaining: 0,
       key: null,
     };

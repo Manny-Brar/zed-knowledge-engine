@@ -24,4 +24,4 @@ After completing the task (or at natural breakpoints during an ongoing Full mode
 
 1. **Evaluate output** against the capture rubric defined in `skills/full-mode/SKILL.md`. Ask: Does this contain a reusable pattern? A decision? A bug insight? A new connection?
 2. **Write persistence-worthy knowledge** to the vault using `zed_write_note`. Tag appropriately (pattern, decision, learning, etc.) and add backlinks to related notes.
-3. **Append session summary** to the daily note. Run `zed daily-append` via the Bash tool with a brief summary of what was loaded, executed, and captured.
+3. **Append session summary** to the daily note. Run `zed daily "summary text"` via the Bash tool with a brief summary of what was loaded, executed, and captured.
