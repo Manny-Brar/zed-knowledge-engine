@@ -3,6 +3,7 @@
 #
 # Auto-appends session activity to today's daily note.
 # Captures git changes if in a git repo.
+# Checks knowledge capture count and warns if zero.
 
 set -euo pipefail
 
@@ -13,6 +14,7 @@ DB_PATH="$DATA_DIR/knowledge.db"
 DATE=$(date +%Y-%m-%d)
 TIME=$(date +%H:%M)
 DAILY_NOTE="$VAULT_DIR/sessions/$DATE.md"
+TRACKER="$DATA_DIR/edit-tracker.json"
 
 # Skip if vault doesn't exist
 if [ ! -d "$VAULT_DIR" ]; then
@@ -33,6 +35,20 @@ fi
 if [ -f "$DAILY_NOTE" ] && [ -n "$GIT_INFO" ]; then
   echo "" >> "$DAILY_NOTE"
   printf '%s\n' "$GIT_INFO" >> "$DAILY_NOTE"
+fi
+
+# Check knowledge capture count vs edit count
+if [ -f "$TRACKER" ]; then
+  EDIT_COUNT=$(node -e "const t=require('$TRACKER'); console.log(t.edit_count || 0)" 2>/dev/null || echo 0)
+  CAPTURE_COUNT=$(node -e "const t=require('$TRACKER'); console.log(t.captures || 0)" 2>/dev/null || echo 0)
+
+  if [ "$CAPTURE_COUNT" -eq 0 ] 2>/dev/null && [ "$EDIT_COUNT" -gt 5 ] 2>/dev/null; then
+    echo ""
+    echo "ZED: No knowledge was captured this session ($EDIT_COUNT edits made). Consider running /zed:decide or writing a pattern note."
+  fi
+
+  # Reset the edit tracker
+  rm -f "$TRACKER"
 fi
 
 # Rebuild graph to pick up any new notes

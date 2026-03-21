@@ -11,14 +11,14 @@ This skill governs your behavior for the entire session. It is not optional. Whe
 | Mode | Activation | Overhead | Purpose |
 |------|-----------|----------|---------|
 | **Light** | Always on (default) | ~500 tokens, ~1-2s | Passive awareness — check vault, act on what's relevant |
-| **Full** | `/zed` command | Medium | Deep context loading + active knowledge capture |
+| **Full** | `/zed` command or auto-escalation | Medium | Deep context loading + active knowledge capture |
 | **Evolve** | `/evolve` command | High | Structured self-improvement loop with persistence |
 
 ---
 
 ### ZED-First Principle
 
-On EVERY prompt, before doing any work, determine if vault context is relevant. This is the first thing you do, not an afterthought.
+On EVERY prompt, before doing any work, determine if vault context is relevant. This is the first thing you do, not an afterthought. This is MANDATORY.
 
 ---
 
@@ -28,48 +28,48 @@ Light mode runs automatically. No activation needed. No mode indicator displayed
 
 **On each prompt:**
 
-1. **Bailout check**: Skip vault entirely for trivial prompts — greetings, simple factual questions with no project context, arithmetic, casual conversation. Do not waste tokens on "hey how's it going."
-2. **Search**: Run `zed_search` using 2-3 keywords extracted from the user's request. Parameters: `limit: 3`, titles only (L0).
-3. **Evaluate**: If search returns relevant results, read the top 1-2 notes with `zed_read_note` (L1). If nothing relevant, move on — do not force context that isn't there.
+1. **Bailout check**: Skip vault entirely for these exact categories: greetings ("hi", "hello", "hey"), yes/no answers, simple math (single arithmetic operations), single-word responses, casual conversation with no project context. For ALL other prompts, proceed to step 2.
+2. **Search**: MUST run `zed_search` using 2-3 keywords extracted from the user's request. Parameters: `limit: 3`, titles only (L0).
+3. **Evaluate**: If search returns relevant results, MUST read the top 1-2 notes with `zed_read_note` (L1). If nothing relevant, proceed to step 4.
 4. **Work**: Do the task. Use vault context if it informed your approach.
-5. **Write (selective)**: Only write to vault when something is genuinely persistence-worthy. Ask yourself: "Would it be costly to re-derive this in a future session?" If yes, write it. If no, skip.
+5. **Capture check**: MUST evaluate whether capture is warranted using the criteria below. This step is not optional.
 
-**Write criteria for Light mode:**
-- Decisions that affect future work
-- Patterns discovered during implementation
-- Insights that required significant reasoning to reach
-- Corrections to existing vault knowledge
+**MUST capture in Light mode when:**
+- A decision was made between 2+ alternatives
+- A pattern was discovered during implementation
+- An insight required significant reasoning to reach (>30 seconds of analysis)
+- Existing vault knowledge was found to be incorrect or outdated
 
-**Do NOT write in Light mode:**
-- Routine code changes
-- Things the user can trivially re-state
-- Information already captured in the vault
+**MUST NOT capture in Light mode:**
+- Routine code changes with no design decisions
+- Information the user stated in this prompt (they can re-state it)
+- Content already present in the vault
 
-**Overhead target**: ~500 tokens, ~1-2 seconds. Light mode must stay light.
+**Overhead target**: ~500 tokens, ~1-2 seconds. Light mode MUST stay light.
 
 ---
 
 ### Full Mode
 
-Activated by the `/zed` command. Prefix your first response with:
+Activated by the `/zed` command or auto-escalation. MUST prefix first response with:
 
 > **ZED: Full mode active**
 
-**Context loading**: L0 → L1 → L2.
-- Search vault broadly for the task domain
-- Read top results with `zed_read_note`
-- Follow backlinks and related notes by running `zed related <note>` and `zed backlinks <note>` via the Bash tool
-- Build a rich context web before planning
+**Context loading**: L0 -> L1 -> L2. This sequence is MANDATORY.
+- MUST search vault broadly for the task domain
+- MUST read top results with `zed_read_note`
+- MUST follow backlinks and related notes by running `zed related <note>` and `zed backlinks <note>` via the Bash tool
+- MUST build a rich context web before planning
 
-**Knowledge capture**: Evaluate ALL output for vault storage. See the `full-mode` skill for the complete capture rubric — what to write, what to skip, and quality standards.
+**Knowledge capture**: MUST evaluate ALL output for vault storage. See the `full-mode` skill for the complete capture rubric.
 
-**Session summary**: At the end of a Full mode task, append a summary to the daily note by running `zed daily "summary"` via the Bash tool.
+**Session summary**: At the end of a Full mode task, MUST append a summary to the daily note by running `zed daily "summary"` via the Bash tool.
 
 ---
 
 ### Evolve Mode
 
-Activated by the `/evolve` command. Prefix your first response with:
+Activated by the `/evolve` command. MUST prefix first response with:
 
 > **ZED: Evolve mode active**
 
@@ -77,17 +77,17 @@ Runs a structured self-improvement loop with scope-locked iterations. See the `e
 
 ---
 
-### Auto-Escalation: Light → Full
+### Auto-Escalation: Light -> Full
 
-You MUST automatically escalate from Light to Full mode when you detect any of the following:
+MUST automatically escalate from Light to Full mode when ANY of the following conditions are true:
 
 - **Multi-session continuity**: User references prior conversation ("we started this yesterday", "as we discussed", "continuing from last time")
-- **Architecture/design decisions**: Keywords like "should we", "which approach", "how should we structure", "what's the best way to"
+- **Architecture/design decisions**: Prompt contains "should we", "which approach", "how should we structure", "what's the best way to", or equivalent
 - **Complex plans**: Task requires 5+ discrete steps to complete
-- **Research tasks**: Keywords like "compare", "evaluate", "investigate", "options for", "pros and cons"
+- **Research tasks**: Prompt contains "compare", "evaluate", "investigate", "options for", "pros and cons"
 - **Post-mortems, audits, reviews**: Retrospective analysis of what happened and why
 
-When auto-escalating, note it briefly at the start of your response:
+When auto-escalating, MUST note it at the start of the response:
 
 > **ZED: Full mode** (detected [reason])
 
@@ -95,9 +95,25 @@ Then operate under Full mode rules for the remainder of that task.
 
 ---
 
+### Skill Trigger Table
+
+These triggers are algorithmic. When the condition is met, the action is MANDATORY.
+
+| Skill | Trigger Condition | Mandatory Action |
+|---|---|---|
+| context-loader | Every task start | MUST run L0 vault search before any work |
+| execution-protocol | Task has 3+ steps | MUST load and follow phased execution |
+| full-mode | Architecture decision made | MUST evaluate all output for capture |
+| compound-learner | Task complete | MUST extract pattern or anti-pattern |
+| evolve-mode | `/evolve` active | MUST check loop state and drift score |
+| behavior-controller | Every prompt | MUST determine mode and apply rules |
+
+---
+
 ### Rules
 
-1. Light mode overhead must not degrade response speed for simple tasks. If the bailout check says skip, skip.
-2. Never force vault context into a response where it adds no value.
+1. Light mode overhead MUST NOT degrade response speed for simple tasks. If the bailout check says skip, skip immediately.
+2. MUST NOT force vault context into a response where it adds no value.
 3. Write quality over write quantity — a vault full of noise is worse than an empty vault.
-4. When in doubt about whether to write, don't. The bar for persistence is "would re-deriving this cost significant time or risk getting it wrong."
+4. The bar for persistence is: "Would re-deriving this cost significant time or risk getting it wrong?" If yes, capture. If no, skip.
+5. Every captured note MUST have a clear title, at least 2 tags, and enough context for a future session to act on it.

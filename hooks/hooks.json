@@ -1,5 +1,29 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
+            "timeout": 15000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-edit-hook.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",
@@ -7,7 +31,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-end.sh",
-            "timeout": 10000
+            "timeout": 15000
           }
         ]
       }
