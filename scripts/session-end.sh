@@ -31,6 +31,27 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fi
 fi
 
+# Auto-create daily note if it doesn't exist
+if [ ! -f "$DAILY_NOTE" ]; then
+  mkdir -p "$(dirname "$DAILY_NOTE")"
+  cat > "$DAILY_NOTE" << DAILY_EOF
+---
+title: "Session $(date +%Y-%m-%d)"
+type: daily
+tags: [daily]
+date: $(date +%Y-%m-%d)
+---
+
+# Session $(date +%Y-%m-%d)
+
+## Work Done
+
+## Decisions Made
+
+## Next Session
+DAILY_EOF
+fi
+
 # Append to daily note if it exists
 if [ -f "$DAILY_NOTE" ] && [ -n "$GIT_INFO" ]; then
   echo "" >> "$DAILY_NOTE"

@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { createRequire } from 'module';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 // Import CJS core engine
 const require = createRequire(import.meta.url);
@@ -188,6 +189,15 @@ server.tool(
       }
       engine.writeNote(notePath, content);
       engine.incrementalBuild();
+
+      // Increment capture counter in edit-tracker
+      const trackerPathW = path.join(process.env.CLAUDE_PLUGIN_DATA || path.join(os.homedir(), '.zed-data'), 'edit-tracker.json');
+      try {
+        const tracker = JSON.parse(fs.readFileSync(trackerPathW, 'utf8'));
+        tracker.captures = (tracker.captures || 0) + 1;
+        fs.writeFileSync(trackerPathW, JSON.stringify(tracker));
+      } catch (e) { /* tracker may not exist yet — that's fine */ }
+
       return { content: [{ type: 'text', text: `Note written: ${file_name}\nGraph updated.` }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
@@ -252,6 +262,15 @@ server.tool(
       const notePath = path.join(VAULT_DIR, fileName);
       engine.writeNote(notePath, content);
       engine.rebuild();
+
+      // Increment capture counter in edit-tracker
+      const trackerPathD = path.join(process.env.CLAUDE_PLUGIN_DATA || path.join(os.homedir(), '.zed-data'), 'edit-tracker.json');
+      try {
+        const tracker = JSON.parse(fs.readFileSync(trackerPathD, 'utf8'));
+        tracker.captures = (tracker.captures || 0) + 1;
+        fs.writeFileSync(trackerPathD, JSON.stringify(tracker));
+      } catch (e) { /* tracker may not exist yet — that's fine */ }
+
       return { content: [{ type: 'text', text: `Decision recorded: ${fileName}\nTitle: ${title}` }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };

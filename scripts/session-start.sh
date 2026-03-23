@@ -27,6 +27,20 @@ node "$PLUGIN_ROOT/bin/zed" overview 2>/dev/null || echo "Vault: present (stats 
 echo ""
 echo "ZED-First Principle: Before executing any task, check if the vault has relevant context. Before finishing any task, evaluate if something should be captured."
 
+# Cross-session continuity: surface yesterday's "Next Session" items
+YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d 2>/dev/null)
+YESTERDAY_NOTE="$VAULT_DIR/sessions/$YESTERDAY.md"
+if [ -f "$YESTERDAY_NOTE" ]; then
+  # Extract content after "## Next Session" header
+  NEXT_SESSION=$(sed -n '/^## Next Session/,/^## /{ /^## Next Session/d; /^## /d; p; }' "$YESTERDAY_NOTE" | head -10)
+  if [ -n "$NEXT_SESSION" ] && [ "$(echo "$NEXT_SESSION" | tr -d '[:space:]')" != "" ]; then
+    echo ""
+    echo "=== From yesterday's session ==="
+    echo "$NEXT_SESSION"
+    echo "================================"
+  fi
+fi
+
 # Check for active evolve loops
 LOOP_OBJ="$VAULT_DIR/_loop/objective.md"
 if [ -f "$LOOP_OBJ" ]; then

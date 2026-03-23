@@ -29,6 +29,6 @@ node -e "
   fs.writeFileSync('$TRACKER', JSON.stringify(t, null, 2));
   const fc = t.files.length;
   if ($NEW_COUNT > 25 || fc > 8) {
-    process.stderr.write('ZED DRIFT WARNING: ' + $NEW_COUNT + ' edits across ' + fc + ' files. Consider pausing to verify scope.\\n');
+    process.stdout.write('ZED DRIFT WARNING: ' + $NEW_COUNT + ' edits across ' + fc + ' files. Consider pausing to verify scope.\\n');
   }
 " 2>&1
