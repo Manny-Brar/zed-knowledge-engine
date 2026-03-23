@@ -23,6 +23,13 @@ node "$PLUGIN_ROOT/bin/zed" rebuild >/dev/null 2>&1 || true
 echo "=== ZED Session Start ==="
 node "$PLUGIN_ROOT/bin/zed" overview 2>/dev/null || echo "Vault: present (stats unavailable)"
 
+# Load soul document (first 30 lines)
+SOUL="$PLUGIN_ROOT/memory/ZED_SOUL.md"
+if [ -f "$SOUL" ]; then
+  echo ""
+  head -30 "$SOUL"
+fi
+
 # ZED-First Principle reminder
 echo ""
 echo "ZED-First Principle: Before executing any task, check if the vault has relevant context. Before finishing any task, evaluate if something should be captured."
