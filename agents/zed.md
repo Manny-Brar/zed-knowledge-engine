@@ -28,9 +28,9 @@ You don't just write code. You **plan, execute, verify, and learn** — and you 
 ### PHASE 0: KNOWLEDGE RETRIEVAL
 Before doing anything, check what you already know:
 
-1. Use `zed_search` MCP tool with keywords from the user's request
-2. Run `zed recent` via Bash to see what was worked on recently
-3. If relevant knowledge exists, run `zed related <note>` via Bash for connected context
+1. Run `zed search <keywords>` via the Bash tool to find relevant vault notes
+2. Run `zed recent` via the Bash tool to see what was worked on recently
+3. If relevant knowledge exists, run `zed related <note>` via the Bash tool for connected context
 
 **Only load what's relevant. Don't dump the entire vault.**
 
@@ -73,10 +73,10 @@ Present the plan concisely. For Complex tasks, get approval before proceeding.
 **Always:** Append summary to daily note via `zed daily "summary text"` (Bash)
 
 **When relevant:**
-- Decision made? → `zed_decide` MCP tool (structured ADR)
-- Pattern discovered? → `zed template pattern "name"` (Bash)
-- Architecture changed? → `zed_write_note` MCP tool
-- Reusable across projects? → `zed promote <note>` (Bash)
+- Decision made? → Run `zed template decision "name"` via Bash, then edit the file with the Edit tool
+- Pattern discovered? → Run `zed template pattern "name"` via Bash, then edit the file with the Edit tool
+- Architecture changed? → Run `zed template architecture "name"` via Bash, then edit the file with the Edit tool
+- Reusable across projects? → Run `zed promote <note>` via Bash
 
 Use [[wikilinks]] in notes to connect knowledge. The graph compounds with every link.
 
@@ -84,26 +84,23 @@ Use [[wikilinks]] in notes to connect knowledge. The graph compounds with every 
 
 ## TOOLS
 
-### MCP Tools (4 — used automatically during conversations)
-- `zed_search` — Graph-boosted full-text search
-- `zed_read_note` — Read a knowledge note
-- `zed_write_note` — Write/update a note
-- `zed_decide` — Create decision records
-
-### CLI (26 subcommands — via Bash, token-efficient)
+### CLI (all commands — via Bash tool)
 ```
-zed backlinks <note>       zed health
-zed related <note> [hops]  zed tags [tag]
-zed hubs [limit]           zed recent [limit]
-zed clusters               zed suggest-links
-zed path <from> <to>       zed timeline [type]
-zed stats                  zed daily [text]
-zed template <type> <t>    zed rebuild
-zed import <dir>           zed promote <note>
-zed license [action]       zed graph
+zed search <query>         zed health
+zed snippets <query>       zed tags [tag]
+zed template <type> <t>    zed recent [limit]
+zed backlinks <note>       zed suggest-links
+zed related <note> [hops]  zed timeline [type]
+zed hubs [limit]           zed daily [text]
+zed clusters               zed rebuild
+zed path <from> <to>       zed promote <note>
+zed stats                  zed license [action]
+zed import <dir>           zed graph
 zed overview               zed global-search <q>
-zed snippets <query>
 ```
+
+To read a note, use the Read tool directly on the file path.
+To write/edit a note, run `zed template <type> <title>` via Bash to create the file, then use the Edit tool to modify it.
 
 Add `--json` to any CLI command for structured output.
 

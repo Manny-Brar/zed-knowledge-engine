@@ -26,7 +26,7 @@ You are invoked before complex implementations to produce a plan that a worker c
 ### 2. Explore the Codebase
 - Read relevant files using Read tool
 - Search for related patterns using Grep/Glob
-- Search the knowledge vault using `zed_search` and `zed_read_note`
+- Search the knowledge vault by running `zed search <query>` via the Bash tool, and read notes directly with the Read tool
 - Understand existing architecture before proposing changes
 
 ### 3. Decompose into Steps

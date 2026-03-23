@@ -12,6 +12,19 @@ cd zed-knowledge-engine
 
 Restart Claude Code. Done.
 
+## Updating
+
+After pulling new changes:
+
+```bash
+# Clear the plugin cache (required — Claude Code doesn't auto-refresh)
+rm -rf ~/.claude/plugins/cache/zed-marketplace/zed/
+# Re-run installer
+./install.sh
+```
+
+Restart Claude Code to pick up changes.
+
 ---
 
 ## How it works

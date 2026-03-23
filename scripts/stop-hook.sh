@@ -12,6 +12,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="${SCRIPT_DIR}/.."
 DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
 VAULT_DIR="$DATA_DIR/vault"
 LOOP_DIR="$VAULT_DIR/_loop"
@@ -21,14 +23,14 @@ TRACKER="$DATA_DIR/edit-tracker.json"
 OBJECTIVE="$LOOP_DIR/objective.md"
 if [ ! -f "$OBJECTIVE" ]; then
   # Run session-end cleanup before allowing stop
-  "${CLAUDE_PLUGIN_ROOT:-$(dirname "$0")/..}/scripts/session-end.sh" 2>/dev/null || true
+  "$PLUGIN_ROOT/scripts/session-end.sh" 2>/dev/null || true
   exit 0
 fi
 
 # Check if loop is already completed
 if grep -q "completed: true" "$OBJECTIVE" 2>/dev/null; then
   # Run session-end cleanup before allowing stop
-  "${CLAUDE_PLUGIN_ROOT:-$(dirname "$0")/..}/scripts/session-end.sh" 2>/dev/null || true
+  "$PLUGIN_ROOT/scripts/session-end.sh" 2>/dev/null || true
   exit 0
 fi
 
@@ -69,7 +71,7 @@ REASONS=""
 
 # Gate 1: If significant work done but zero captures, block
 if [ "$EDIT_COUNT" -gt 5 ] && [ "$CAPTURES" -eq 0 ]; then
-  REASONS="${REASONS}CAPTURE REQUIRED: You made $EDIT_COUNT edits but captured zero knowledge. Before stopping, save at least one decision (zed_decide) or pattern (zed_write_note) to the vault. "
+  REASONS="${REASONS}CAPTURE REQUIRED: You made $EDIT_COUNT edits but captured zero knowledge. Before stopping, save at least one decision ('zed template decision <title>' via Bash) or pattern ('zed template pattern <title>' via Bash) to the vault. "
 fi
 
 # Gate 2: Check if handoff was written this iteration
@@ -105,5 +107,5 @@ fi
 
 # All gates passed — allow stop
 # Run session-end cleanup before allowing stop
-"${CLAUDE_PLUGIN_ROOT:-$(dirname "$0")/..}/scripts/session-end.sh" 2>/dev/null || true
+"$PLUGIN_ROOT/scripts/session-end.sh" 2>/dev/null || true
 exit 0
