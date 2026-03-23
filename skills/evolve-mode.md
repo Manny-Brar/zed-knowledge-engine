@@ -1,110 +1,93 @@
 ---
-description: Drift guard and self-improvement loop mechanics for ZED Evolve mode. Defines scope locking, iteration cycles, drift testing, self-assessment, and completion protocols. Referenced by the behavior-controller when Evolve mode is active.
+name: evolve-mode
+description: ZED Evolve Mode — autonomous improvement loops with continuous research, scope lock, and blocking enforcement
 ---
 
-## ZED Evolve Mode — Loop Mechanics
+# ZED Evolve Mode
 
-Evolve mode runs a structured, scope-locked self-improvement loop. Every iteration is anchored to an objective. Drift is detected and rejected in real time.
+Evolve mode runs structured autonomous loops toward a stated objective. Each iteration follows the full Phase-Gate Engine (see execution-protocol skill).
 
----
+## Starting an Evolve Loop
 
-### Scope Lock (Non-Negotiable)
+When `/evolve "objective"` is invoked:
 
-At the start of EVERY iteration, before any work, read:
+1. Run `zed loop-init "objective"` — creates `_loop/objective.md` + `_loop/progress.md`
+2. **Initialization iteration (iteration 0):**
+   - Do NOT implement anything
+   - Analyze the objective using 5-level planning
+   - Decompose into ordered units of work
+   - Identify which vault knowledge applies
+   - Write the decomposition to `_loop/handoff.md`
+   - This becomes the roadmap for all subsequent iterations
+3. Begin iteration cycle
 
-```
-_loop/objective.md
-```
+## Each Iteration
 
-This file defines what you are trying to achieve. It is the only source of truth for scope. If you cannot connect your next action to this objective, you are drifting.
+Follow the Phase-Gate Engine exactly:
+- Gate 0: RETRIEVE (search vault)
+- Gate 1: PLAN (one unit of work from the decomposition)
+- Gate 2: RESEARCH (vault first, then web for unknowns)
+- Gate 3: EXECUTE
+- Gate 4: SELF-ASSESS (against objective AND original prompt)
+- Gate 5: TEST
+- Gate 6: CAPTURE (mandatory — blocking hook enforces this)
+- Gate 7: DOCUMENT
+- Gate 8: HANDOFF (mandatory — blocking hook enforces this)
 
----
+## Continuous Auto-Research Protocol
 
-### Drift Test
+Research is NOT triggered by failure. It is part of every iteration.
 
-Before each action within an iteration, complete this sentence:
+Each iteration MUST include:
+1. **Vault search** for the current unit of work — what patterns/decisions/anti-patterns apply?
+2. **Best practices check** — a targeted web search for the specific technique being used
+3. **Research capture** — save any significant finding to `research/` in the vault
 
+This is what makes evolve mode compound. Each iteration generates knowledge that future iterations can use.
+
+## Scope Lock
+
+Before every action, complete this sentence:
 > "This action achieves [objective] by [mechanism]."
 
-Rules:
-- The objective must come directly from `_loop/objective.md`
-- The mechanism must be a direct causal link, not a chain of "this leads to that which leads to..."
-- If you cannot complete the sentence, the action is OUT OF SCOPE
+If you cannot complete the sentence, the action is out of scope. Do NOT do it.
 
-When drift is detected:
-1. Log it: "Drift detected: [proposed action] does not directly serve [objective]."
-2. Do not execute the action.
-3. Re-read `_loop/objective.md`.
-4. Re-plan from the current state toward the objective.
+## Drift Detection
 
----
+The blocking Stop hook calculates a drift score (0-10):
+- Edit count > 30: +2, > 20: +1
+- File spread > 8: +2, > 5: +1
+- Iteration count > 10: +2, > 5: +1
 
-### Iteration Cycle
+Score >= 7 triggers circuit breaker — you must re-read the objective and confirm alignment before continuing.
 
-Each iteration follows this exact sequence:
+## "Identify Next" Protocol (Prevents Premature Stopping)
 
-1. **Re-ground**: Read `_loop/objective.md`. Re-internalize the scope.
-2. **Status check**: Read `_loop/progress.md`. Understand what is done and what is next.
-3. **Plan one unit**: Scope a single, concrete unit of work that serves the objective. Do not plan multiple units — plan one, execute one.
-4. **Execute**: Do the work. Apply the drift test before each significant action within the unit.
-5. **Record**: Update progress via `zed loop-tick "what was done"`.
-6. **Scope check**: Review what you just did. Did it serve the objective? If not, note the deviation and correct course on the next iteration.
+After completing each iteration, BEFORE writing the handoff, ask:
 
----
+1. Is the objective fully met? If no → next iteration works on the gap.
+2. If yes, are tests comprehensive? Edge cases covered? → if no, next iteration adds tests.
+3. If yes, is performance acceptable? → if no, next iteration optimizes.
+4. If yes, is security hardened? → if no, next iteration hardens.
+5. If yes, is documentation complete? → if no, next iteration documents.
+6. If yes, are there improvement opportunities a senior engineer would pursue? → if yes, next iteration implements.
+7. If ALL are satisfied, THEN the objective is truly complete.
 
-### Self-Assessment
+This is what keeps the loop running overnight. "Done" means "a senior engineer would ship this to production with confidence."
 
-Every N iterations, pause and assess. Default N is 3. This is configurable via the `self_assess_every` field in `_loop/objective.md` frontmatter.
+## Self-Assessment
 
-Assessment questions (answer all five):
+Every 3rd iteration, write a self-assessment to `_loop/assessment-N.md`:
+1. Percentage toward objective completion
+2. Measurable improvement since last assessment
+3. Was drift avoided?
+4. Should we continue, pivot, or stop?
+5. What's the single most impactful next action?
 
-1. What percentage of the objective is complete? Base this on concrete deliverables, not feelings.
-2. What has improved measurably since the last assessment? Cite specific artifacts, metrics, or outcomes.
-3. What scope drift was tempting but avoided? Name the distractions.
-4. Should this loop **continue**, **pivot**, or **stop**?
-   - Continue: objective is on track, progress is measurable
-   - Pivot: objective is valid but approach needs to change
-   - Stop: objective is met, blocked, or no longer relevant
-5. If continuing, what is the single most important thing to do next?
+## Resuming (`/evolve --resume`)
 
-Write the assessment to:
-
-```
-_loop/assessment-{iteration_number}.md
-```
-
----
-
-### Completion
-
-When the objective is met OR max iterations are reached (defined in `_loop/objective.md` frontmatter as `max_iterations`):
-
-1. **Stop the loop**: Run `zed loop-stop "reason"` with a clear explanation of why the loop is ending (objective met, max iterations, diminishing returns, blocked).
-2. **Promote findings**: Run `zed loop-promote` to move valuable findings from `_loop/` scratch space into proper vault notes. This ensures transient loop artifacts become permanent knowledge.
-3. **Final summary**: Write a summary to the daily note via `zed daily "summary"`. Include: objective, iterations run, key outcomes, notes promoted.
-
----
-
-### Resume Protocol
-
-When resuming a previous loop via `/evolve --resume`:
-
-1. Read ALL files in `_loop/`:
-   - `objective.md` — the goal
-   - `progress.md` — what has been done
-   - `assessment-*.md` — all prior assessments
-2. Reconstruct full context from these files. Do not ask the user to re-explain.
-3. Determine the current iteration number from `progress.md`.
-4. Continue the iteration cycle from the next planned unit of work.
-
-If `_loop/` is empty or missing, inform the user: "No active loop found. Use `/evolve` with a new objective to start one."
-
----
-
-### Rules
-
-1. The objective file is sacred. Do not modify it during a loop unless the user explicitly requests a pivot.
-2. One unit of work per iteration. Do not batch. Small iterations catch drift early.
-3. Never skip the drift test. It exists because drift is the default failure mode of autonomous loops.
-4. Assessments are honest. If progress is stalling, say so. The point is improvement, not the appearance of improvement.
-5. When in doubt, stop. A loop that runs too long without progress wastes more than it produces.
+1. Read `_loop/objective.md` — re-ground on the goal
+2. Read `_loop/handoff.md` — pick up where last iteration left off
+3. Read `_loop/progress.md` — understand what's been done
+4. Read any `_loop/assessment-*.md` files — check for pivot decisions
+5. Continue from the handoff's "Immediate Next Action"
