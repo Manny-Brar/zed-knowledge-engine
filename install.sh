@@ -1,55 +1,92 @@
 #!/bin/bash
 # ZED Knowledge Engine — Installer
 # Usage: ./install.sh
+# Idempotent — safe to re-run at any time.
 
-set -e
+set -euo pipefail
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+echo -e "${CYAN}ZED Knowledge Engine — Installer${NC}"
+echo ""
+
+# --- Dependency checks ---
+check_cmd() {
+  if ! command -v "$1" &>/dev/null; then
+    echo -e "${RED}ERROR: $1 not found. Please install $1 first.${NC}"
+    exit 1
+  fi
+}
+check_cmd node
+check_cmd npm
+check_cmd git
+check_cmd rsync
+
+# Check Node version (need 18+)
+NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
+if [ "$NODE_VER" -lt 18 ]; then
+  echo -e "${RED}ERROR: Node.js 18+ required (found $(node -v))${NC}"
+  exit 1
+fi
+
+NPM_VER=$(npm -v | cut -d. -f1)
+echo -e "${GREEN}✓${NC} Dependencies checked (Node v${NODE_VER}, npm v${NPM_VER})"
+
+# --- Resolve paths ---
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+VERSION=$(node -e "console.log(require('${SCRIPT_DIR}/package.json').version)")
 PLUGIN_NAME="zed"
 MARKETPLACE_NAME="zed-marketplace"
 CLAUDE_DIR="$HOME/.claude"
 PLUGINS_DIR="$CLAUDE_DIR/plugins"
-INSTALL_DIR="$PLUGINS_DIR/ZED"
+CACHE_DIR="$PLUGINS_DIR/cache/$MARKETPLACE_NAME/$PLUGIN_NAME/$VERSION"
+MARKETPLACE_DIR="$PLUGINS_DIR/repos/$MARKETPLACE_NAME"
 
-echo "Installing ZED Knowledge Engine..."
-
-# 1. Install npm dependencies
-echo "  Installing dependencies..."
+# --- Install npm dependencies in source ---
 cd "$SCRIPT_DIR"
-npm install --silent
+npm install --silent 2>&1 || {
+  echo -e "${RED}ERROR: npm install failed. Check network connection and try again.${NC}"
+  exit 1
+}
+echo -e "${GREEN}✓${NC} npm packages installed"
 
-# 2. Create install directory and copy plugin files
-echo "  Setting up plugin directory..."
-mkdir -p "$INSTALL_DIR"/{.claude-plugin,commands,skills,agents,hooks}
+# --- Clear old plugin cache ---
+echo -e "${YELLOW}  Clearing plugin cache...${NC}"
+rm -rf "$PLUGINS_DIR/cache/$MARKETPLACE_NAME/$PLUGIN_NAME/" 2>/dev/null || true
+# Also remove legacy install location if it exists
+rm -rf "$PLUGINS_DIR/ZED" 2>/dev/null || true
 
-# Copy plugin files (not the full source repo)
-cp -r "$SCRIPT_DIR/.claude-plugin/"* "$INSTALL_DIR/.claude-plugin/"
-cp -r "$SCRIPT_DIR/commands/"* "$INSTALL_DIR/commands/"
-cp -r "$SCRIPT_DIR/agents/"* "$INSTALL_DIR/agents/"
-cp -r "$SCRIPT_DIR/hooks/"* "$INSTALL_DIR/hooks/"
+# --- Copy plugin files to cache (including node_modules) ---
+mkdir -p "$CACHE_DIR"
+rsync -a \
+  --exclude='.git' \
+  --exclude='cli/test-*.cjs' \
+  --exclude='core/test.cjs' \
+  --exclude='core/bench.cjs' \
+  "$SCRIPT_DIR/" "$CACHE_DIR/"
+echo -e "${GREEN}✓${NC} Plugin files copied to ${CACHE_DIR}"
 
-# Flatten skills if needed
-for f in "$SCRIPT_DIR/skills/"*.md; do
-  cp "$f" "$INSTALL_DIR/skills/$(basename "$f")"
-done
-
-# Create .mcp.json with absolute paths
-cat > "$INSTALL_DIR/.mcp.json" << MCPEOF
+# --- Create .mcp.json with absolute paths in cache ---
+cat > "$CACHE_DIR/.mcp.json" << MCPEOF
 {
   "mcpServers": {
     "zed-knowledge-engine": {
       "command": "node",
-      "args": ["$SCRIPT_DIR/server/mcp-server.mjs"],
+      "args": ["${CACHE_DIR}/server/mcp-server.mjs"],
       "env": {
-        "CLAUDE_PLUGIN_DATA": "$PLUGINS_DIR/data/$PLUGIN_NAME-$MARKETPLACE_NAME"
+        "CLAUDE_PLUGIN_DATA": "${PLUGINS_DIR}/data/${PLUGIN_NAME}-${MARKETPLACE_NAME}"
       }
     }
   }
 }
 MCPEOF
 
-# Fix hooks to use absolute paths
-cat > "$INSTALL_DIR/hooks/hooks.json" << HOOKEOF
+# --- Fix hooks to use absolute paths in cache ---
+cat > "$CACHE_DIR/hooks/hooks.json" << HOOKEOF
 {
   "hooks": {
     "Stop": [
@@ -58,7 +95,7 @@ cat > "$INSTALL_DIR/hooks/hooks.json" << HOOKEOF
         "hooks": [
           {
             "type": "command",
-            "command": "$SCRIPT_DIR/scripts/session-end.sh",
+            "command": "${CACHE_DIR}/scripts/session-end.sh",
             "timeout": 10000
           }
         ]
@@ -68,22 +105,21 @@ cat > "$INSTALL_DIR/hooks/hooks.json" << HOOKEOF
 }
 HOOKEOF
 
-# 3. Create marketplace
-echo "  Creating marketplace..."
-MARKETPLACE_DIR="$PLUGINS_DIR/repos/$MARKETPLACE_NAME"
+# --- Create marketplace ---
 mkdir -p "$MARKETPLACE_DIR/.claude-plugin"
+GIT_USER=$(git config user.name 2>/dev/null || echo 'User')
 cat > "$MARKETPLACE_DIR/.claude-plugin/marketplace.json" << MKTEOF
 {
   "\$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "$MARKETPLACE_NAME",
+  "name": "${MARKETPLACE_NAME}",
   "version": "1.0.0",
   "description": "ZED Knowledge Engine marketplace",
-  "owner": { "name": "$(git config user.name 2>/dev/null || echo 'User')" },
+  "owner": { "name": "${GIT_USER}" },
   "plugins": [
     {
-      "name": "$PLUGIN_NAME",
+      "name": "${PLUGIN_NAME}",
       "description": "ZED Knowledge Engine — persistent memory + structured execution for Claude Code",
-      "version": "$(node -e "console.log(require('./package.json').version)")",
+      "version": "${VERSION}",
       "source": "./zed-knowledge-engine"
     }
   ]
@@ -92,66 +128,80 @@ MKTEOF
 
 # Symlink source into marketplace
 ln -sf "$SCRIPT_DIR" "$MARKETPLACE_DIR/zed-knowledge-engine"
+echo -e "${GREEN}✓${NC} Marketplace registered"
 
-# 4. Register marketplace in known_marketplaces.json
-echo "  Registering marketplace..."
+# --- Register marketplace in known_marketplaces.json ---
 KNOWN_MKT="$PLUGINS_DIR/known_marketplaces.json"
 if [ ! -f "$KNOWN_MKT" ]; then
-  echo "{}" > "$KNOWN_MKT"
+  echo '{}' > "$KNOWN_MKT"
 fi
-# Use node for safe JSON merging
 node -e "
 const fs = require('fs');
-const data = JSON.parse(fs.readFileSync('$KNOWN_MKT', 'utf-8'));
-data['$MARKETPLACE_NAME'] = {
-  source: { source: 'directory', path: '$MARKETPLACE_DIR' },
-  installLocation: '$MARKETPLACE_DIR',
+const path = '${KNOWN_MKT}';
+const data = JSON.parse(fs.readFileSync(path, 'utf-8'));
+data['${MARKETPLACE_NAME}'] = {
+  source: { source: 'directory', path: '${MARKETPLACE_DIR}' },
+  installLocation: '${MARKETPLACE_DIR}',
   lastUpdated: new Date().toISOString()
 };
-fs.writeFileSync('$KNOWN_MKT', JSON.stringify(data, null, 2));
-"
+fs.writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+" || {
+  echo -e "${RED}ERROR: Failed to register marketplace in known_marketplaces.json${NC}"
+  exit 1
+}
 
-# 5. Register plugin in installed_plugins.json
-echo "  Registering plugin..."
+# --- Register plugin in installed_plugins.json ---
 INSTALLED="$PLUGINS_DIR/installed_plugins.json"
 if [ ! -f "$INSTALLED" ]; then
   echo '{"version":2,"plugins":{}}' > "$INSTALLED"
 fi
 node -e "
 const fs = require('fs');
-const data = JSON.parse(fs.readFileSync('$INSTALLED', 'utf-8'));
+const path = '${INSTALLED}';
+const data = JSON.parse(fs.readFileSync(path, 'utf-8'));
 if (!data.plugins) data.plugins = {};
-data.plugins['$PLUGIN_NAME@$MARKETPLACE_NAME'] = [{
+const key = '${PLUGIN_NAME}@${MARKETPLACE_NAME}';
+const now = new Date().toISOString();
+const existing = data.plugins[key];
+data.plugins[key] = [{
   scope: 'user',
-  installPath: '$INSTALL_DIR',
-  version: '$(node -e "console.log(require('./package.json').version)")',
-  installedAt: new Date().toISOString(),
-  lastUpdated: new Date().toISOString()
+  installPath: '${CACHE_DIR}',
+  version: '${VERSION}',
+  installedAt: existing && existing[0] ? existing[0].installedAt : now,
+  lastUpdated: now
 }];
-fs.writeFileSync('$INSTALLED', JSON.stringify(data, null, 2));
-"
+fs.writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+" || {
+  echo -e "${RED}ERROR: Failed to register plugin in installed_plugins.json${NC}"
+  exit 1
+}
+echo -e "${GREEN}✓${NC} Plugin registered"
 
-# 6. Enable plugin in settings.json
-echo "  Enabling plugin..."
+# --- Enable plugin in settings.json ---
 SETTINGS="$CLAUDE_DIR/settings.json"
 if [ ! -f "$SETTINGS" ]; then
   echo '{}' > "$SETTINGS"
 fi
 node -e "
 const fs = require('fs');
-const data = JSON.parse(fs.readFileSync('$SETTINGS', 'utf-8'));
+const path = '${SETTINGS}';
+const data = JSON.parse(fs.readFileSync(path, 'utf-8'));
 if (!data.enabledPlugins) data.enabledPlugins = {};
-data.enabledPlugins['$PLUGIN_NAME@$MARKETPLACE_NAME'] = true;
-fs.writeFileSync('$SETTINGS', JSON.stringify(data, null, 2));
-"
+data.enabledPlugins['${PLUGIN_NAME}@${MARKETPLACE_NAME}'] = true;
+fs.writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+" || {
+  echo -e "${RED}ERROR: Failed to enable plugin in settings.json${NC}"
+  exit 1
+}
+echo -e "${GREEN}✓${NC} Plugin enabled"
 
-# 7. Create plugin data directory
+# --- Create plugin data directory ---
 mkdir -p "$PLUGINS_DIR/data/$PLUGIN_NAME-$MARKETPLACE_NAME"
 
 echo ""
-echo "ZED Knowledge Engine installed successfully!"
+echo -e "${GREEN}ZED v${VERSION} installed successfully!${NC}"
+echo -e "Restart Claude Code to activate."
 echo ""
-echo "Restart Claude Code to activate. After restart:"
 echo "  /zed:help     -- Full command reference"
 echo "  /zed:overview -- Vault dashboard"
 echo "  /zed          -- Activate Full mode"
