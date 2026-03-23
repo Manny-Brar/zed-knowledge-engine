@@ -126,4 +126,4 @@ If vault is empty (< 3 notes):
 
 ---
 
-*ZED Knowledge Engine v6.2*
+*ZED Knowledge Engine v6.3*

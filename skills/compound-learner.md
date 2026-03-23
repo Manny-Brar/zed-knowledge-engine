@@ -1,4 +1,5 @@
 ---
+name: compound-learner
 description: Extracts reusable patterns and anti-patterns from completed work sessions. Triggers after significant implementation tasks, bug fixes, or architecture decisions to capture institutional knowledge.
 ---
 

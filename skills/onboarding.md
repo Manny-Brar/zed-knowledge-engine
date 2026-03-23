@@ -1,4 +1,5 @@
 ---
+name: onboarding
 description: First-run onboarding for the ZED Knowledge Engine. Triggers when the vault is empty or the plugin has never been used. Guides the user through initial setup and indexes their existing project docs.
 ---
 

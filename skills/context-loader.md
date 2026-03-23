@@ -1,4 +1,5 @@
 ---
+name: context-loader
 description: Automatically loads relevant knowledge graph context when Claude needs project background. Triggers when Claude is working on tasks that could benefit from prior decisions, patterns, or architecture knowledge.
 ---
 

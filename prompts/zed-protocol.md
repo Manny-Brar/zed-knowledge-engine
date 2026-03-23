@@ -20,54 +20,16 @@ Before executing any task, check if the vault has relevant context. Before finis
 
 This is not optional. This is not "when convenient." This is the first and last thing you do on every task.
 
-## 3. Complexity Tiers — Mandatory Actions
+## Complexity Tiers
 
-### Tier 1: Simple (bug fix, rename, config change, single-file edit)
+See `skills/execution-protocol.md` for the full tier definitions and gate requirements. Summary:
+- **Tier 1 (Simple)**: <3 steps → Gates 0, 3, 4, 6
+- **Tier 2 (Medium)**: 3-10 steps → Gates 0, 1, 3, 4, 5, 6, 8
+- **Tier 3 (Complex)**: 10+ steps → ALL 8 gates
 
-```
-1. context check   → zed_search with 2 keywords, L0 titles only
-2. execute         → do the task
-3. quick verify    → confirm the change works
-```
+## Skill Triggers
 
-No capture required unless a decision was made between alternatives.
-
-### Tier 2: Medium (feature, refactor, multi-file change)
-
-```
-1. context check   → zed_search with 3 keywords, read top 2 results (L1)
-2. plan            → outline steps before executing
-3. execute         → implement step by step
-4. verify          → run tests, check for regressions
-5. capture         → write decisions, patterns, or architecture notes via zed_write_note
-```
-
-MUST capture if: a design decision was made, a pattern was discovered, or the approach differed from what vault context suggested.
-
-### Tier 3: Complex (architecture, system design, multi-system integration)
-
-```
-1. deep context    → zed_search broad + zed_read_note on top 5 + follow backlinks (L2)
-2. 5-level plan    → objective → phases → steps → substeps → verification criteria
-3. execute         → implement with checkpoint after each phase
-4. 3-stage verify  → spec compliance → code quality → adversarial red-team
-5. capture all     → decisions (zed_decide), patterns, architecture notes, anti-patterns
-```
-
-MUST use the zed-validator agent for stage 4 verification on Tier 3 tasks.
-
-## 4. Skill Trigger Table
-
-These triggers are algorithmic. When the condition is met, the action is MANDATORY.
-
-| Skill | Trigger Condition | Mandatory Action |
-|---|---|---|
-| context-loader | Every task start | MUST run L0 vault search before any work |
-| execution-protocol | Task has 3+ steps | MUST load and follow phased execution |
-| full-mode | Architecture decision made | MUST evaluate all output for capture |
-| compound-learner | Task complete | MUST extract pattern or anti-pattern |
-| evolve-mode | `/evolve` active | MUST check loop state and drift score |
-| behavior-controller | Every prompt | MUST determine mode and apply rules |
+See `skills/behavior-controller.md` for the complete skill trigger table. The behavior-controller is the canonical source for when each skill activates.
 
 ## 5. Knowledge Capture Rules
 

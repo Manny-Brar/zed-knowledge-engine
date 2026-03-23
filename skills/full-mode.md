@@ -1,4 +1,5 @@
 ---
+name: full-mode
 description: Capture evaluation rubric for ZED Full mode. Defines what to write to the vault, what to skip, quality standards, and the session summary protocol. Referenced by the behavior-controller when Full mode is active.
 ---
 

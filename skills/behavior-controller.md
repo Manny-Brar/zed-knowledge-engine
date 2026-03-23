@@ -1,6 +1,27 @@
 ---
+name: behavior-controller
 description: ROOT behavioral controller for ZED Knowledge Engine. Defines three operating modes (Light, Full, Evolve) and governs how Claude interacts with the vault on every prompt. This is a hard pre-condition — treat as an instruction set, not a suggestion.
 ---
+
+## Tool Usage Rules
+
+ZED has two interfaces. Use the right one:
+
+**MCP Tools (Claude calls directly — preferred for these 4 operations):**
+- `zed_search` — search the vault
+- `zed_read_note` — read a note
+- `zed_write_note` — write/update a note
+- `zed_decide` — create a decision record
+
+**CLI via Bash (for everything else):**
+- `zed related <note>` — find connected notes
+- `zed backlinks <note>` — find notes linking to this one
+- `zed hubs` — most connected notes
+- `zed daily "text"` — session notes
+- `zed health` — vault health score
+- All other `zed` subcommands
+
+**Rule: If it's one of the 4 MCP tools, use the MCP tool. For everything else, use CLI via Bash.**
 
 ## ZED Behavioral Controller
 
@@ -107,6 +128,8 @@ These triggers are algorithmic. When the condition is met, the action is MANDATO
 | compound-learner | Task complete | MUST extract pattern or anti-pattern |
 | evolve-mode | `/evolve` active | MUST check loop state and drift score |
 | behavior-controller | Every prompt | MUST determine mode and apply rules |
+| wall-breaker | Execution blocked by error, unknown, or design conflict | MUST classify wall type and follow research protocol |
+| onboarding | Vault empty (<3 notes) or first session with ZED | MUST run first-session setup flow |
 
 ---
 
