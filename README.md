@@ -155,16 +155,16 @@ ZED captures knowledge based on concrete rules, not vibes:
 
 ## Multi-agent system
 
-ZED includes 4 specialized agents:
+ZED includes 6 specialized agents:
 
-| Agent | Role | Restrictions |
-|-------|------|-------------|
-| `zed` | Main execution agent — plans, executes, captures | Full access |
-| `graph-explorer` | Traverses knowledge connections | Read-only |
-| `knowledge-indexer` | Vault health and maintenance | Read-only |
-| `zed-validator` | Adversarial 3-stage validation | **Cannot edit code** — can only find issues |
-
-The validator is intentionally restricted from editing. It must find at least 3 potential issues per review.
+| Agent | Role | Model | Restrictions |
+|-------|------|-------|-------------|
+| `zed` | Main execution agent | Opus | Full access |
+| `zed-planner` | Read-only implementation planning | Sonnet | Cannot edit code |
+| `zed-validator` | Adversarial 3-stage validation | Opus | Cannot edit code |
+| `zed-researcher` | Fast web research | Haiku | Read + web only |
+| `graph-explorer` | Knowledge graph traversal | Opus | Read-only |
+| `knowledge-indexer` | Vault health maintenance | Opus | Read-only |
 
 ---
 
@@ -172,9 +172,27 @@ The validator is intentionally restricted from editing. It must find at least 3 
 
 | Hook | When | What it does |
 |------|------|-------------|
-| **SessionStart** | Every new conversation | Rebuilds graph, shows vault stats, loads ZED Protocol |
-| **PostToolUse** | After every file edit | Tracks edit count and file spread, warns on drift |
-| **Stop** | Session ends | Logs session activity, warns if no knowledge captured |
+| **SessionStart** | New conversation | Rebuilds graph, loads soul doc, shows vault stats, surfaces yesterday's items |
+| **PostToolUse** | After every file edit | Tracks edit count/file spread, warns on drift |
+| **PreCompact** | Before context compression | Reminds to flush unsaved knowledge to vault |
+| **Stop** | Session/iteration ends | **Blocking in evolve mode** — enforces capture, handoff, drift gates |
+
+---
+
+## Phase-gate execution engine
+
+Every non-trivial task passes through 8 sequential gates. A gate must pass before the next begins:
+
+1. **Retrieve** — search vault for prior knowledge
+2. **Plan** — classify complexity, draft implementation plan
+3. **Research** — fill knowledge gaps the plan revealed
+4. **Execute** — implement one unit of work
+5. **Self-assess** — check output against the original request
+6. **Test** — run tests, verify nothing broke
+7. **Capture** — save decisions, patterns, architecture to vault
+8. **Document** — update daily note, write handoff items
+
+Simple tasks skip gates 2-3. The engine is enforced by the Stop hook in evolve mode — the agent cannot exit without clearing capture, handoff, and drift gates.
 
 ---
 
@@ -200,7 +218,7 @@ zed scan [dir]     zed visualize            zed suggest-links
 
 Add `--json` to any command for structured output.
 
-**7 behavioral skills** — loaded automatically, govern Claude's behavior.
+**9 behavioral skills** — loaded automatically, govern Claude's behavior.
 
 **1 injected protocol** — `prompts/zed-protocol.md` is loaded at session start, not on demand.
 
@@ -242,7 +260,7 @@ CXXFLAGS="-I$(xcrun --show-sdk-path)/usr/include/c++/v1 -isysroot $(xcrun --show
 npm test          # 49 core engine tests
 npm run test:mcp  # 16 MCP server tests
 npm run test:cli  # 57 CLI integration tests
-npm run test:all  # 122 total
+npm run test:all  # 122 total (all passing)
 npm run bench     # Performance benchmarks
 ```
 

@@ -95,7 +95,7 @@ function buildHtml(graphJsonString) {
 <canvas id="c"></canvas>
 <div id="tooltip"></div>
 <div id="legend"></div>
-<div id="version">ZED v6.3.0</div>
+<div id="version">ZED v7.0.0</div>
 <div id="controls">scroll zoom &middot; drag pan &middot; hover inspect</div>
 
 <script>

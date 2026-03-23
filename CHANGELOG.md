@@ -1,5 +1,37 @@
 # Changelog
 
+## v7.0.0 (2026-03-23)
+
+### Architecture
+- Blocking Stop hook — agent cannot exit evolve loop without passing capture, handoff, and drift gates
+- Phase-gate execution engine — 8 gates (retrieve, plan, research, execute, self-assess, test, capture, document)
+- ZED Soul document — identity anchor loaded at every session start
+- PreCompact hook — flushes knowledge before context compression
+
+### New Agents
+- `zed-planner` — read-only implementation planning (Sonnet)
+- `zed-researcher` — fast web research (Haiku)
+
+### New Skills
+- `wall-breaker` — obstacle classification with 5 wall types and escalation ladder
+- `execution-protocol` rewritten with full 8-gate phase-gate system
+- `evolve-mode` rewritten with continuous auto-research and "Identify Next" protocol
+
+### Fixes
+- Plugin agents now use CLI via Bash (MCP tools unavailable to plugin agents — GitHub #21560)
+- All scripts derive paths from script location (CLAUDE_PLUGIN_ROOT not set in SessionStart — GitHub #27145)
+- Capture counter now works (MCP tools increment tracker)
+- Daily note auto-created on session end
+- Yesterday's "Next Session" items surface on session start
+- Drift warning outputs to stdout (was invisible on stderr)
+- Skill audit: deduplicated trigger tables, added missing frontmatter names
+- Production-grade install.sh with dependency checks + uninstall.sh
+
+### Research Captured to Vault
+- Claude Code plugin architecture (26 hooks, skills loading, caching behavior)
+- Competitor analysis (Aider, Cline, Cursor, Windsurf, Devin)
+- Install UX best practices
+
 ## [6.3.0] - 2026-03-20
 
 ### Added
