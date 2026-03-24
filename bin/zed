@@ -800,6 +800,16 @@ Object.assign(commands, {
     const date = new Date().toISOString().split('T')[0];
     const loopDir = path.join(VAULT_DIR, '_loop');
 
+    // Warn if a loop is already active
+    const existingState = _validateLoopState();
+    if (existingState.valid) {
+      const existingContent = fs.readFileSync(existingState.objectivePath, 'utf-8');
+      const existingTitle = (existingContent.match(/^title:\s*"(.+)"/m) || [])[1] || 'Unknown';
+      if (!jsonMode) {
+        console.error(`Warning: Overwriting active loop "${existingTitle}"`);
+      }
+    }
+
     const objectiveContent = [
       '---',
       `title: "${objective}"`,
@@ -854,7 +864,12 @@ Object.assign(commands, {
     if (!note) error('Usage: zed loop-tick "what was accomplished this iteration"');
 
     const state = _validateLoopState();
-    if (!state.valid) error(`Loop state is corrupt: missing ${state.missing.join(', ')}. Run \`zed loop-init\` to start fresh.`);
+    if (!state.valid) {
+      if (state.missing.length === 2) {
+        error('No active evolve loop. Start one with: zed loop-init "objective"');
+      }
+      error(`Loop state is corrupt: missing ${state.missing.join(', ')}. Run \`zed loop-init\` to start fresh.`);
+    }
 
     const { loopDir, progressPath, objectivePath } = state;
 
@@ -956,7 +971,12 @@ Object.assign(commands, {
     if (!reason) error('Usage: zed loop-stop "reason for stopping"');
 
     const state = _validateLoopState();
-    if (!state.valid) error(`Loop state is corrupt: missing ${state.missing.join(', ')}. Run \`zed loop-init\` to start fresh.`);
+    if (!state.valid) {
+      if (state.missing.length === 2) {
+        error('No active evolve loop. Start one with: zed loop-init "objective"');
+      }
+      error(`Loop state is corrupt: missing ${state.missing.join(', ')}. Run \`zed loop-init\` to start fresh.`);
+    }
 
     const { objectivePath } = state;
 
@@ -1136,14 +1156,14 @@ Object.assign(commands, {
   'loop-complete'() {
     const featuresPath = path.join(VAULT_DIR, '_loop', 'features.json');
     if (!fs.existsSync(featuresPath)) {
-      error('No features.json');
+      error('No features found. Run: zed loop-decompose "feature1, feature2" first');
     }
 
     const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
     const current = features.find(f => f.status === 'in_progress');
 
     if (!current) {
-      error('No feature currently in progress');
+      error('No feature currently in progress. Run: zed loop-next to start one');
     }
 
     current.status = 'done';
@@ -1334,6 +1354,14 @@ Object.assign(commands, {
   visualize() {
     const engine = getEngine();
     const allNotes = engine.listNotes();
+
+    if (allNotes.length === 0) {
+      return output(jsonMode
+        ? { action: 'visualize', nodeCount: 0, edgeCount: 0, message: 'Nothing to visualize — vault is empty' }
+        : 'Nothing to visualize — vault is empty. Add notes first.'
+      );
+    }
+
     const stats = engine.getStats();
     const hubs = engine.findHubs(allNotes.length || 50);
 

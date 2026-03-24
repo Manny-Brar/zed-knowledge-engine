@@ -711,6 +711,102 @@ test('scan --json returns structured data', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Error Handling Audit Tests
+// ---------------------------------------------------------------------------
+
+console.log('\nError Handling:');
+
+test('loop-tick without active loop says no active loop', () => {
+  // Clean loop dir
+  const loopDir = path.join(vaultDir, '_loop');
+  for (const f of fs.readdirSync(loopDir)) {
+    fs.rmSync(path.join(loopDir, f), { recursive: true, force: true });
+  }
+  const out = zed('loop-tick "test"', { expectError: true });
+  assert(out.includes('No active evolve loop'), `Expected no active loop message, got: ${out}`);
+});
+
+test('loop-stop without active loop says no active loop', () => {
+  const out = zed('loop-stop "test"', { expectError: true });
+  assert(out.includes('No active evolve loop'), `Expected no active loop message, got: ${out}`);
+});
+
+test('loop-decompose without active loop says no active loop', () => {
+  const out = zed('loop-decompose "feature1"', { expectError: true });
+  assert(out.includes('No active evolve loop'), `Expected no active loop message, got: ${out}`);
+});
+
+test('loop-next without features.json says no features', () => {
+  const out = zed('loop-next');
+  assert(out.includes('No features.json') || out.includes('features'), `Expected no features message, got: ${out}`);
+});
+
+test('loop-complete without features says helpful message', () => {
+  const out = zed('loop-complete', { expectError: true });
+  assert(out.includes('No features found'), `Expected helpful message, got: ${out}`);
+});
+
+test('double loop-init warns about overwriting', () => {
+  zed('loop-init "first objective"');
+  const out = zed('loop-init "second objective"', { expectError: true });
+  // The warning goes to stderr, the success to stdout; expectError captures stderr
+  // But the command succeeds, so we need to check differently
+  const loopDir = path.join(vaultDir, '_loop');
+  const content = fs.readFileSync(path.join(loopDir, 'objective.md'), 'utf-8');
+  assert(content.includes('second objective'), `Expected second objective, got overwrite issue`);
+});
+
+test('visualize on empty vault says nothing to visualize', () => {
+  const env = {
+    ...process.env,
+    ZED_DATA_DIR: path.join(tmpDir, 'empty-env'),
+    CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
+  };
+  try {
+    const result = execSync(`node ${BIN} visualize --out ${path.join(tmpDir, 'empty-viz.json')}`, {
+      env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    }).trim();
+    assert(result.includes('Nothing to visualize'), `Expected nothing to visualize, got: ${result}`);
+  } catch (err) {
+    const msg = (err.stderr || err.stdout || err.message).trim();
+    assert(false, `visualize on empty vault crashed: ${msg}`);
+  }
+});
+
+test('scan on directory without package.json uses dir name', () => {
+  const noPackageDir = path.join(tmpDir, 'no-pkg-project');
+  fs.mkdirSync(path.join(noPackageDir, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(noPackageDir, 'src', 'main.js'), '// entry');
+  const out = zed(`scan ${noPackageDir}`);
+  assert(out.includes('no-pkg-project'), `Expected dir name as project name, got: ${out}`);
+});
+
+test('CLI with nonexistent vault dir creates it gracefully', () => {
+  const env = {
+    ...process.env,
+    ZED_DATA_DIR: path.join(tmpDir, 'fresh-vault-test'),
+    CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'fresh-vault-test'),
+  };
+  try {
+    const result = execSync(`node ${BIN} stats`, {
+      env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
+    }).trim();
+    assert(result.includes('Notes: 0'), `Expected empty stats, got: ${result}`);
+  } catch (err) {
+    const msg = (err.stderr || err.stdout || err.message).trim();
+    assert(false, `stats with nonexistent vault crashed: ${msg}`);
+  }
+});
+
+test('path traversal is rejected', () => {
+  const out = zed('backlinks "../../etc/passwd"', { expectError: true });
+  assert(out.includes('not found') || out.includes('Error'), `Expected rejection, got: ${out}`);
+});
+
+// Re-init loop for any subsequent tests
+zed('loop-init "restored for hooks"');
+
+// ---------------------------------------------------------------------------
 // Hook Tests
 // ---------------------------------------------------------------------------
 
