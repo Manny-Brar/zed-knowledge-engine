@@ -85,6 +85,15 @@ function buildHtml(graphJsonString) {
     background: rgba(10, 10, 26, 0.8); padding: 6px 10px; border-radius: 6px;
     z-index: 20; border: 1px solid #1a1a3e;
   }
+  #search {
+    position: absolute; top: 56px; left: 16px;
+    background: rgba(10, 10, 26, 0.9); border: 1px solid #1a1a3e;
+    color: #e0e0e0; padding: 6px 12px; border-radius: 6px;
+    font-family: inherit; font-size: 12px; width: 200px;
+    z-index: 20; outline: none;
+  }
+  #search:focus { border-color: #00d4ff; }
+  #search::placeholder { color: #555; }
 </style>
 </head>
 <body>
@@ -92,11 +101,12 @@ function buildHtml(graphJsonString) {
   <div class="title"><span>ZED</span> Knowledge Graph</div>
   <div class="stats" id="stats-bar"></div>
 </div>
+<input id="search" type="text" placeholder="Filter nodes...">
 <canvas id="c"></canvas>
 <div id="tooltip"></div>
 <div id="legend"></div>
 <div id="version">ZED v7.0.0</div>
-<div id="controls">scroll zoom &middot; drag pan &middot; hover inspect</div>
+<div id="controls">scroll zoom &middot; drag pan &middot; hover inspect &middot; click lock &middot; dbl-click path &middot; <b>r</b> reset</div>
 
 <script>
 'use strict';
@@ -245,14 +255,14 @@ document.getElementById('stats-bar').innerHTML =
   '<b>' + nodes.length + '</b> nodes &middot; <b>' + edges.length + '</b> edges &middot; ' +
   Object.entries(typeCounts).map(([t, c]) => c + ' ' + t + 's').join(' &middot; ');
 
-// --- Legend ---
+// --- Legend (with counts) ---
 const legendEl = document.getElementById('legend');
 const allColors = { decision: '#1a5fb4', pattern: '#2d7d46', project: '#6c3fa0', session: '#444444', note: '#333333' };
 for (const [type, color] of Object.entries(allColors)) {
   if (typeCounts[type]) {
     const item = document.createElement('span');
     item.className = 'legend-item';
-    item.innerHTML = '<span class="legend-dot" style="background:' + color + '"></span>' + type;
+    item.innerHTML = '<span class="legend-dot" style="background:' + color + '"></span>' + type + 's (' + typeCounts[type] + ')';
     legendEl.appendChild(item);
   }
 }
@@ -293,16 +303,78 @@ if (nodes.length > 0) {
 
 // --- Interaction ---
 let hoveredNode = null;
+let lockedNode = null;
+let searchFilter = '';
 let dragging = false;
 let dragStartX = 0, dragStartY = 0;
 let camStartX = 0, camStartY = 0;
 
+// --- Search filter ---
+const searchInput = document.getElementById('search');
+searchInput.addEventListener('input', () => {
+  searchFilter = searchInput.value.toLowerCase();
+  draw();
+});
+
+// --- Click to lock focus ---
 canvas.addEventListener('mousedown', e => {
   dragging = true;
   dragStartX = e.clientX;
   dragStartY = e.clientY;
   camStartX = camX;
   camStartY = camY;
+});
+
+canvas.addEventListener('click', e => {
+  const mx = (e.clientX - W / 2) / zoom + camX;
+  const my = (e.clientY - H / 2) / zoom + camY;
+  let found = null;
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (mx >= n.x && mx <= n.x + n.w && my >= n.y && my <= n.y + n.h) {
+      found = n; break;
+    }
+  }
+  lockedNode = found; // lock to clicked node, or clear if background
+  draw();
+});
+
+// --- Double-click to show path ---
+canvas.addEventListener('dblclick', e => {
+  const mx = (e.clientX - W / 2) / zoom + camX;
+  const my = (e.clientY - H / 2) / zoom + camY;
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (mx >= n.x && mx <= n.x + n.w && my >= n.y && my <= n.y + n.h) {
+      console.log('[ZED Graph] Node: ' + n.label + ' | Type: ' + n.type + ' | ID: ' + n.id);
+      break;
+    }
+  }
+});
+
+// --- Keyboard: r to reset view ---
+window.addEventListener('keydown', e => {
+  if (e.target === searchInput) return; // don't capture when typing in search
+  if (e.key === 'r' || e.key === 'R') {
+    if (nodes.length === 0) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.x + n.w > maxX) maxX = n.x + n.w;
+      if (n.y + n.h > maxY) maxY = n.y + n.h;
+    }
+    const gw = maxX - minX, gh = maxY - minY;
+    const z = Math.min(W / (gw + 200), H / (gh + 200), 2);
+    zoom = targetZoom = Math.max(z, 0.1);
+    camX = targetCamX = minX + gw / 2;
+    camY = targetCamY = minY + gh / 2;
+    lockedNode = null;
+    hoveredNode = null;
+    searchInput.value = '';
+    searchFilter = '';
+    draw();
+  }
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -388,11 +460,24 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(viewLeft, y); ctx.lineTo(viewRight, y); ctx.stroke();
   }
 
+  // Determine the active focus node (locked takes priority over hovered)
+  const focusNode = lockedNode || hoveredNode;
+
   const highlightSet = new Set();
-  if (hoveredNode) {
-    highlightSet.add(hoveredNode.id);
-    if (adjacency[hoveredNode.id]) {
-      for (const id of adjacency[hoveredNode.id]) highlightSet.add(id);
+  if (focusNode) {
+    highlightSet.add(focusNode.id);
+    if (adjacency[focusNode.id]) {
+      for (const id of adjacency[focusNode.id]) highlightSet.add(id);
+    }
+  }
+
+  // Search filter: set of node ids that match the filter text
+  const searchMatchSet = new Set();
+  if (searchFilter) {
+    for (const n of nodes) {
+      if (n.label.toLowerCase().includes(searchFilter)) {
+        searchMatchSet.add(n.id);
+      }
     }
   }
 
@@ -403,7 +488,9 @@ function draw() {
     if (!src || !tgt) continue;
 
     const highlighted = highlightSet.has(e.src) && highlightSet.has(e.tgt);
-    const dimmed = hoveredNode && !highlighted;
+    const focusDimmed = focusNode && !highlighted;
+    const searchDimmed = searchFilter && !(searchMatchSet.has(e.src) && searchMatchSet.has(e.tgt));
+    const dimmed = focusDimmed || searchDimmed;
 
     ctx.strokeStyle = dimmed ? 'rgba(255,255,255,0.05)' : (highlighted ? edgeHighlight : edgeColor);
     ctx.lineWidth = highlighted ? 2 : 0.8;
@@ -431,12 +518,14 @@ function draw() {
 
   // Draw nodes
   for (const n of nodes) {
-    const isHovered = hoveredNode && n.id === hoveredNode.id;
+    const isFocused = focusNode && n.id === focusNode.id;
     const isConnected = highlightSet.has(n.id);
-    const dimmed = hoveredNode && !isConnected;
+    const focusDimmed = focusNode && !isConnected;
+    const searchDimmed = searchFilter && !searchMatchSet.has(n.id);
+    const dimmed = focusDimmed || searchDimmed;
 
-    // Glow effect on hover
-    if (isHovered) {
+    // Glow effect on focus
+    if (isFocused) {
       const glowR = 12;
       ctx.save();
       ctx.shadowColor = edgeHighlight;
@@ -454,8 +543,8 @@ function draw() {
     roundRect(ctx, n.x, n.y, n.w, n.h, 6);
     ctx.fill();
 
-    ctx.strokeStyle = isHovered ? edgeHighlight : 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = isHovered ? 1.5 : 0.5;
+    ctx.strokeStyle = isFocused ? edgeHighlight : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = isFocused ? 1.5 : 0.5;
     roundRect(ctx, n.x, n.y, n.w, n.h, 6);
     ctx.stroke();
 
