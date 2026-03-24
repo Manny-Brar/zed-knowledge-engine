@@ -1972,6 +1972,36 @@ See [[${techFile.replace('.md', '')}]] for dependencies.
 });
 
 // ---------------------------------------------------------------------------
+// Aliases + programmatic endpoints
+// ---------------------------------------------------------------------------
+
+Object.assign(commands, {
+  'search': function() { commands.snippets(); },
+
+  'vault-info': () => {
+    const engine = getEngine();
+    const stats = engine.getStats();
+    const health = computeHealthScore(stats, stats.clusterCount, engine.findHubs(100).filter(h => h.backlink_count > 0).length);
+    const recent = engine.listNotes().slice(0, 5).map(p => {
+      try { return engine.readNote(p).title; } catch(e) { return path.basename(p); }
+    });
+
+    const info = {
+      version: require('../package.json').version,
+      vault: VAULT_DIR,
+      notes: stats.nodeCount,
+      edges: stats.edgeCount,
+      orphans: stats.orphanCount,
+      health: { score: health.score, grade: health.grade },
+      recent: recent
+    };
+
+    // Always JSON output (this is a programmatic endpoint)
+    console.log(JSON.stringify(info, null, 2));
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -2023,6 +2053,7 @@ Content:
   daily [text]              Daily session note (create/append/read)
   template <type> <title>   Create from template
   snippets <query>          Search with context snippets
+  search <query>            Alias for snippets
   suggest-links [note]      Find unlinked mentions
 
 Maintenance:
@@ -2047,6 +2078,7 @@ Evolve Loop:
   loop-promote                Promote findings to vault
 
 Other:
+  vault-info                Compact JSON vault state (for scripts)
   version                   Show ZED version
 
 Options:

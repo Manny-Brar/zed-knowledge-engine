@@ -1044,6 +1044,25 @@ test('analytics appears in help', () => {
   assert(out.includes('analytics'), 'Help should list analytics command');
 });
 
+// --- Search alias + vault-info ---
+console.log('\nSearch Alias + Vault Info:');
+test('search is alias for snippets', () => {
+  const out = zed('search "test"');
+  // Should not error — either returns results or "No results"
+  assert(out.length > 0, 'Should produce output');
+  assert(!out.includes('Unknown command'), 'Should be recognized as a command');
+});
+
+test('vault-info returns JSON', () => {
+  const raw = zed('vault-info');
+  const data = JSON.parse(raw);
+  assert(typeof data.version === 'string', 'Should have version string');
+  assert(typeof data.notes === 'number', 'Should have notes count');
+  assert(data.health && typeof data.health.score === 'number', 'Should have health.score');
+  assert(data.health && typeof data.health.grade === 'string', 'Should have health.grade');
+  assert(typeof data.vault === 'string', 'Should have vault path');
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
