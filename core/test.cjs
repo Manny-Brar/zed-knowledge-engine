@@ -167,6 +167,20 @@ test('writeNote: rejects empty content', () => {
   assert.throws(() => fileLayer.writeNote('/tmp/test-empty.md', undefined), /content must not be empty/);
 });
 
+test('writeNote is atomic — no partial writes', () => {
+  setupVault();
+  const p = path.join(TEST_DIR, 'atomic-test.md');
+  fileLayer.writeNote(p, '# Atomic\nThis write should be atomic.');
+  assert.ok(fs.existsSync(p), 'File should exist after atomic write');
+  const content = fs.readFileSync(p, 'utf-8');
+  assert.strictEqual(content, '# Atomic\nThis write should be atomic.');
+  // Verify no .tmp files remain
+  const dir = fs.readdirSync(TEST_DIR);
+  const tmpFiles = dir.filter(f => f.includes('.tmp.'));
+  assert.strictEqual(tmpFiles.length, 0, 'No .tmp files should remain after successful write');
+  teardownVault();
+});
+
 test('writeNote: creates file and parent dirs', () => {
   setupVault();
   const p = path.join(TEST_DIR, 'new-dir', 'new-note.md');
@@ -295,6 +309,17 @@ test('getClusters: detects connected components', () => {
   const clusters = graph.getClusters();
   assert.ok(clusters.length >= 2); // at least main cluster + orphans
   assert.ok(clusters[0].length > clusters[clusters.length - 1].length);
+  graph.close();
+  teardownVault();
+});
+
+test('schema version table is created', () => {
+  setupVault();
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(TEST_DIR);
+  const row = graph.db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get();
+  assert.ok(row, 'schema_version table should exist with a row');
+  assert.strictEqual(row.version, 1, 'schema version should be 1');
   graph.close();
   teardownVault();
 });

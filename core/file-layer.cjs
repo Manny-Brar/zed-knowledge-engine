@@ -228,7 +228,16 @@ function writeNote(filePath, content) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  fs.writeFileSync(resolved, content, 'utf-8');
+  // Atomic write: write to temp file, then rename
+  const tmpPath = resolved + '.tmp.' + process.pid;
+  try {
+    fs.writeFileSync(tmpPath, content, 'utf-8');
+    fs.renameSync(tmpPath, resolved);
+  } catch (e) {
+    // Clean up temp file on failure
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+    throw e;
+  }
 }
 
 // ---------------------------------------------------------------------------
