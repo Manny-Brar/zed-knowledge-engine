@@ -1016,6 +1016,34 @@ test('session-end auto-creates daily note', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// --- Analytics ---
+console.log('\nAnalytics:');
+test('analytics returns vault stats', () => {
+  const out = zed('analytics');
+  assert(out.includes('ZED Vault Analytics'), `Expected header, got: ${out}`);
+  assert(out.includes('Total:'), 'Should show total notes');
+  assert(out.includes('Density:'), 'Should show density');
+  assert(out.includes('By Type:'), 'Should show type breakdown');
+  assert(out.includes('Last 7 Days:'), 'Should show recent activity');
+  assert(out.includes('Top Tags:'), 'Should show top tags');
+});
+
+test('analytics --json returns structured data', () => {
+  const data = zedJson('analytics');
+  assert(data.stats, 'Should have stats');
+  assert(data.byType, 'Should have byType');
+  assert(Array.isArray(data.recentDays), 'Should have recentDays array');
+  assert(typeof data.density === 'number', 'Density should be a number');
+  assert(data.topTags, 'Should have topTags');
+  assert(typeof data.orphanRatio === 'number', 'orphanRatio should be a number');
+  assert(data.health && typeof data.health.score === 'number', 'Should have health score');
+});
+
+test('analytics appears in help', () => {
+  const out = zed('help');
+  assert(out.includes('analytics'), 'Help should list analytics command');
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------

@@ -760,6 +760,94 @@ const commands = {
     output(lines.join('\n'));
   },
 
+  // --- Analytics ---
+
+  analytics() {
+    const engine = getEngine();
+    const stats = engine.getStats();
+    const notes = engine.listNotes();
+    const tags = engine.getAllTags();
+
+    // Group notes by date and type
+    const byDate = {};
+    const byType = {};
+    for (const notePath of notes) {
+      try {
+        const note = engine.readNote(notePath);
+        const date = note.frontmatter?.date
+          ? String(note.frontmatter.date).slice(0, 10)
+          : new Date(fs.statSync(notePath).mtime).toISOString().slice(0, 10);
+        byDate[date] = (byDate[date] || 0) + 1;
+        const type = note.frontmatter?.type || 'note';
+        byType[type] = (byType[type] || 0) + 1;
+      } catch (e) { /* skip unreadable */ }
+    }
+
+    // Last 7 days
+    const today = new Date();
+    const recentDays = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      recentDays.push({ date: key, count: byDate[key] || 0 });
+    }
+
+    // Graph density
+    const density = stats.nodeCount > 1
+      ? (stats.edgeCount / (stats.nodeCount * (stats.nodeCount - 1))).toFixed(4)
+      : 0;
+
+    // Top 5 tags
+    const topTags = [...tags.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    // Health score
+    const allHubs = engine.findHubs(100);
+    const clusters = engine.getClusters();
+    const hubsWithLinks = allHubs.filter(h => h.backlink_count > 0).length;
+    const healthResult = computeHealthScore(stats, clusters.length, hubsWithLinks);
+
+    if (jsonMode) {
+      return output({
+        stats,
+        byType,
+        recentDays,
+        density: parseFloat(density),
+        topTags: Object.fromEntries(topTags),
+        orphanRatio: stats.nodeCount > 0 ? parseFloat((stats.orphanCount / stats.nodeCount).toFixed(2)) : 0,
+        health: { score: healthResult.score, grade: healthResult.grade },
+      });
+    }
+
+    console.log('ZED Vault Analytics');
+    console.log(`  Total: ${stats.nodeCount} notes, ${stats.edgeCount} connections`);
+    console.log(`  Health: ${healthResult.grade} (${healthResult.score}/100)`);
+    console.log(`  Density: ${density} (edges per possible connection)`);
+    console.log(`  Orphans: ${stats.orphanCount} (${stats.nodeCount > 0 ? Math.round(stats.orphanCount / stats.nodeCount * 100) : 0}%)`);
+    console.log('');
+    console.log('  By Type:');
+    for (const [type, count] of Object.entries(byType).sort((a, b) => b[1] - a[1])) {
+      console.log(`    ${type}: ${count}`);
+    }
+    console.log('');
+    console.log('  Last 7 Days:');
+    for (const day of recentDays) {
+      const bar = '\u2588'.repeat(day.count);
+      console.log(`    ${day.date}: ${bar || '\u00b7'} (${day.count})`);
+    }
+    console.log('');
+    if (topTags.length > 0) {
+      console.log('  Top Tags:');
+      for (const [tag, count] of topTags) {
+        console.log(`    #${tag}: ${count}`);
+      }
+    } else {
+      console.log('  Top Tags: (none)');
+    }
+  },
+
   // --- Evolve Loop ---
 
   // Shared helper: validate that both loop state files exist
@@ -1925,6 +2013,7 @@ Info:
   recent [limit]            Recently modified notes
   overview                  Full dashboard
   timeline [type] [limit]   Chronological view
+  analytics                 Knowledge growth tracking over time
   visualize [--out file]    Open interactive graph in browser (or write Excalidraw JSON with --out)
 
 Content:
