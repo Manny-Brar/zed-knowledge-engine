@@ -59,14 +59,30 @@ if [ -f "$DAILY_NOTE" ] && [ -n "$GIT_INFO" ]; then
   printf '%s\n' "$GIT_INFO" >> "$DAILY_NOTE"
 fi
 
-# Check knowledge capture count vs edit count
+# Protocol adherence summary
 if [ -f "$TRACKER" ]; then
-  EDIT_COUNT=$(node -e "const t=require('$TRACKER'); console.log(t.edit_count || 0)" 2>/dev/null || echo 0)
-  CAPTURE_COUNT=$(node -e "const t=require('$TRACKER'); console.log(t.captures || 0)" 2>/dev/null || echo 0)
+  EDITS=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$TRACKER','utf8')).edit_count||0)}catch(e){console.log(0)}")
+  CAPS=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$TRACKER','utf8')).captures||0)}catch(e){console.log(0)}")
+  FILES=$(node -e "try{console.log((JSON.parse(require('fs').readFileSync('$TRACKER','utf8')).files||[]).length)}catch(e){console.log(0)}")
 
-  if [ "$CAPTURE_COUNT" -eq 0 ] 2>/dev/null && [ "$EDIT_COUNT" -gt 5 ] 2>/dev/null; then
-    echo ""
-    echo "ZED: No knowledge was captured this session ($EDIT_COUNT edits made). Consider running /zed:decide or writing a pattern note."
+  echo ""
+  echo "=== ZED Session Summary ==="
+  echo "  Edits: $EDITS  |  Files touched: $FILES  |  Knowledge captured: $CAPS"
+
+  # Capture ratio
+  if [ "$EDITS" -gt 0 ]; then
+    if [ "$CAPS" -gt 0 ]; then
+      echo "  Capture ratio: good ($CAPS captures / $EDITS edits)"
+    elif [ "$EDITS" -gt 5 ]; then
+      echo "  Capture ratio: LOW — $EDITS edits but $CAPS captures. Consider recording decisions."
+    fi
+  fi
+  echo "==========================="
+
+  # Append session summary to daily note
+  if [ -f "$DAILY_NOTE" ] && [ "$EDITS" -gt 0 ]; then
+    printf '\n### Session Summary (%s)\n  Edits: %s | Files: %s | Captured: %s\n' \
+      "$(date +%H:%M)" "$EDITS" "$FILES" "$CAPS" >> "$DAILY_NOTE"
   fi
 
   # Reset the edit tracker
