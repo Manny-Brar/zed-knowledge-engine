@@ -111,13 +111,17 @@ server.tool(
       if (!query || !query.trim()) {
         return { content: [{ type: 'text', text: 'Error: search query must not be empty' }], isError: true };
       }
-      const results = engine.searchNotes(query.trim(), { limit });
+      const results = engine.searchWithSnippets(query.trim(), { limit });
       if (results.length === 0) {
         return { content: [{ type: 'text', text: `No results for "${query}"` }] };
       }
-      const formatted = results.map((r, i) =>
-        `${i + 1}. **${r.node.title}** (score: ${r.boostedScore.toFixed(3)}, backlinks: ${r.backlinkCount})\n   Path: ${r.node.path}`
-      ).join('\n');
+      const formatted = results.map((r, i) => {
+        const snippet = r.snippets && r.snippets.length > 0
+          ? r.snippets[0].slice(0, 150)
+          : '';
+        const snippetLine = snippet ? `\n   Snippet: ${snippet}` : '';
+        return `${i + 1}. **${r.node.title}** (score: ${r.score.toFixed(3)}, backlinks: ${r.backlinkCount})\n   Path: ${r.node.path}${snippetLine}`;
+      }).join('\n');
       return { content: [{ type: 'text', text: `## Search: "${query}"\n\n${formatted}` }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Search error: ${err.message}` }], isError: true };

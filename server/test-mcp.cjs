@@ -178,6 +178,13 @@ async function runTests() {
     assert.ok(result.content[0].text.includes('SQLite'));
   });
 
+  await test('zed_search returns snippets', async () => {
+    const result = await client.callTool('zed_search', { query: 'reusable pattern', limit: 5 });
+    const text = result.content[0].text;
+    assert.ok(text.includes('Snippet:'), `Expected "Snippet:" in results: ${text}`);
+    assert.ok(text.includes('reusable pattern'), `Expected snippet to contain matched text: ${text}`);
+  });
+
   // zed_read_note
   await test('zed_read_note reads by title', async () => {
     const result = await client.callTool('zed_read_note', { note_path: 'Test Pattern' });
