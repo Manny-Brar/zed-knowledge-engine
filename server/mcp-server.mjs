@@ -112,17 +112,44 @@ server.tool(
         return { content: [{ type: 'text', text: 'Error: search query must not be empty' }], isError: true };
       }
       const results = engine.searchWithSnippets(query.trim(), { limit });
-      if (results.length === 0) {
-        return { content: [{ type: 'text', text: `No results for "${query}"` }] };
-      }
       const formatted = results.map((r, i) => {
         const snippet = r.snippets && r.snippets.length > 0
           ? r.snippets[0].slice(0, 150)
           : '';
         const snippetLine = snippet ? `\n   Snippet: ${snippet}` : '';
         return `${i + 1}. **${r.node.title}** (score: ${r.score.toFixed(3)}, backlinks: ${r.backlinkCount})\n   Path: ${r.node.path}${snippetLine}`;
-      }).join('\n');
-      return { content: [{ type: 'text', text: `## Search: "${query}"\n\n${formatted}` }] };
+      });
+
+      // Search global vault for cross-project patterns
+      const globalDir = path.join(os.homedir(), '.zed', 'global');
+      if (fs.existsSync(globalDir)) {
+        try {
+          const globalEngine = new KnowledgeEngine({
+            vaultPath: globalDir,
+            dbPath: path.join(os.homedir(), '.zed', 'global.db'),
+          });
+          globalEngine.build();
+          const globalResults = globalEngine.searchWithSnippets(query.trim(), { limit: 3 });
+          for (const r of globalResults) {
+            // Deduplicate by title — skip if already in project results
+            if (!results.some(pr => pr.node.title === r.node.title)) {
+              const snippet = r.snippets && r.snippets.length > 0
+                ? r.snippets[0].slice(0, 150)
+                : '';
+              const snippetLine = snippet ? `\n   Snippet: ${snippet}` : '';
+              formatted.push(`${formatted.length + 1}. **[GLOBAL] ${r.node.title}** (score: ${r.score.toFixed(3)})\n   Path: ${r.node.path}${snippetLine}`);
+            }
+          }
+          globalEngine.close();
+        } catch (e) {
+          // Global vault search failure is non-fatal
+        }
+      }
+
+      if (formatted.length === 0) {
+        return { content: [{ type: 'text', text: `No results for "${query}"` }] };
+      }
+      return { content: [{ type: 'text', text: `## Search: "${query}"\n\n${formatted.join('\n')}` }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Search error: ${err.message}` }], isError: true };
     }
