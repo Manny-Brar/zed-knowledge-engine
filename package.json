@@ -10,7 +10,8 @@
     "test": "cd core && node test.cjs",
     "test:mcp": "node server/test-mcp.cjs",
     "test:cli": "node cli/test-cli.cjs",
-    "test:all": "cd core && node test.cjs && cd .. && node server/test-mcp.cjs && node cli/test-cli.cjs",
+    "test:e2e": "node cli/test-e2e.cjs",
+    "test:all": "cd core && node test.cjs && cd .. && node server/test-mcp.cjs && node cli/test-cli.cjs && node cli/test-e2e.cjs",
     "bench": "node core/bench.cjs",
     "start": "node server/mcp-server.mjs",
     "setup": "bash scripts/setup.sh"
