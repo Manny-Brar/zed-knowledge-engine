@@ -24,6 +24,16 @@ node "$PLUGIN_ROOT/bin/zed" rebuild >/dev/null 2>&1 || true
 echo "=== ZED Session Start ==="
 node "$PLUGIN_ROOT/bin/zed" overview 2>/dev/null || echo "Vault: present (stats unavailable)"
 
+# Check if vault is nearly empty — trigger onboarding
+NOTE_COUNT=$(find "$VAULT_DIR" -name "*.md" -not -path "*/_loop/*" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$NOTE_COUNT" -lt 3 ]; then
+  echo ""
+  echo "=== ZED: New vault detected ==="
+  echo "Your knowledge vault is empty. ZED will auto-scan your project on the first task."
+  echo "Or run: zed scan . (to scan now)"
+  echo "==============================="
+fi
+
 # Load soul document (first 30 lines)
 SOUL="$PLUGIN_ROOT/memory/ZED_SOUL.md"
 if [ -f "$SOUL" ]; then
