@@ -1045,6 +1045,121 @@ Object.assign(commands, {
     );
   },
 
+  'loop-decompose'() {
+    const loopDir = path.join(VAULT_DIR, '_loop');
+    const objectivePath = path.join(loopDir, 'objective.md');
+    const featuresPath = path.join(loopDir, 'features.json');
+
+    if (!fs.existsSync(objectivePath)) {
+      error('No active evolve loop. Start one with: zed loop-init "objective"');
+    }
+
+    // Read features from stdin or command args
+    const input = commandArgs.join(' ');
+    if (!input) {
+      // If no input, show current features
+      if (fs.existsSync(featuresPath)) {
+        const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
+        if (jsonMode) {
+          console.log(JSON.stringify(features, null, 2));
+        } else {
+          console.log('Evolve Loop Features:');
+          features.forEach((f, i) => {
+            const status = f.status === 'done' ? '\u2713' : f.status === 'in_progress' ? '\u2192' : ' ';
+            console.log(`  [${status}] ${i + 1}. ${f.description} (${f.status}, ${f.attempts}/${f.max_attempts} attempts)`);
+          });
+        }
+      } else {
+        console.log('No features.json found. Provide features as comma-separated list:');
+        console.log('  zed loop-decompose "feature1, feature2, feature3"');
+      }
+      return;
+    }
+
+    // Parse comma-separated features
+    const featureList = input.split(',').map(f => f.trim()).filter(f => f.length > 0);
+
+    const features = featureList.map((desc, i) => ({
+      id: i + 1,
+      description: desc,
+      status: 'pending',      // pending, in_progress, done, blocked
+      attempts: 0,
+      max_attempts: 5,
+      priority: i + 1,
+      verification: null,     // command to verify completion
+      completed_at: null,
+      wall_log: []            // obstacles encountered
+    }));
+
+    fs.writeFileSync(featuresPath, JSON.stringify(features, null, 2));
+
+    if (jsonMode) {
+      console.log(JSON.stringify({ action: 'decomposed', count: features.length, features }));
+    } else {
+      console.log(`Decomposed into ${features.length} features:`);
+      features.forEach((f, i) => {
+        console.log(`  ${i + 1}. ${f.description}`);
+      });
+    }
+  },
+
+  'loop-next'() {
+    const featuresPath = path.join(VAULT_DIR, '_loop', 'features.json');
+    if (!fs.existsSync(featuresPath)) {
+      if (jsonMode) console.log(JSON.stringify({ next: null, reason: 'no features.json' }));
+      else console.log('No features.json. Run: zed loop-decompose "feature1, feature2"');
+      return;
+    }
+
+    const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
+    const next = features.find(f => f.status === 'pending' || f.status === 'in_progress');
+
+    if (!next) {
+      if (jsonMode) console.log(JSON.stringify({ next: null, reason: 'all features complete' }));
+      else console.log('All features complete!');
+      return;
+    }
+
+    // Mark as in_progress
+    next.status = 'in_progress';
+    next.attempts++;
+    fs.writeFileSync(featuresPath, JSON.stringify(features, null, 2));
+
+    if (jsonMode) {
+      console.log(JSON.stringify({ next }));
+    } else {
+      console.log(`Next feature (#${next.id}): ${next.description}`);
+      console.log(`  Attempt ${next.attempts}/${next.max_attempts}`);
+    }
+  },
+
+  'loop-complete'() {
+    const featuresPath = path.join(VAULT_DIR, '_loop', 'features.json');
+    if (!fs.existsSync(featuresPath)) {
+      error('No features.json');
+    }
+
+    const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
+    const current = features.find(f => f.status === 'in_progress');
+
+    if (!current) {
+      error('No feature currently in progress');
+    }
+
+    current.status = 'done';
+    current.completed_at = new Date().toISOString();
+    fs.writeFileSync(featuresPath, JSON.stringify(features, null, 2));
+
+    const remaining = features.filter(f => f.status !== 'done').length;
+
+    if (jsonMode) {
+      console.log(JSON.stringify({ completed: current, remaining }));
+    } else {
+      console.log(`Completed: ${current.description}`);
+      console.log(`${remaining} features remaining`);
+    }
+  },
+
   // --- Auto-fix ---
 
   fix() {
@@ -1805,6 +1920,9 @@ Evolve Loop:
   loop-init "obj" [--max N]   Start an evolve loop
   loop-tick "progress"        Record iteration progress
   loop-status                 Check loop state
+  loop-decompose "f1, f2"    Decompose objective into features
+  loop-next                  Get next pending feature
+  loop-complete              Mark current feature as done
   loop-stop "reason"          Stop loop gracefully
   loop-promote                Promote findings to vault
 

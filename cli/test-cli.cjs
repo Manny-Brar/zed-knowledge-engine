@@ -360,6 +360,42 @@ test('loop-stop --json returns structured data', () => {
   assert(data.timestamp, 'Should have timestamp');
 });
 
+// --- Structured Features (decompose/next/complete) ---
+console.log('\nStructured Features:');
+test('loop-decompose creates features.json', () => {
+  // Clean loop dir and re-init
+  const loopDir = path.join(vaultDir, '_loop');
+  for (const f of fs.readdirSync(loopDir)) {
+    fs.rmSync(path.join(loopDir, f), { recursive: true, force: true });
+  }
+  zed('loop-init "decompose test" --max 10');
+  const out = zed('loop-decompose "auth system, user dashboard, notification service"');
+  assert(out.includes('Decomposed into 3 features'), `Expected 3 features, got: ${out}`);
+  const featuresPath = path.join(vaultDir, '_loop', 'features.json');
+  assert(fs.existsSync(featuresPath), 'features.json should exist');
+  const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
+  assert(features.length === 3, `Expected 3 features, got ${features.length}`);
+  assert(features[0].description === 'auth system', `Expected 'auth system', got '${features[0].description}'`);
+  assert(features[0].status === 'pending', `Expected pending, got ${features[0].status}`);
+  assert(features[0].attempts === 0, `Expected 0 attempts, got ${features[0].attempts}`);
+});
+
+test('loop-next returns first pending feature', () => {
+  const data = zedJson('loop-next');
+  assert(data.next !== null, 'Should return a feature');
+  assert(data.next.id === 1, `Expected feature #1, got #${data.next.id}`);
+  assert(data.next.status === 'in_progress', `Expected in_progress, got ${data.next.status}`);
+  assert(data.next.attempts === 1, `Expected 1 attempt, got ${data.next.attempts}`);
+});
+
+test('loop-complete marks feature done', () => {
+  const data = zedJson('loop-complete');
+  assert(data.completed.id === 1, `Expected completed feature #1, got #${data.completed.id}`);
+  assert(data.completed.status === 'done', `Expected done, got ${data.completed.status}`);
+  assert(data.completed.completed_at !== null, 'Should have completed_at timestamp');
+  assert(data.remaining === 2, `Expected 2 remaining, got ${data.remaining}`);
+});
+
 test('loop-status reports no loop after stop+promote or clean state', () => {
   // Clean up loop dir to simulate no active loop
   const loopDir = path.join(vaultDir, '_loop');
