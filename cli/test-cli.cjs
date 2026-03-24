@@ -675,6 +675,216 @@ test('scan --json returns structured data', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Hook Tests
+// ---------------------------------------------------------------------------
+
+console.log('\nHook Tests:');
+
+// Hook test helper
+function runHook(hookScript, env = {}) {
+  const scriptPath = path.join(__dirname, '..', 'scripts', hookScript);
+  const fullEnv = { ...process.env, ...env };
+  try {
+    const output = execSync(`bash "${scriptPath}"`, {
+      env: fullEnv,
+      timeout: 15000,
+      encoding: 'utf8',
+    });
+    return { output, exitCode: 0 };
+  } catch (e) {
+    return { output: e.stdout || '', stderr: e.stderr || '', exitCode: e.status };
+  }
+}
+
+// Create a fresh hook test dir with vault structure for each test
+function makeHookEnv() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zed-hook-test-'));
+  const vault = path.join(dir, 'vault');
+  for (const sub of ['sessions', '_loop']) {
+    fs.mkdirSync(path.join(vault, sub), { recursive: true });
+  }
+  // Create a minimal note so overview has something to report
+  fs.writeFileSync(path.join(vault, 'test-note.md'), `---
+title: "Test Note"
+date: 2026-03-23
+type: note
+tags: [test]
+---
+
+# Test Note
+Content.
+`);
+  return { dir, vault };
+}
+
+// 1. session-start outputs vault stats
+test('session-start outputs vault stats', () => {
+  const { dir, vault } = makeHookEnv();
+  const { output } = runHook('session-start.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(
+    output.includes('ZED Vault Overview') || output.includes('Notes:'),
+    `Expected vault stats in output, got: ${output.substring(0, 200)}`
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 2. session-start loads soul document
+test('session-start loads soul document', () => {
+  const { dir, vault } = makeHookEnv();
+  const { output } = runHook('session-start.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(
+    output.includes('Core Identity') || output.includes('Soul Document'),
+    `Expected soul document content, got: ${output.substring(0, 300)}`
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 3. post-edit-hook increments edit count
+test('post-edit-hook increments edit count', () => {
+  const { dir } = makeHookEnv();
+  // Seed tracker with edit_count=0
+  const tracker = path.join(dir, 'edit-tracker.json');
+  fs.writeFileSync(tracker, JSON.stringify({ edit_count: 0, files: [], started: new Date().toISOString(), captures: 0 }));
+  runHook('post-edit-hook.sh', { CLAUDE_PLUGIN_DATA: dir });
+  const updated = JSON.parse(fs.readFileSync(tracker, 'utf8'));
+  assert(updated.edit_count === 1, `Expected edit_count=1, got ${updated.edit_count}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 4. post-edit-hook tracks file paths
+test('post-edit-hook tracks file paths', () => {
+  const { dir } = makeHookEnv();
+  const tracker = path.join(dir, 'edit-tracker.json');
+  fs.writeFileSync(tracker, JSON.stringify({ edit_count: 0, files: [], started: new Date().toISOString(), captures: 0 }));
+  runHook('post-edit-hook.sh', {
+    CLAUDE_PLUGIN_DATA: dir,
+    CLAUDE_TOOL_ARG_file_path: '/src/index.js',
+  });
+  const updated = JSON.parse(fs.readFileSync(tracker, 'utf8'));
+  assert(updated.files.includes('/src/index.js'), `Expected /src/index.js in files, got ${JSON.stringify(updated.files)}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 5. post-edit-hook warns on drift
+test('post-edit-hook warns on drift', () => {
+  const { dir } = makeHookEnv();
+  const tracker = path.join(dir, 'edit-tracker.json');
+  // Seed with 25 edits so next one (26) triggers drift warning (>25)
+  fs.writeFileSync(tracker, JSON.stringify({ edit_count: 25, files: [], started: new Date().toISOString(), captures: 0 }));
+  const { output } = runHook('post-edit-hook.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(
+    output.includes('DRIFT WARNING'),
+    `Expected DRIFT WARNING in output, got: ${output}`
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 6. pre-compact-hook outputs reminder
+test('pre-compact-hook outputs compaction reminder', () => {
+  const { dir } = makeHookEnv();
+  const { output } = runHook('pre-compact-hook.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(
+    output.includes('compaction'),
+    `Expected compaction reminder, got: ${output}`
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 7. stop-hook allows exit with no loop
+test('stop-hook allows exit with no loop', () => {
+  const { dir, vault } = makeHookEnv();
+  // Remove _loop dir so there's no active loop
+  fs.rmSync(path.join(vault, '_loop'), { recursive: true, force: true });
+  // Also remove objective specifically — the hook checks for objective file not _loop dir
+  const { output, exitCode } = runHook('stop-hook.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(exitCode === 0, `Expected exit code 0, got ${exitCode}`);
+  // Output should not contain blocking JSON
+  assert(!output.includes('"decision"'), `Expected no blocking JSON, got: ${output}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 8. stop-hook blocks with active loop
+test('stop-hook blocks with active loop', () => {
+  const { dir, vault } = makeHookEnv();
+  const loopDir = path.join(vault, '_loop');
+  fs.writeFileSync(path.join(loopDir, 'objective.md'), `---
+title: "Test Objective"
+max_iterations: 5
+completed: false
+---
+
+# Test Objective
+Do something.
+`);
+  fs.writeFileSync(path.join(loopDir, 'progress.md'), `---
+iteration: 1
+---
+
+# Progress
+- Step 1 done
+`);
+  // Seed tracker with some edits
+  fs.writeFileSync(path.join(dir, 'edit-tracker.json'), JSON.stringify({
+    edit_count: 5, files: ['/a.js'], started: new Date().toISOString(), captures: 1,
+  }));
+  const { output } = runHook('stop-hook.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(
+    output.includes('"decision"') || output.includes('block'),
+    `Expected blocking JSON with decision, got: ${output.substring(0, 300)}`
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 9. stop-hook enforces capture gate
+test('stop-hook enforces capture gate', () => {
+  const { dir, vault } = makeHookEnv();
+  const loopDir = path.join(vault, '_loop');
+  fs.writeFileSync(path.join(loopDir, 'objective.md'), `---
+title: "Capture Test"
+max_iterations: 5
+completed: false
+---
+
+# Capture Test
+`);
+  fs.writeFileSync(path.join(loopDir, 'progress.md'), `---
+iteration: 1
+---
+`);
+  // 10 edits, 0 captures — should trigger capture gate
+  fs.writeFileSync(path.join(dir, 'edit-tracker.json'), JSON.stringify({
+    edit_count: 10, files: ['/a.js'], started: new Date().toISOString(), captures: 0,
+  }));
+  const { output } = runHook('stop-hook.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(
+    output.includes('CAPTURE REQUIRED'),
+    `Expected CAPTURE REQUIRED in output, got: ${output.substring(0, 300)}`
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// 10. session-end auto-creates daily note
+test('session-end auto-creates daily note', () => {
+  const { dir, vault } = makeHookEnv();
+  // Use local date to match bash `date +%Y-%m-%d`
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const dailyNote = path.join(vault, 'sessions', `${today}.md`);
+  // Ensure no daily note exists
+  if (fs.existsSync(dailyNote)) fs.unlinkSync(dailyNote);
+  // Seed a tracker so session-end has something to work with
+  fs.writeFileSync(path.join(dir, 'edit-tracker.json'), JSON.stringify({
+    edit_count: 2, files: [], started: new Date().toISOString(), captures: 1,
+  }));
+  runHook('session-end.sh', { CLAUDE_PLUGIN_DATA: dir });
+  assert(fs.existsSync(dailyNote), `Expected daily note at ${dailyNote}`);
+  const content = fs.readFileSync(dailyNote, 'utf8');
+  assert(content.includes('title:'), 'Daily note should have frontmatter');
+  assert(content.includes('type: daily'), 'Daily note should have type: daily');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
 
