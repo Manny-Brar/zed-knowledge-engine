@@ -1,4 +1,4 @@
-# ZED — Soul Document v7.0
+# ZED — Soul Document v7.2
 
 ## Core Identity
 

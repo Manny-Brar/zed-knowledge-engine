@@ -1,5 +1,40 @@
 # Changelog
 
+## v7.2.0 (2026-03-23)
+
+### New Features
+- `zed search` CLI alias for `zed snippets`
+- `zed vault-info` programmatic JSON endpoint
+- `zed analytics` — knowledge growth tracking with daily graph
+- Structured evolve features: `loop-decompose`, `loop-next`, `loop-complete`
+- Enhanced PreCompact hook with unsaved work detection
+- Auto-injected rules (zed-first, zed-capture, zed-verify)
+- Improved onboarding with empty vault detection
+
+### Infrastructure
+- Schema versioning in SQLite database for future migrations
+- Atomic file writes prevent note corruption
+- Vault .gitignore protection from accidental commits
+- Hardened evolve resume/stop flows
+- Global vault visible in Light mode search
+
+### Security
+- Shell injection prevention in all hook scripts
+- Path traversal check on promote subdir
+- JSON escaping in stop hook output
+- YAML title escaping in zed_decide
+
+### Testing
+- 18-step end-to-end lifecycle test
+- 10 automated hook tests
+- 500-note stress test script
+- Error handling audit (10 edge cases)
+
+### Documentation
+- CONTRIBUTING.md — contributor guide
+- docs/ARCHITECTURE.md — system architecture
+- Graph visualizer: search filter, click-to-lock, reset view
+
 ## v7.1.0 (2026-03-23)
 
 ### New Features
