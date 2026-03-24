@@ -13,6 +13,12 @@ const Database = require('better-sqlite3');
 const fileLayer = require('./file-layer.cjs');
 
 // ---------------------------------------------------------------------------
+// Schema versioning
+// ---------------------------------------------------------------------------
+
+const CURRENT_SCHEMA_VERSION = 1;
+
+// ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
 
@@ -57,6 +63,9 @@ class GraphLayer {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.exec(SCHEMA_SQL);
+
+    // Check and apply schema versioning
+    this._checkSchema();
 
     // Cached adjacency list — invalidated on buildGraph()
     this._adjCache = null;
@@ -516,6 +525,35 @@ class GraphLayer {
    */
   getNodeByPath(notePath) {
     return this._stmts.getNodeByPath.get(path.resolve(notePath));
+  }
+
+  /**
+   * Check schema version and run migrations if needed.
+   * Creates the schema_version table if it doesn't exist.
+   */
+  _checkSchema() {
+    this.db.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL, migrated_at TEXT NOT NULL)`);
+    const row = this.db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get();
+    if (!row) {
+      // Fresh database — insert current version
+      this.db.prepare('INSERT INTO schema_version (version, migrated_at) VALUES (?, ?)').run(CURRENT_SCHEMA_VERSION, new Date().toISOString());
+      return;
+    }
+    if (row.version < CURRENT_SCHEMA_VERSION) {
+      // Run migrations
+      this._migrate(row.version, CURRENT_SCHEMA_VERSION);
+    }
+  }
+
+  /**
+   * Run schema migrations from one version to another.
+   * @param {number} fromVersion - Current database version
+   * @param {number} toVersion - Target version
+   */
+  _migrate(fromVersion, toVersion) {
+    // Future migrations go here
+    // Example: if (fromVersion < 2) { this.db.exec('ALTER TABLE nodes ADD COLUMN ...'); }
+    this.db.prepare('INSERT INTO schema_version (version, migrated_at) VALUES (?, ?)').run(toVersion, new Date().toISOString());
   }
 
   /**
