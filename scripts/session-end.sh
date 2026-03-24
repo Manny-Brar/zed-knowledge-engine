@@ -61,9 +61,9 @@ fi
 
 # Protocol adherence summary
 if [ -f "$TRACKER" ]; then
-  EDITS=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$TRACKER','utf8')).edit_count||0)}catch(e){console.log(0)}")
-  CAPS=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$TRACKER','utf8')).captures||0)}catch(e){console.log(0)}")
-  FILES=$(node -e "try{console.log((JSON.parse(require('fs').readFileSync('$TRACKER','utf8')).files||[]).length)}catch(e){console.log(0)}")
+  EDITS=$(ZED_TRACKER="$TRACKER" node -e "try{console.log(JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8')).edit_count||0)}catch(e){console.log(0)}")
+  CAPS=$(ZED_TRACKER="$TRACKER" node -e "try{console.log(JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8')).captures||0)}catch(e){console.log(0)}")
+  FILES=$(ZED_TRACKER="$TRACKER" node -e "try{console.log((JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8')).files||[]).length)}catch(e){console.log(0)}")
 
   echo ""
   echo "=== ZED Session Summary ==="
@@ -90,11 +90,11 @@ if [ -f "$TRACKER" ]; then
 fi
 
 # Rebuild graph to pick up any new notes
-node -e "
-  const KE = require('$PLUGIN_ROOT/core/engine.cjs');
+ZED_PLUGIN_ROOT="$PLUGIN_ROOT" ZED_VAULT_DIR="$VAULT_DIR" ZED_DB_PATH="$DB_PATH" node -e "
+  const KE = require(process.env.ZED_PLUGIN_ROOT + '/core/engine.cjs');
   const engine = new KE({
-    vaultPath: '$VAULT_DIR',
-    dbPath: '$DB_PATH'
+    vaultPath: process.env.ZED_VAULT_DIR,
+    dbPath: process.env.ZED_DB_PATH
   });
   engine.build();
   engine.close();

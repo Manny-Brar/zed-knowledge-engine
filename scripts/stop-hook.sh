@@ -39,22 +39,22 @@ EDIT_COUNT=0
 CAPTURES=0
 FILE_COUNT=0
 if [ -f "$TRACKER" ]; then
-  EDIT_COUNT=$(node -e "try{const t=JSON.parse(require('fs').readFileSync('$TRACKER','utf8'));console.log(t.edit_count||0)}catch(e){console.log(0)}")
-  CAPTURES=$(node -e "try{const t=JSON.parse(require('fs').readFileSync('$TRACKER','utf8'));console.log(t.captures||0)}catch(e){console.log(0)}")
-  FILE_COUNT=$(node -e "try{const t=JSON.parse(require('fs').readFileSync('$TRACKER','utf8'));console.log((t.files||[]).length)}catch(e){console.log(0)}")
+  EDIT_COUNT=$(ZED_TRACKER="$TRACKER" node -e "try{const t=JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8'));console.log(t.edit_count||0)}catch(e){console.log(0)}")
+  CAPTURES=$(ZED_TRACKER="$TRACKER" node -e "try{const t=JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8'));console.log(t.captures||0)}catch(e){console.log(0)}")
+  FILE_COUNT=$(ZED_TRACKER="$TRACKER" node -e "try{const t=JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8'));console.log((t.files||[]).length)}catch(e){console.log(0)}")
 fi
 
 # Read current iteration from progress
 ITERATION=0
 PROGRESS="$LOOP_DIR/progress.md"
 if [ -f "$PROGRESS" ]; then
-  ITERATION=$(node -e "try{const c=require('fs').readFileSync('$PROGRESS','utf8');const m=c.match(/^iteration:\\s*(\\d+)/m);console.log(m?m[1]:0)}catch(e){console.log(0)}")
+  ITERATION=$(ZED_PROGRESS="$PROGRESS" node -e "try{const c=require('fs').readFileSync(process.env.ZED_PROGRESS,'utf8');const m=c.match(/^iteration:\\s*(\\d+)/m);console.log(m?m[1]:0)}catch(e){console.log(0)}")
 fi
 
 # Read max iterations from objective
 MAX_ITERATIONS=0
 if [ -f "$OBJECTIVE" ]; then
-  MAX_ITERATIONS=$(node -e "try{const c=require('fs').readFileSync('$OBJECTIVE','utf8');const m=c.match(/^max_iterations:\\s*(\\d+)/m);console.log(m?m[1]:0)}catch(e){console.log(0)}")
+  MAX_ITERATIONS=$(ZED_OBJECTIVE="$OBJECTIVE" node -e "try{const c=require('fs').readFileSync(process.env.ZED_OBJECTIVE,'utf8');const m=c.match(/^max_iterations:\\s*(\\d+)/m);console.log(m?m[1]:0)}catch(e){console.log(0)}")
 fi
 
 # Calculate drift score (0-10)
@@ -90,7 +90,7 @@ if [ "$MAX_ITERATIONS" -gt 0 ] && [ "$ITERATION" -lt "$MAX_ITERATIONS" ]; then
   if [ -z "$REASONS" ]; then
     # No blocking reasons, but loop isn't done — inject next iteration
     # Read objective for re-anchoring
-    OBJ_TITLE=$(node -e "try{const c=require('fs').readFileSync('$OBJECTIVE','utf8');const m=c.match(/^title:\\s*[\"']?(.+?)[\"']?$/m);console.log(m?m[1]:'(unknown)')}catch(e){console.log('(unknown)')}")
+    OBJ_TITLE=$(ZED_OBJECTIVE="$OBJECTIVE" node -e "try{const c=require('fs').readFileSync(process.env.ZED_OBJECTIVE,'utf8');const m=c.match(/^title:\\s*[\"']?(.+?)[\"']?$/m);console.log(m?m[1]:'(unknown)')}catch(e){console.log('(unknown)')}")
 
     REASONS="EVOLVE LOOP ACTIVE (iteration $ITERATION/$MAX_ITERATIONS). Continue working toward: $OBJ_TITLE. Steps: (1) Re-read objective at $OBJECTIVE, (2) Read progress at $PROGRESS, (3) Search vault for relevant prior work, (4) Research best practices for next task, (5) Execute one unit of work, (6) Run tests, (7) Capture knowledge, (8) Write handoff, (9) Run 'zed loop-tick' to advance iteration. "
   fi
@@ -98,10 +98,9 @@ fi
 
 # If we have blocking reasons, block
 if [ -n "$REASONS" ]; then
-  # Output blocking JSON
-  cat << EOF
-{"decision": "block", "reason": "$REASONS"}
-EOF
+  # Escape for JSON
+  REASONS_ESCAPED=$(echo "$REASONS" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ')
+  printf '{"decision": "block", "reason": "%s"}\n' "$REASONS_ESCAPED"
   exit 0
 fi
 

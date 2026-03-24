@@ -265,9 +265,10 @@ server.tool(
       const date = new Date().toISOString().split('T')[0];
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       const fileName = `decisions/${date}-${slug}.md`;
+      const safeTitle = title.replace(/"/g, '\\"');
       const content = [
         '---',
-        `title: "${title}"`,
+        `title: "${safeTitle}"`,
         `date: ${date}`,
         'type: decision',
         'tags: [decision]',

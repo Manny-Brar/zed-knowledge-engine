@@ -13,22 +13,25 @@ if [ ! -f "$TRACKER" ]; then
 fi
 
 # Read current state
-EDIT_COUNT=$(node -e "const t=require('$TRACKER'); console.log(t.edit_count || 0)" 2>/dev/null || echo 0)
+EDIT_COUNT=$(ZED_TRACKER="$TRACKER" node -e "try{const t=JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8'));console.log(t.edit_count||0)}catch(e){console.log(0)}" 2>/dev/null || echo 0)
 NEW_COUNT=$((EDIT_COUNT + 1))
 
 # Get the file being edited from CLAUDE_TOOL_ARG_file_path env var (if available)
 FILE_ARG="${CLAUDE_TOOL_ARG_file_path:-unknown}"
 
 # Update tracker atomically
-node -e "
-  const fs = require('fs');
-  const t = JSON.parse(fs.readFileSync('$TRACKER','utf8'));
-  t.edit_count = $NEW_COUNT;
-  t.last_edit = new Date().toISOString();
-  if ('$FILE_ARG' !== 'unknown' && !t.files.includes('$FILE_ARG')) t.files.push('$FILE_ARG');
-  fs.writeFileSync('$TRACKER', JSON.stringify(t, null, 2));
-  const fc = t.files.length;
-  if ($NEW_COUNT > 25 || fc > 8) {
-    process.stdout.write('ZED DRIFT WARNING: ' + $NEW_COUNT + ' edits across ' + fc + ' files. Consider pausing to verify scope.\\n');
-  }
+ZED_TRACKER="$TRACKER" ZED_FILE="$FILE_ARG" node -e "
+  try {
+    const fs = require('fs');
+    const t = JSON.parse(fs.readFileSync(process.env.ZED_TRACKER, 'utf8'));
+    t.edit_count = (t.edit_count || 0) + 1;
+    t.last_edit = new Date().toISOString();
+    const f = process.env.ZED_FILE;
+    if (f && f !== 'unknown' && !t.files.includes(f)) t.files.push(f);
+    fs.writeFileSync(process.env.ZED_TRACKER, JSON.stringify(t, null, 2));
+    const fc = t.files.length;
+    if (t.edit_count > 25 || fc > 8) {
+      process.stdout.write('ZED DRIFT WARNING: ' + t.edit_count + ' edits across ' + fc + ' files. Consider pausing to verify scope.\n');
+    }
+  } catch(e) {}
 " 2>&1

@@ -444,7 +444,7 @@ const commands = {
   // --- Maintenance ---
 
   backup() {
-    const { execSync } = require('child_process');
+    const { execFileSync } = require('child_process');
     const outputDir = commandArgs[0] ? path.resolve(commandArgs[0]) : process.cwd();
 
     if (!fs.existsSync(outputDir)) error(`Output directory not found: ${outputDir}`);
@@ -462,10 +462,7 @@ const commands = {
 
     // Create tar.gz of vault directory, excluding SQLite database files
     try {
-      execSync(
-        `tar -czf ${JSON.stringify(filePath)} --exclude='*.db' --exclude='*.db-journal' --exclude='*.db-wal' --exclude='*.db-shm' -C ${JSON.stringify(path.dirname(VAULT_DIR))} ${JSON.stringify(path.basename(VAULT_DIR))}`,
-        { stdio: 'pipe' }
-      );
+      execFileSync('tar', ['-czf', filePath, '--exclude=*.db', '--exclude=*.db-journal', '--exclude=*.db-wal', '--exclude=*.db-shm', '-C', path.dirname(VAULT_DIR), path.basename(VAULT_DIR)], { stdio: 'pipe' });
     } catch (tarErr) {
       error(`Backup failed: ${tarErr.message}`);
     }
@@ -656,6 +653,12 @@ const commands = {
     const notePath = commandArgs[0];
     const subdir = commandArgs[1] || 'patterns';
     if (!notePath) error('Usage: zed promote <note> [subdir]');
+    if (subdir) {
+      const targetDirCheck = path.resolve(GLOBAL_DIR, subdir);
+      if (!targetDirCheck.startsWith(path.resolve(GLOBAL_DIR))) {
+        error('Subdirectory path escapes global vault');
+      }
+    }
 
     const resolved = resolveNotePath(notePath);
     if (!resolved) error(`Note not found: ${notePath}`);
