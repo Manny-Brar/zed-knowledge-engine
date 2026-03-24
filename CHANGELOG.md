@@ -1,5 +1,32 @@
 # Changelog
 
+## v7.1.0 (2026-03-23)
+
+### New Features
+- `zed analytics` — knowledge growth tracking (notes/day, type distribution, graph density, top tags)
+- `zed loop-decompose` / `zed loop-next` / `zed loop-complete` — structured feature queue for evolve mode
+- PreCompact hook — reminds to flush knowledge before context compression
+- Global vault search in Light mode — cross-project patterns now visible automatically
+- Search results include content snippets — halves vault lookup round trips
+- Auto-injected rules (zed-first, zed-capture, zed-verify) via .claude/rules/
+- Improved onboarding — auto-detects empty vault, suggests `zed scan`
+- Protocol adherence tracking — session summary with capture ratio
+
+### Security
+- Fixed shell injection in all hook scripts (env vars via process.env, not interpolation)
+- Fixed backup command injection (execFileSync with arg array)
+- Fixed promote command path traversal on subdir parameter
+- Fixed stop hook JSON output escaping
+- Fixed YAML frontmatter title escaping in zed_decide
+
+### Quality
+- Error handling audit — 10 edge cases checked, 6 fixed
+- 500-note stress test — all operations under 260ms
+- CONTRIBUTING.md and docs/ARCHITECTURE.md added
+- Graph visualizer: search filter, click-to-lock, keyboard reset
+- Production install.sh with dependency checks + uninstall.sh
+- 149 tests (49 core + 17 MCP + 83 CLI), all passing
+
 ## v7.0.0 (2026-03-23)
 
 ### Architecture

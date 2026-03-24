@@ -1,6 +1,6 @@
 {
   "name": "zed",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "ZED — Intelligent execution agent with persistent knowledge graph for Claude Code. Every task gets multi-phase planning, self-critical verification, and automatic knowledge capture. Powered by the Nelson Muntz Protocol.",
   "author": {
     "name": "Manny Brar",
