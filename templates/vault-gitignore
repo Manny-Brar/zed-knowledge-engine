@@ -1,0 +1,4 @@
+# ZED vault — this directory should not be committed to version control
+# It contains your personal knowledge graph with potentially sensitive decisions
+*
+!.gitignore

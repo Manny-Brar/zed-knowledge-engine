@@ -198,6 +198,13 @@ echo -e "${GREEN}✓${NC} Plugin enabled"
 # --- Create plugin data directory ---
 mkdir -p "$PLUGINS_DIR/data/$PLUGIN_NAME-$MARKETPLACE_NAME"
 
+# --- Protect vault from accidental git commits ---
+if [ ! -f "$HOME/.zed-data/.gitignore" ]; then
+  mkdir -p "$HOME/.zed-data"
+  echo "# ZED vault data — do not commit" > "$HOME/.zed-data/.gitignore"
+  echo "*" >> "$HOME/.zed-data/.gitignore"
+fi
+
 echo ""
 echo -e "${GREEN}ZED v${VERSION} installed successfully!${NC}"
 echo -e "Restart Claude Code to activate."
