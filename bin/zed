@@ -380,6 +380,51 @@ const commands = {
     output(`Recent Notes:\n${lines.join('\n')}`);
   },
 
+  diff() {
+    const engine = getEngine();
+    const notes = engine.listNotes();
+
+    // Get time range
+    const hours = parseInt(commandArgs[0]) || 24;
+    const since = Date.now() - (hours * 60 * 60 * 1000);
+
+    const created = [];
+    const modified = [];
+
+    for (const notePath of notes) {
+      try {
+        const stat = fs.statSync(notePath);
+        const relativePath = path.relative(VAULT_DIR, notePath);
+        const note = engine.readNote(notePath);
+        const title = note.title || path.basename(notePath);
+
+        if (stat.birthtimeMs >= since) {
+          created.push({ title, path: relativePath, time: stat.birthtime.toISOString() });
+        } else if (stat.mtimeMs >= since) {
+          modified.push({ title, path: relativePath, time: stat.mtime.toISOString() });
+        }
+      } catch (e) { /* skip */ }
+    }
+
+    if (jsonMode) {
+      output({ hours, created, modified, total: created.length + modified.length });
+    } else {
+      const lines = [`Vault changes (last ${hours}h):`];
+      if (created.length > 0) {
+        lines.push(`\n  Created (${created.length}):`);
+        for (const n of created) lines.push(`    + ${n.title}`);
+      }
+      if (modified.length > 0) {
+        lines.push(`\n  Modified (${modified.length}):`);
+        for (const n of modified) lines.push(`    ~ ${n.title}`);
+      }
+      if (created.length === 0 && modified.length === 0) {
+        lines.push('  No changes in the last ' + hours + ' hours.');
+      }
+      output(lines.join('\n'));
+    }
+  },
+
   // --- Content operations ---
 
   snippets() {
@@ -2204,6 +2249,7 @@ Info:
   overview                  Full dashboard
   timeline [type] [limit]   Chronological view
   analytics                 Knowledge growth tracking over time
+  diff [hours]              Show vault changes (default: last 24h)
   visualize [--out file]    Open interactive graph in browser (or write Excalidraw JSON with --out)
 
 Content:

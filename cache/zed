@@ -380,6 +380,51 @@ const commands = {
     output(`Recent Notes:\n${lines.join('\n')}`);
   },
 
+  diff() {
+    const engine = getEngine();
+    const notes = engine.listNotes();
+
+    // Get time range
+    const hours = parseInt(commandArgs[0]) || 24;
+    const since = Date.now() - (hours * 60 * 60 * 1000);
+
+    const created = [];
+    const modified = [];
+
+    for (const notePath of notes) {
+      try {
+        const stat = fs.statSync(notePath);
+        const relativePath = path.relative(VAULT_DIR, notePath);
+        const note = engine.readNote(notePath);
+        const title = note.title || path.basename(notePath);
+
+        if (stat.birthtimeMs >= since) {
+          created.push({ title, path: relativePath, time: stat.birthtime.toISOString() });
+        } else if (stat.mtimeMs >= since) {
+          modified.push({ title, path: relativePath, time: stat.mtime.toISOString() });
+        }
+      } catch (e) { /* skip */ }
+    }
+
+    if (jsonMode) {
+      output({ hours, created, modified, total: created.length + modified.length });
+    } else {
+      const lines = [`Vault changes (last ${hours}h):`];
+      if (created.length > 0) {
+        lines.push(`\n  Created (${created.length}):`);
+        for (const n of created) lines.push(`    + ${n.title}`);
+      }
+      if (modified.length > 0) {
+        lines.push(`\n  Modified (${modified.length}):`);
+        for (const n of modified) lines.push(`    ~ ${n.title}`);
+      }
+      if (created.length === 0 && modified.length === 0) {
+        lines.push('  No changes in the last ' + hours + ' hours.');
+      }
+      output(lines.join('\n'));
+    }
+  },
+
   // --- Content operations ---
 
   snippets() {
@@ -548,6 +593,127 @@ const commands = {
     const engine = getEngine();
     engine.incrementalBuild();
     output(jsonMode ? { imported, skipped, source: resolvedSource, target: targetDir } : `Imported ${imported} files (${skipped} skipped)`);
+  },
+
+  export() {
+    const engine = getEngine();
+    const notes = engine.listNotes();
+    const exportData = {
+      version: require('../package.json').version,
+      exported_at: new Date().toISOString(),
+      vault_path: VAULT_DIR,
+      stats: engine.getStats(),
+      notes: []
+    };
+
+    for (const notePath of notes) {
+      try {
+        const note = engine.readNote(notePath);
+        const relativePath = path.relative(VAULT_DIR, notePath);
+        exportData.notes.push({
+          path: relativePath,
+          title: note.title,
+          type: note.frontmatter?.type || 'note',
+          tags: note.frontmatter?.tags || [],
+          date: note.frontmatter?.date || null,
+          content: note.body,
+          frontmatter: note.frontmatter
+        });
+      } catch (e) { /* skip unreadable */ }
+    }
+
+    const outFile = commandArgs[0] || `zed-vault-export-${new Date().toISOString().slice(0,10)}.json`;
+
+    if (jsonMode) {
+      console.log(JSON.stringify(exportData, null, 2));
+    } else {
+      fs.writeFileSync(outFile, JSON.stringify(exportData, null, 2));
+      console.log(`Exported ${exportData.notes.length} notes to ${outFile}`);
+      console.log(`  Size: ${(Buffer.byteLength(JSON.stringify(exportData)) / 1024).toFixed(1)} KB`);
+    }
+  },
+
+  merge() {
+    const importFile = commandArgs[0];
+    if (!importFile) error('Usage: zed merge <export-file.json>');
+    if (!fs.existsSync(importFile)) error(`File not found: ${importFile}`);
+
+    const engine = getEngine();
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(importFile, 'utf8'));
+    } catch (e) {
+      error(`Invalid JSON: ${e.message}`);
+    }
+
+    if (!data.notes || !Array.isArray(data.notes)) {
+      error('Invalid export format: missing notes array');
+    }
+
+    let imported = 0, skipped = 0, updated = 0;
+
+    for (const note of data.notes) {
+      const targetPath = path.join(VAULT_DIR, note.path);
+      const targetDir = path.dirname(targetPath);
+
+      // Path traversal check
+      if (!path.resolve(targetPath).startsWith(path.resolve(VAULT_DIR) + path.sep)) {
+        skipped++;
+        continue;
+      }
+
+      // Check if note already exists
+      if (fs.existsSync(targetPath)) {
+        // Skip if content is identical
+        const existing = fs.readFileSync(targetPath, 'utf8');
+        const incoming = note.frontmatter
+          ? `---\n${Object.entries(note.frontmatter).map(([k,v]) => `${k}: ${JSON.stringify(v)}`).join('\n')}\n---\n\n${note.content}`
+          : note.content;
+        if (existing.trim() === incoming.trim()) {
+          skipped++;
+          continue;
+        }
+        updated++;
+      } else {
+        imported++;
+      }
+
+      // Write the note
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      // Reconstruct full markdown
+      let fullContent = '';
+      if (note.frontmatter) {
+        fullContent += '---\n';
+        for (const [key, value] of Object.entries(note.frontmatter)) {
+          if (Array.isArray(value)) {
+            fullContent += `${key}: [${value.join(', ')}]\n`;
+          } else {
+            fullContent += `${key}: ${value}\n`;
+          }
+        }
+        fullContent += '---\n\n';
+      }
+      fullContent += note.content || '';
+
+      fs.writeFileSync(targetPath, fullContent);
+    }
+
+    // Rebuild graph to pick up new notes
+    engine.rebuild();
+    const stats = engine.getStats();
+
+    if (jsonMode) {
+      console.log(JSON.stringify({ imported, updated, skipped, total: data.notes.length, vault: stats }));
+    } else {
+      console.log(`Merged ${data.notes.length} notes:`);
+      console.log(`  Imported: ${imported} new`);
+      console.log(`  Updated: ${updated} existing`);
+      console.log(`  Skipped: ${skipped} (identical or invalid)`);
+      console.log(`  Vault: ${stats.nodeCount} notes, ${stats.edgeCount} connections`);
+    }
   },
 
   'suggest-links'() {
@@ -2083,6 +2249,7 @@ Info:
   overview                  Full dashboard
   timeline [type] [limit]   Chronological view
   analytics                 Knowledge growth tracking over time
+  diff [hours]              Show vault changes (default: last 24h)
   visualize [--out file]    Open interactive graph in browser (or write Excalidraw JSON with --out)
 
 Content:
@@ -2098,6 +2265,8 @@ Maintenance:
   rebuild                   Rebuild graph index
   scan [dir]                Scan codebase, generate linked knowledge notes
   import <dir> [subdir]     Import markdown files
+  export [file]             Export vault as portable JSON
+  merge <file.json>       Merge notes from exported vault JSON
   promote <note> [subdir]   Promote to global vault
   global-search <query>     Search project + global vaults
   license [status|activate] License management
