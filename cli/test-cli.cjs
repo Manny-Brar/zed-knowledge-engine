@@ -1063,6 +1063,31 @@ test('vault-info returns JSON', () => {
   assert(typeof data.vault === 'string', 'Should have vault path');
 });
 
+// --- Stale Note Detection ---
+console.log('\nStale Note Detection:');
+test('health reports stale notes', () => {
+  // Create a note and set its mtime to 60 days ago
+  const stalePath = path.join(vaultDir, 'stale-test-note.md');
+  fs.writeFileSync(stalePath, `---
+title: "Stale Test Note"
+type: note
+---
+
+# Stale Test Note
+
+This note is old and should be flagged.
+`);
+  const sixtyDaysAgo = new Date(Date.now() - (60 * 24 * 60 * 60 * 1000));
+  fs.utimesSync(stalePath, sixtyDaysAgo, sixtyDaysAgo);
+
+  const out = zed('health');
+  assert(out.includes('Stale notes'), `Expected "Stale notes" in output, got: ${out}`);
+  assert(out.includes('Stale Test Note'), `Expected stale note title in output, got: ${out}`);
+
+  // Clean up the stale note
+  fs.unlinkSync(stalePath);
+});
+
 // ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
