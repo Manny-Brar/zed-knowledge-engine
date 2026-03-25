@@ -313,13 +313,30 @@ test('getClusters: detects connected components', () => {
   teardownVault();
 });
 
+test('context_summary is generated during build', () => {
+  setupVault();
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(TEST_DIR);
+  const hubNode = graph.getNodeByPath(path.join(TEST_DIR, 'hub.md'));
+  assert.ok(hubNode.context_summary, 'hub should have a context_summary');
+  assert.ok(hubNode.context_summary.length > 0, 'context_summary should not be empty');
+  // hub.md has type: index, tags: [core, important] — verify they appear
+  assert.ok(hubNode.context_summary.includes('index'), 'context_summary should include type');
+  assert.ok(hubNode.context_summary.includes('core'), 'context_summary should include tags');
+  // Check a note without frontmatter still gets a summary from body
+  const noFmNode = graph.getNodeByPath(path.join(TEST_DIR, 'no-frontmatter.md'));
+  assert.ok(noFmNode.context_summary.length > 0, 'note without frontmatter should still get a body-based summary');
+  graph.close();
+  teardownVault();
+});
+
 test('schema version table is created', () => {
   setupVault();
   const graph = new GraphLayer(':memory:');
   graph.buildGraph(TEST_DIR);
   const row = graph.db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get();
   assert.ok(row, 'schema_version table should exist with a row');
-  assert.strictEqual(row.version, 1, 'schema version should be 1');
+  assert.strictEqual(row.version, 2, 'schema version should be 2');
   graph.close();
   teardownVault();
 });

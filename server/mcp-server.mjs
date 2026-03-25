@@ -129,7 +129,8 @@ When to use vs alternatives:
           ? r.snippets[0].slice(0, 150)
           : '';
         const snippetLine = snippet ? `\n   Snippet: ${snippet}` : '';
-        return `${i + 1}. **${r.node.title}** (score: ${r.score.toFixed(3)}, backlinks: ${r.backlinkCount})\n   Path: ${r.node.path}${snippetLine}`;
+        const contextLine = r.contextSummary ? `\n   Context: ${r.contextSummary}` : '';
+        return `${i + 1}. **${r.node.title}** (score: ${r.score.toFixed(3)}, backlinks: ${r.backlinkCount})${contextLine}\n   Path: ${r.node.path}${snippetLine}`;
       });
 
       // Search global vault for cross-project patterns

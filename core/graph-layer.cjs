@@ -16,7 +16,7 @@ const fileLayer = require('./file-layer.cjs');
 // Schema versioning
 // ---------------------------------------------------------------------------
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -24,12 +24,13 @@ const CURRENT_SCHEMA_VERSION = 1;
 
 const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS nodes (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    path        TEXT    UNIQUE NOT NULL,
-    title       TEXT    NOT NULL,
-    type        TEXT    DEFAULT 'note',
-    tags        TEXT    DEFAULT '[]',
-    word_count  INTEGER DEFAULT 0
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    path            TEXT    UNIQUE NOT NULL,
+    title           TEXT    NOT NULL,
+    type            TEXT    DEFAULT 'note',
+    tags            TEXT    DEFAULT '[]',
+    word_count      INTEGER DEFAULT 0,
+    context_summary TEXT    DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS edges (
@@ -73,8 +74,8 @@ class GraphLayer {
     // Prepare frequently-used statements
     this._stmts = {
       insertNode: this.db.prepare(`
-        INSERT OR REPLACE INTO nodes (path, title, type, tags, word_count)
-        VALUES (@path, @title, @type, @tags, @wordCount)
+        INSERT OR REPLACE INTO nodes (path, title, type, tags, word_count, context_summary)
+        VALUES (@path, @title, @type, @tags, @wordCount, @contextSummary)
       `),
       insertEdge: this.db.prepare(`
         INSERT INTO edges (source_id, target_id, link_text, context)
@@ -151,12 +152,25 @@ class GraphLayer {
         const tags = note.frontmatter.tags || [];
         const type = note.frontmatter.type || 'note';
 
+        // Generate contextual summary from frontmatter + first sentence
+        const contextParts = [];
+        if (note.frontmatter.type) contextParts.push(note.frontmatter.type);
+        if (note.frontmatter.date) contextParts.push(`from ${note.frontmatter.date}`);
+        if (tags && (Array.isArray(tags) ? tags.length > 0 : true)) {
+          const tagList = Array.isArray(tags) ? tags : [tags];
+          if (tagList.length > 0) contextParts.push(`about ${tagList.join(', ')}`);
+        }
+        const firstSentence = (note.body || '').split(/[.\n]/)[0].substring(0, 100).trim();
+        if (firstSentence) contextParts.push(firstSentence);
+        const contextSummary = contextParts.join(' — ');
+
         this._stmts.insertNode.run({
           path: note.path,
           title: note.title,
           type,
           tags: JSON.stringify(Array.isArray(tags) ? tags : [tags]),
           wordCount: note.wordCount,
+          contextSummary,
         });
 
         const node = this._stmts.getNodeByPath.get(note.path);
@@ -551,8 +565,13 @@ class GraphLayer {
    * @param {number} toVersion - Target version
    */
   _migrate(fromVersion, toVersion) {
-    // Future migrations go here
-    // Example: if (fromVersion < 2) { this.db.exec('ALTER TABLE nodes ADD COLUMN ...'); }
+    if (fromVersion < 2) {
+      try {
+        this.db.exec('ALTER TABLE nodes ADD COLUMN context_summary TEXT DEFAULT ""');
+      } catch (e) {
+        // Column may already exist
+      }
+    }
     this.db.prepare('INSERT INTO schema_version (version, migrated_at) VALUES (?, ?)').run(toVersion, new Date().toISOString());
   }
 

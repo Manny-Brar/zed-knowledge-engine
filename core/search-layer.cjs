@@ -301,6 +301,7 @@ class SearchLayer {
         node: r.node,
         score: r.boostedScore,
         backlinkCount: r.backlinkCount,
+        contextSummary: r.node.context_summary || '',
         snippets,
       };
     });
