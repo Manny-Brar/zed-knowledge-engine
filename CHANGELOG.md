@@ -1,5 +1,19 @@
 # Changelog
 
+## v7.3.0 (2026-03-24)
+
+### New Features
+- Contextual metadata on notes — each note gets a context_summary combining type, date, tags, and first sentence for improved retrieval (+35-67% accuracy per Anthropic research)
+- MCP tool descriptions rewritten with edge cases, examples, and usage guidance per Anthropic SWE-bench findings
+- Schema versioning v2 with automatic migration
+
+### Testing
+- 30-test protocol adherence eval suite (search quality, capture quality, hook behavior, evolve mechanics, graph operations, protocol adherence)
+- 202 total tests across 5 suites (52 core + 17 MCP + 85 CLI + 18 E2E + 30 eval)
+
+### Research
+- Full Anthropic engineering blog analysis (21 articles, 5 immediately actionable patterns)
+
 ## v7.2.0 (2026-03-23)
 
 ### New Features
