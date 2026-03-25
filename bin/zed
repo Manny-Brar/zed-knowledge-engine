@@ -588,6 +588,89 @@ const commands = {
     }
   },
 
+  merge() {
+    const importFile = commandArgs[0];
+    if (!importFile) error('Usage: zed merge <export-file.json>');
+    if (!fs.existsSync(importFile)) error(`File not found: ${importFile}`);
+
+    const engine = getEngine();
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(importFile, 'utf8'));
+    } catch (e) {
+      error(`Invalid JSON: ${e.message}`);
+    }
+
+    if (!data.notes || !Array.isArray(data.notes)) {
+      error('Invalid export format: missing notes array');
+    }
+
+    let imported = 0, skipped = 0, updated = 0;
+
+    for (const note of data.notes) {
+      const targetPath = path.join(VAULT_DIR, note.path);
+      const targetDir = path.dirname(targetPath);
+
+      // Path traversal check
+      if (!path.resolve(targetPath).startsWith(path.resolve(VAULT_DIR) + path.sep)) {
+        skipped++;
+        continue;
+      }
+
+      // Check if note already exists
+      if (fs.existsSync(targetPath)) {
+        // Skip if content is identical
+        const existing = fs.readFileSync(targetPath, 'utf8');
+        const incoming = note.frontmatter
+          ? `---\n${Object.entries(note.frontmatter).map(([k,v]) => `${k}: ${JSON.stringify(v)}`).join('\n')}\n---\n\n${note.content}`
+          : note.content;
+        if (existing.trim() === incoming.trim()) {
+          skipped++;
+          continue;
+        }
+        updated++;
+      } else {
+        imported++;
+      }
+
+      // Write the note
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      // Reconstruct full markdown
+      let fullContent = '';
+      if (note.frontmatter) {
+        fullContent += '---\n';
+        for (const [key, value] of Object.entries(note.frontmatter)) {
+          if (Array.isArray(value)) {
+            fullContent += `${key}: [${value.join(', ')}]\n`;
+          } else {
+            fullContent += `${key}: ${value}\n`;
+          }
+        }
+        fullContent += '---\n\n';
+      }
+      fullContent += note.content || '';
+
+      fs.writeFileSync(targetPath, fullContent);
+    }
+
+    // Rebuild graph to pick up new notes
+    engine.rebuild();
+    const stats = engine.getStats();
+
+    if (jsonMode) {
+      console.log(JSON.stringify({ imported, updated, skipped, total: data.notes.length, vault: stats }));
+    } else {
+      console.log(`Merged ${data.notes.length} notes:`);
+      console.log(`  Imported: ${imported} new`);
+      console.log(`  Updated: ${updated} existing`);
+      console.log(`  Skipped: ${skipped} (identical or invalid)`);
+      console.log(`  Vault: ${stats.nodeCount} notes, ${stats.edgeCount} connections`);
+    }
+  },
+
   'suggest-links'() {
     const notePath = commandArgs[0];
     const limit = parseInt(commandArgs[1]) || 10;
@@ -2137,6 +2220,7 @@ Maintenance:
   scan [dir]                Scan codebase, generate linked knowledge notes
   import <dir> [subdir]     Import markdown files
   export [file]             Export vault as portable JSON
+  merge <file.json>       Merge notes from exported vault JSON
   promote <note> [subdir]   Promote to global vault
   global-search <query>     Search project + global vaults
   license [status|activate] License management

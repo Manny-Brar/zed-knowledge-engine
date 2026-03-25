@@ -1108,6 +1108,43 @@ test('export creates valid JSON with notes', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Merge
+// ---------------------------------------------------------------------------
+
+test('merge imports notes from export JSON', () => {
+  // Export current vault
+  const exportFile = path.join(tmpDir, 'merge-export.json');
+  zed(`export ${exportFile}`);
+  assert(fs.existsSync(exportFile), 'Export file should exist');
+  const data = JSON.parse(fs.readFileSync(exportFile, 'utf-8'));
+  const exportedCount = data.notes.length;
+  assert(exportedCount > 0, 'Export should have notes');
+
+  // Create a fresh vault to merge into
+  const mergeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zed-merge-test-'));
+  const mergeVault = path.join(mergeDir, 'vault');
+  const mergeDb = path.join(mergeDir, 'merge.db');
+  fs.mkdirSync(mergeVault, { recursive: true });
+
+  const mergeResult = execSync(
+    `node ${path.join(__dirname, '..', 'bin', 'zed')} merge ${exportFile}`,
+    { env: { ...process.env, ZED_DATA_DIR: mergeDir }, encoding: 'utf-8' }
+  );
+  assert(mergeResult.includes('Merged'), 'Should report merge results');
+  assert(mergeResult.includes(`Imported: ${exportedCount} new`), `Should import ${exportedCount} notes`);
+
+  // Verify files exist in the merge vault
+  for (const note of data.notes) {
+    const merged = path.join(mergeVault, note.path);
+    assert(fs.existsSync(merged), `Merged note should exist: ${note.path}`);
+  }
+
+  // Clean up
+  fs.rmSync(mergeDir, { recursive: true, force: true });
+  fs.unlinkSync(exportFile);
+});
+
+// ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
 
