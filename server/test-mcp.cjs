@@ -218,6 +218,21 @@ async function runTests() {
   });
 
   // ---------------------------------------------------------------------------
+  // Wikilink suggestion tests
+  // ---------------------------------------------------------------------------
+
+  await test('zed_write_note suggests wikilinks for mentioned titles', async () => {
+    // "API Design" already exists as a note title from earlier test
+    const result = await client.callTool('zed_write_note', {
+      file_name: 'research/api-research.md',
+      content: '---\ntitle: "API Research"\ntags: [research, api]\n---\n# API Research\nWe looked at API Design patterns and considered alternatives.',
+    });
+    const text = result.content[0].text;
+    assert.ok(text.includes('Suggested wikilinks'), `Expected "Suggested wikilinks" in: ${text}`);
+    assert.ok(text.includes('[[API Design]]'), `Expected "[[API Design]]" in: ${text}`);
+  });
+
+  // ---------------------------------------------------------------------------
   // Edge case tests: error handling hardening
   // ---------------------------------------------------------------------------
 

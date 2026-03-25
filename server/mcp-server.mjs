@@ -273,7 +273,33 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
         fs.writeFileSync(trackerPathW, JSON.stringify(tracker));
       } catch (e) { /* tracker may not exist yet — that's fine */ }
 
-      return { content: [{ type: 'text', text: `Note written: ${file_name}\nGraph updated.` }] };
+      let resultText = `Note written: ${file_name}\nGraph updated.`;
+
+      // Auto-suggest wikilinks for the new note
+      try {
+        const suggestions = [];
+        const allNotes = engine.listNotes();
+        const bodyLower = content.toLowerCase();
+
+        for (const notePath of allNotes) {
+          if (notePath === path.join(VAULT_DIR, file_name.trim())) continue; // skip self
+          try {
+            const note = engine.readNote(notePath);
+            if (!note || !note.title) continue;
+            const titleLower = note.title.toLowerCase();
+            // Check if the note body mentions this title (and doesn't already have a wikilink)
+            if (titleLower.length > 3 && bodyLower.includes(titleLower) && !content.includes(`[[${note.title}]]`)) {
+              suggestions.push(note.title);
+            }
+          } catch (e) { /* skip unreadable notes */ }
+        }
+
+        if (suggestions.length > 0) {
+          resultText += `\n\nSuggested wikilinks (mentioned but not linked): ${suggestions.slice(0, 5).map(t => `[[${t}]]`).join(', ')}`;
+        }
+      } catch (e) { /* non-fatal */ }
+
+      return { content: [{ type: 'text', text: resultText }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
     }
@@ -360,7 +386,23 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
         fs.writeFileSync(trackerPathD, JSON.stringify(tracker));
       } catch (e) { /* tracker may not exist yet — that's fine */ }
 
-      return { content: [{ type: 'text', text: `Decision recorded: ${fileName}\nTitle: ${title}` }] };
+      let resultText = `Decision recorded: ${fileName}\nTitle: ${title}`;
+
+      // Suggest related decisions
+      try {
+        const related = engine.searchNotes(title, 3);
+        if (related.length > 1) { // >1 because the new note itself will match
+          const relatedTitles = related
+            .filter(r => !r.path.includes(slug))
+            .slice(0, 3)
+            .map(r => r.title);
+          if (relatedTitles.length > 0) {
+            resultText += `\n\nRelated decisions: ${relatedTitles.map(t => `[[${t}]]`).join(', ')}`;
+          }
+        }
+      } catch (e) { /* non-fatal */ }
+
+      return { content: [{ type: 'text', text: resultText }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
     }
