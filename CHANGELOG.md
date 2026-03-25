@@ -1,5 +1,22 @@
 # Changelog
 
+## v7.4.0 (2026-03-25)
+
+### New Features
+- `zed export` — portable JSON vault export for migration between machines
+- `zed merge` — import notes from exported vault JSON for team knowledge sharing
+- `zed diff [hours]` — show vault changes since last session (default 24h)
+- Auto-suggest wikilinks when writing notes — graph self-connects
+- Duplicate note detection warns before creating similar notes
+- Stale note detection (>30 days) in health and analytics commands
+- Contextual metadata on all notes improves retrieval accuracy
+
+### Testing
+- 208 total tests across 5 suites (52 core + 19 MCP + 89 CLI + 18 E2E + 30 eval)
+
+### Research
+- Anthropic engineering blog analysis (21 articles) — patterns applied to tool descriptions, contextual retrieval, and eval design
+
 ## v7.3.0 (2026-03-24)
 
 ### New Features

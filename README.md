@@ -204,7 +204,7 @@ Simple tasks skip gates 2-3. The engine is enforced by the Stop hook in evolve m
 - `zed_write_note` — create or update a note
 - `zed_decide` — create a decision record
 
-**37 CLI subcommands** — run via `zed <command>`:
+**40 CLI subcommands** — run via `zed <command>`:
 ```
 zed stats          zed backlinks <note>     zed rebuild
 zed health         zed related <note>       zed backup
@@ -218,6 +218,7 @@ zed scan [dir]     zed global-search <q>    zed license
 zed vault-info     zed loop-init "obj"      zed loop-tick "msg"
 zed loop-decompose zed loop-next            zed loop-complete
 zed loop-status    zed loop-stop "reason"   zed loop-promote
+zed export         zed merge <file>         zed diff [hours]
 ```
 
 Add `--json` to any command for structured output.
@@ -262,11 +263,11 @@ CXXFLAGS="-I$(xcrun --show-sdk-path)/usr/include/c++/v1 -isysroot $(xcrun --show
 
 ```bash
 npm test          # 52 core engine tests
-npm run test:mcp  # 17 MCP server tests
-npm run test:cli  # 85 CLI integration tests
+npm run test:mcp  # 19 MCP server tests
+npm run test:cli  # 89 CLI integration tests
 npm run test:e2e  # 18 end-to-end lifecycle tests
 npm run test:eval # 30 protocol adherence evals
-npm run test:all  # 202 total (all passing)
+npm run test:all  # 208 total (all passing)
 npm run bench     # Performance benchmarks
 ```
 
