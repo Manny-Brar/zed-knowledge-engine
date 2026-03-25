@@ -262,6 +262,34 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
       if (!resolved.startsWith(path.resolve(VAULT_DIR) + path.sep) && resolved !== path.resolve(VAULT_DIR)) {
         return { content: [{ type: 'text', text: 'Error: path escapes vault directory' }], isError: true };
       }
+
+      // Check for potential duplicates before writing
+      let duplicateWarning = '';
+      try {
+        const titleMatch = content.match(/^title:\s*["']?(.+?)["']?\s*$/m);
+        if (titleMatch) {
+          const newTitle = titleMatch[1].trim().toLowerCase();
+          const searchResults = engine.searchNotes(newTitle, { limit: 5 });
+          const potentialDupes = searchResults.filter(r => {
+            const existingTitle = (r.node.title || '').toLowerCase();
+            // Similarity: check if titles share >60% of words (with prefix matching)
+            const newWords = newTitle.split(/\s+/).filter(w => w.length > 2);
+            const existingWords = existingTitle.split(/\s+/).filter(w => w.length > 2);
+            if (newWords.length === 0 || existingWords.length === 0) return false;
+            // Count matches including prefix relationships (auth ~ authentication)
+            const overlap = newWords.filter(nw =>
+              existingWords.some(ew => ew === nw || ew.startsWith(nw) || nw.startsWith(ew))
+            ).length;
+            const similarity = overlap / Math.max(newWords.length, existingWords.length);
+            return similarity > 0.6 && r.node.path !== resolved;
+          });
+
+          if (potentialDupes.length > 0) {
+            duplicateWarning = `\n\nPossible duplicate(s) detected:\n${potentialDupes.slice(0, 3).map(d => `- "${d.node.title}" at ${d.node.path}`).join('\n')}\nConsider updating the existing note instead of creating a new one.`;
+          }
+        }
+      } catch (e) { /* non-fatal */ }
+
       engine.writeNote(notePath, content);
       engine.incrementalBuild();
 
@@ -299,7 +327,7 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
         }
       } catch (e) { /* non-fatal */ }
 
-      return { content: [{ type: 'text', text: resultText }] };
+      return { content: [{ type: 'text', text: resultText + duplicateWarning }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
     }

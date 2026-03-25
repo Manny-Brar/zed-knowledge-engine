@@ -233,6 +233,28 @@ async function runTests() {
   });
 
   // ---------------------------------------------------------------------------
+  // Duplicate detection tests
+  // ---------------------------------------------------------------------------
+
+  await test('zed_write_note warns about potential duplicates', async () => {
+    // Create a note with title "Auth Architecture"
+    await client.callTool('zed_write_note', {
+      file_name: 'architecture/auth-architecture.md',
+      content: '---\ntitle: "Auth Architecture"\ntags: [architecture, auth]\n---\n# Auth Architecture\nHow authentication works in the system.',
+    });
+
+    // Now try to write a note with a very similar title
+    const result = await client.callTool('zed_write_note', {
+      file_name: 'architecture/authentication-architecture.md',
+      content: '---\ntitle: "Authentication Architecture"\ntags: [architecture, auth]\n---\n# Authentication Architecture\nDetailed auth architecture overview.',
+    });
+    const text = result.content[0].text;
+    assert.ok(text.includes('Note written'), `Expected "Note written" in: ${text}`);
+    assert.ok(text.includes('Possible duplicate'), `Expected "Possible duplicate" in: ${text}`);
+    assert.ok(text.includes('Auth Architecture'), `Expected "Auth Architecture" in duplicate warning: ${text}`);
+  });
+
+  // ---------------------------------------------------------------------------
   // Edge case tests: error handling hardening
   // ---------------------------------------------------------------------------
 
