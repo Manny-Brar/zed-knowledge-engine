@@ -550,6 +550,44 @@ const commands = {
     output(jsonMode ? { imported, skipped, source: resolvedSource, target: targetDir } : `Imported ${imported} files (${skipped} skipped)`);
   },
 
+  export() {
+    const engine = getEngine();
+    const notes = engine.listNotes();
+    const exportData = {
+      version: require('../package.json').version,
+      exported_at: new Date().toISOString(),
+      vault_path: VAULT_DIR,
+      stats: engine.getStats(),
+      notes: []
+    };
+
+    for (const notePath of notes) {
+      try {
+        const note = engine.readNote(notePath);
+        const relativePath = path.relative(VAULT_DIR, notePath);
+        exportData.notes.push({
+          path: relativePath,
+          title: note.title,
+          type: note.frontmatter?.type || 'note',
+          tags: note.frontmatter?.tags || [],
+          date: note.frontmatter?.date || null,
+          content: note.body,
+          frontmatter: note.frontmatter
+        });
+      } catch (e) { /* skip unreadable */ }
+    }
+
+    const outFile = commandArgs[0] || `zed-vault-export-${new Date().toISOString().slice(0,10)}.json`;
+
+    if (jsonMode) {
+      console.log(JSON.stringify(exportData, null, 2));
+    } else {
+      fs.writeFileSync(outFile, JSON.stringify(exportData, null, 2));
+      console.log(`Exported ${exportData.notes.length} notes to ${outFile}`);
+      console.log(`  Size: ${(Buffer.byteLength(JSON.stringify(exportData)) / 1024).toFixed(1)} KB`);
+    }
+  },
+
   'suggest-links'() {
     const notePath = commandArgs[0];
     const limit = parseInt(commandArgs[1]) || 10;
@@ -2098,6 +2136,7 @@ Maintenance:
   rebuild                   Rebuild graph index
   scan [dir]                Scan codebase, generate linked knowledge notes
   import <dir> [subdir]     Import markdown files
+  export [file]             Export vault as portable JSON
   promote <note> [subdir]   Promote to global vault
   global-search <query>     Search project + global vaults
   license [status|activate] License management

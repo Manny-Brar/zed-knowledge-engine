@@ -1089,6 +1089,25 @@ This note is old and should be flagged.
 });
 
 // ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
+test('export creates valid JSON with notes', () => {
+  const exportFile = path.join(tmpDir, 'test-export.json');
+  zed(`export ${exportFile}`);
+  assert(fs.existsSync(exportFile), 'Export file should exist');
+  const data = JSON.parse(fs.readFileSync(exportFile, 'utf-8'));
+  assert(data.version, 'Export should have version');
+  assert(data.exported_at, 'Export should have exported_at timestamp');
+  assert(Array.isArray(data.notes), 'Export should have notes array');
+  assert(data.notes.length > 0, 'Export should contain at least one note');
+  assert(data.notes[0].title, 'Each note should have a title');
+  assert(data.notes[0].path, 'Each note should have a path');
+  assert(data.stats, 'Export should have stats');
+  fs.unlinkSync(exportFile);
+});
+
+// ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
 
