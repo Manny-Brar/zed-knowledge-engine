@@ -1,3 +1,13 @@
+```
+  ███████╗███████╗██████╗
+  ╚══███╔╝██╔════╝██╔══██╗
+    ███╔╝ █████╗  ██║  ██║
+   ███╔╝  ██╔══╝  ██║  ██║
+  ███████╗███████╗██████╔╝
+  ╚══════╝╚══════╝╚═════╝
+  Knowledge Engine
+```
+
 # ZED
 
 **Persistent memory + structured execution for Claude Code.** ZED remembers your decisions, patterns, and architecture across sessions — and enforces a protocol that makes Claude plan before coding, verify before committing, and capture knowledge automatically.
