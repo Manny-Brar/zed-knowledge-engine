@@ -1,5 +1,5 @@
 /**
- * engine.cjs — Nelson Knowledge Engine v6
+ * engine.cjs — ZED Knowledge Engine
  *
  * Main entry point that initializes all layers, builds the knowledge graph
  * on startup, and exposes a unified API for vault operations.

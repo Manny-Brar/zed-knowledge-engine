@@ -22,11 +22,14 @@ if [ ! -d "$VAULT_DIR" ]; then
   exit 0
 fi
 
-# Gather git info if available
+# Use CLAUDE_PROJECT_DIR if set, otherwise fall back to current directory
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+
+# Gather git info if available (run in the project directory)
 GIT_INFO=""
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  CHANGED_FILES=$(git diff --name-only HEAD 2>/dev/null | head -10)
-  LAST_COMMIT=$(git log -1 --oneline 2>/dev/null || echo "none")
+if (cd "$PROJECT_DIR" && git rev-parse --is-inside-work-tree) >/dev/null 2>&1; then
+  CHANGED_FILES=$(cd "$PROJECT_DIR" && git diff --name-only HEAD 2>/dev/null | head -10)
+  LAST_COMMIT=$(cd "$PROJECT_DIR" && git log -1 --oneline 2>/dev/null || echo "none")
   if [ -n "$CHANGED_FILES" ]; then
     GIT_INFO="### Session Activity ($TIME)\n- Last commit: $LAST_COMMIT\n- Files changed:\n$(echo "$CHANGED_FILES" | sed 's/^/  - /')"
   fi
