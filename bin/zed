@@ -442,7 +442,12 @@ const commands = {
   },
 
   daily() {
-    const append = commandArgs.join(' ');
+    let append = commandArgs.join(' ');
+    // Truncate extremely long inputs with warning
+    if (append.length > 10000) {
+      console.error('Warning: Input truncated to 10,000 characters');
+      append = append.slice(0, 10000);
+    }
     const engine = getEngine();
     const date = new Date().toISOString().split('T')[0];
     const fileName = `sessions/${date}.md`;
@@ -476,8 +481,9 @@ const commands = {
 
   template() {
     const templateType = commandArgs[0];
-    const title = commandArgs.slice(1).join(' ');
-    if (!templateType || !title) error('Usage: zed template <type> <title>\nTypes: decision, architecture, postmortem, pattern, daily');
+    const title = commandArgs.slice(1).join(' ').trim();
+    if (!templateType) error('Usage: zed template <type> <title>\nTypes: decision, architecture, postmortem, pattern, daily');
+    if (!title) error('Title must not be empty. Usage: zed template <type> <title>');
 
     const templateMap = {
       decision: 'decision-record.md', architecture: 'architecture-doc.md',
@@ -496,7 +502,9 @@ const commands = {
 
     let content = fs.readFileSync(templatePath, 'utf-8');
     const date = new Date().toISOString().split('T')[0];
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!slug) slug = 'untitled';
+    if (slug.length > 80) slug = slug.slice(0, 80).replace(/-$/, '');
     content = content.replace(/\{\{TITLE\}\}/g, title).replace(/\{\{DATE\}\}/g, date);
 
     const fileName = `${subdirMap[templateType]}/${date}-${slug}.md`;
@@ -514,6 +522,12 @@ const commands = {
     const outputDir = commandArgs[0] ? path.resolve(commandArgs[0]) : process.cwd();
 
     if (!fs.existsSync(outputDir)) error(`Output directory not found: ${outputDir}`);
+    // Validate output directory is writable
+    try {
+      fs.accessSync(outputDir, fs.constants.W_OK);
+    } catch {
+      error(`Output directory is not writable: ${outputDir}`);
+    }
 
     // Count notes before archiving
     const engine = getEngine();
@@ -560,6 +574,12 @@ const commands = {
 
     const resolvedSource = path.resolve(sourceDir);
     if (!fs.existsSync(resolvedSource)) error(`Directory not found: ${resolvedSource}`);
+    // Validate source is readable
+    try {
+      fs.accessSync(resolvedSource, fs.constants.R_OK);
+    } catch {
+      error(`Directory is not readable: ${resolvedSource}`);
+    }
 
     const fileLayerMod = require('../core/file-layer.cjs');
     const sourceFiles = fileLayerMod.listNotes(resolvedSource);
@@ -627,6 +647,17 @@ const commands = {
 
     const outFile = commandArgs[0] || `zed-vault-export-${new Date().toISOString().slice(0,10)}.json`;
 
+    // Validate output directory is writable (only for non-json mode which writes to file)
+    if (!jsonMode) {
+      const outDir = path.dirname(path.resolve(outFile));
+      if (!fs.existsSync(outDir)) error(`Output directory does not exist: ${outDir}`);
+      try {
+        fs.accessSync(outDir, fs.constants.W_OK);
+      } catch {
+        error(`Output directory is not writable: ${outDir}`);
+      }
+    }
+
     if (jsonMode) {
       console.log(JSON.stringify(exportData, null, 2));
     } else {
@@ -640,6 +671,12 @@ const commands = {
     const importFile = commandArgs[0];
     if (!importFile) error('Usage: zed merge <export-file.json>');
     if (!fs.existsSync(importFile)) error(`File not found: ${importFile}`);
+    // Validate file is readable
+    try {
+      fs.accessSync(importFile, fs.constants.R_OK);
+    } catch {
+      error(`File is not readable: ${importFile}`);
+    }
 
     const engine = getEngine();
     let data;
@@ -1086,7 +1123,7 @@ Object.assign(commands, {
 
   'loop-init'() {
     const objective = commandArgs[0];
-    if (!objective) error('Usage: zed loop-init "objective text" [--max N]');
+    if (!objective || !objective.trim()) error('Objective must not be empty. Usage: zed loop-init "objective text" [--max N]');
 
     let maxIterations = 0;
     const maxIdx = commandArgs.indexOf('--max');
@@ -1157,8 +1194,13 @@ Object.assign(commands, {
   },
 
   'loop-tick'() {
-    const note = commandArgs[0];
-    if (!note) error('Usage: zed loop-tick "what was accomplished this iteration"');
+    let note = commandArgs[0];
+    if (!note || !note.trim()) error('Progress note must not be empty. Usage: zed loop-tick "what was accomplished this iteration"');
+    // Truncate extremely long inputs with warning
+    if (note.length > 10000) {
+      console.error('Warning: Input truncated to 10,000 characters');
+      note = note.slice(0, 10000);
+    }
 
     const state = _validateLoopState();
     if (!state.valid) {
@@ -1372,7 +1414,12 @@ Object.assign(commands, {
     }
 
     // Read features from stdin or command args
-    const input = commandArgs.join(' ');
+    let input = commandArgs.join(' ');
+    // Truncate extremely long inputs with warning
+    if (input.length > 10000) {
+      console.error('Warning: Input truncated to 10,000 characters');
+      input = input.slice(0, 10000);
+    }
     if (!input) {
       // If no input, show current features
       if (fs.existsSync(featuresPath)) {
@@ -1874,6 +1921,12 @@ Object.assign(commands, {
 
     if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
       error(`Directory not found: ${targetDir}`);
+    }
+    // Validate directory is readable
+    try {
+      fs.accessSync(targetDir, fs.constants.R_OK);
+    } catch {
+      error(`Directory is not readable: ${targetDir}`);
     }
 
     // --- Determine project name ---

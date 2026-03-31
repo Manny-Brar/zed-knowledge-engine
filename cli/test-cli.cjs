@@ -1172,6 +1172,40 @@ Created to test the diff command.
 });
 
 // ---------------------------------------------------------------------------
+// Input Validation Edge Cases
+// ---------------------------------------------------------------------------
+
+console.log('\nInput Validation:');
+
+test('daily with very long text truncates gracefully', () => {
+  const longText = 'x'.repeat(15000);
+  const out = zed(`daily "${longText}"`, { expectError: false });
+  // Should succeed (text gets truncated) — check stderr for warning
+  assert(typeof out === 'string', 'Should produce output');
+  assert(out.includes('Appended') || out.includes('created'), `Expected success message, got: ${out.slice(0, 100)}`);
+});
+
+test('import with nonexistent directory errors clearly', () => {
+  const out = zed('import /totally/nonexistent/directory/for/testing', { expectError: true });
+  assert(out.includes('not found') || out.includes('Error'), `Expected clear error, got: ${out}`);
+});
+
+test('template with empty title errors', () => {
+  const out = zed('template decision', { expectError: true });
+  assert(out.includes('Title must not be empty') || out.includes('Usage'), `Expected empty title error, got: ${out}`);
+});
+
+test('loop-init with empty objective errors', () => {
+  const out = zed('loop-init', { expectError: true });
+  assert(out.includes('must not be empty') || out.includes('Usage') || out.includes('Objective'), `Expected empty objective error, got: ${out}`);
+});
+
+test('export to unwritable path errors clearly', () => {
+  const out = zed('export /nonexistent/dir/output.json', { expectError: true });
+  assert(out.includes('not exist') || out.includes('not writable') || out.includes('Error'), `Expected writable path error, got: ${out}`);
+});
+
+// ---------------------------------------------------------------------------
 // Cleanup + Results
 // ---------------------------------------------------------------------------
 

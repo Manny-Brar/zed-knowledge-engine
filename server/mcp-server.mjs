@@ -371,8 +371,23 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
       if (!decision || !decision.trim()) {
         return { content: [{ type: 'text', text: 'Error: decision must not be empty' }], isError: true };
       }
+      // Truncate extremely long inputs with warning
+      const MAX_INPUT = 10000;
+      let truncWarning = '';
+      if (title.length > MAX_INPUT) { title = title.slice(0, MAX_INPUT); truncWarning += ' title'; }
+      if (context.length > MAX_INPUT) { context = context.slice(0, MAX_INPUT); truncWarning += ' context'; }
+      if (decision.length > MAX_INPUT) { decision = decision.slice(0, MAX_INPUT); truncWarning += ' decision'; }
+      if (alternatives && alternatives.length > MAX_INPUT) { alternatives = alternatives.slice(0, MAX_INPUT); truncWarning += ' alternatives'; }
+      if (consequences && consequences.length > MAX_INPUT) { consequences = consequences.slice(0, MAX_INPUT); truncWarning += ' consequences'; }
       const date = new Date().toISOString().split('T')[0];
-      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      // Handle edge cases: empty slug (title was only special chars/unicode)
+      if (!slug) slug = 'untitled';
+      // Truncate long slugs (>200 chars in title can produce long filenames)
+      if (slug.length > 80) slug = slug.slice(0, 80).replace(/-$/, '');
+      // Avoid reserved filenames on Windows (CON, NUL, PRN, AUX, etc.)
+      const RESERVED = new Set(['con', 'prn', 'aux', 'nul', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9']);
+      if (RESERVED.has(slug)) slug = slug + '-decision';
       const fileName = `decisions/${date}-${slug}.md`;
       const safeTitle = title.replace(/"/g, '\\"');
       const content = [
