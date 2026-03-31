@@ -547,6 +547,13 @@ class GraphLayer {
    */
   _checkSchema() {
     this.db.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL, migrated_at TEXT NOT NULL)`);
+
+    // Always ensure required columns exist (handles stale DBs where version was bumped but ALTER failed)
+    const cols = this.db.pragma('table_info(nodes)').map(c => c.name);
+    if (!cols.includes('context_summary')) {
+      try { this.db.exec('ALTER TABLE nodes ADD COLUMN context_summary TEXT DEFAULT ""'); } catch (e) { /* already exists */ }
+    }
+
     const row = this.db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get();
     if (!row) {
       // Fresh database — insert current version
