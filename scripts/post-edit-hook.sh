@@ -2,6 +2,9 @@
 # post-edit-hook.sh — Lightweight edit tracker for PostToolUse hook
 # Tracks edit count and unique files touched per session.
 
+set -euo pipefail
+trap 'echo "ZED hook error: $BASH_COMMAND failed" >&2' ERR
+
 DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
 TRACKER="$DATA_DIR/edit-tracker.json"
 

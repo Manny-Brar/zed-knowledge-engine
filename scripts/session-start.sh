@@ -4,6 +4,7 @@
 # Rebuilds the knowledge graph, outputs vault stats, and reminds of ZED-First Principle.
 
 set -euo pipefail
+trap 'echo "ZED hook error: $BASH_COMMAND failed" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
@@ -17,8 +18,8 @@ fi
 
 export ZED_DATA_DIR="$DATA_DIR"
 
-# Rebuild graph index
-node "$PLUGIN_ROOT/bin/zed" rebuild >/dev/null 2>&1 || true
+# Rebuild graph index (graceful failure)
+node "$PLUGIN_ROOT/bin/zed" rebuild >/dev/null 2>&1 || echo "ZED: Graph rebuild failed — vault may need repair. Run: zed fix"
 
 # Output vault stats so Claude sees them at session start
 echo "=== ZED Session Start ==="
@@ -38,7 +39,7 @@ fi
 SOUL="$PLUGIN_ROOT/memory/ZED_SOUL.md"
 if [ -f "$SOUL" ]; then
   echo ""
-  head -30 "$SOUL"
+  head -30 "$SOUL" 2>/dev/null || echo "ZED: Soul document exists but could not be read."
 fi
 
 # ZED-First Principle reminder

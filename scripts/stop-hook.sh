@@ -11,6 +11,7 @@
 # Returns nothing or exits cleanly to allow stop
 
 set -euo pipefail
+trap 'echo "ZED hook error: $BASH_COMMAND failed" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
@@ -98,9 +99,8 @@ fi
 
 # If we have blocking reasons, block
 if [ -n "$REASONS" ]; then
-  # Escape for JSON
-  REASONS_ESCAPED=$(echo "$REASONS" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ')
-  printf '{"decision": "block", "reason": "%s"}\n' "$REASONS_ESCAPED"
+  # Use node for safe JSON construction (handles special characters)
+  ZED_REASONS="$REASONS" node -e "console.log(JSON.stringify({decision:'block',reason:process.env.ZED_REASONS}))"
   exit 0
 fi
 

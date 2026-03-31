@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+trap 'echo "ZED hook error: $BASH_COMMAND failed" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
