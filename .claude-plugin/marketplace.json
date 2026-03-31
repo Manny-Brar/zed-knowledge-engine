@@ -11,7 +11,7 @@
     {
       "name": "zed",
       "description": "ZED — Every prompt. Planned. Verified. Remembered. Knowledge engine + execution protocol for Claude Code with persistent knowledge graph, graph-boosted search, and structured decision records.",
-      "version": "7.5.0",
+      "version": "7.6.0",
       "author": {
         "name": "Manny Brar",
         "email": "dev@projectaurora.ai"

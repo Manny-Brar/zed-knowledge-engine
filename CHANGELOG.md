@@ -1,5 +1,29 @@
 # Changelog
 
+## v7.6.0 (2026-04-01)
+
+### Security & Hardening
+- PreToolUse circuit breaker — blocks execution at extreme drift (>40 edits, >12 files)
+- ERR traps on all 5 hook scripts
+- Comprehensive input validation: truncation, empty checks, path validation
+- Stop hook JSON output via node (immune to special characters)
+- Session-start graceful degradation on rebuild failure
+
+### Bug Fixes (Deep Gap Analysis — 21 findings)
+- 5 CRITICAL: Atomic writes everywhere, incrementalBuild in decide, TypeError in related decisions
+- 7 HIGH: Version sync, loop guards, wikilink perf (DB queries), git dir detection
+- 6 MEDIUM: Code fence wikilinks, YAML comments, layer abstraction, empty vault rebuild
+- 3 LOW: Wall-breaker hints, analytics optimization, merge YAML formatting
+- Schema migration resilience (column existence check on every startup)
+
+### Research
+- Claude Code source leak analysis (512K lines, KAIROS daemon, 44 feature flags)
+- Claude Code internals (37 system-reminders, 3-tier skill loading, PreToolUse patterns)
+
+### Testing
+- 213 total tests (52 core + 19 MCP + 94 CLI + 18 E2E + 30 eval)
+- 5 new input validation edge case tests
+
 ## v7.5.0 (2026-04-01)
 
 ### Bug Fixes (Gap Analysis — 18 findings resolved)
