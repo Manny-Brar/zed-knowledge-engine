@@ -32,6 +32,7 @@ import os from 'os';
 // Import CJS core engine
 const require = createRequire(import.meta.url);
 const KnowledgeEngine = require('../core/engine.cjs');
+const pkgVersion = require('../package.json').version;
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -91,7 +92,7 @@ function requireEngine() {
 
 const server = new McpServer({
   name: 'zed-knowledge-engine',
-  version: '6.2.0',
+  version: pkgVersion,
 });
 
 // ---------------------------------------------------------------------------
@@ -303,23 +304,20 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
 
       let resultText = `Note written: ${file_name}\nGraph updated.`;
 
-      // Auto-suggest wikilinks for the new note
+      // Auto-suggest wikilinks for the new note (H-6: use DB query instead of O(N) file reads)
       try {
         const suggestions = [];
-        const allNotes = engine.listNotes();
+        const allTitles = engine.graph.db.prepare('SELECT title, path FROM nodes').all();
         const bodyLower = content.toLowerCase();
+        const selfPath = path.join(VAULT_DIR, file_name.trim());
 
-        for (const notePath of allNotes) {
-          if (notePath === path.join(VAULT_DIR, file_name.trim())) continue; // skip self
-          try {
-            const note = engine.readNote(notePath);
-            if (!note || !note.title) continue;
-            const titleLower = note.title.toLowerCase();
-            // Check if the note body mentions this title (and doesn't already have a wikilink)
-            if (titleLower.length > 3 && bodyLower.includes(titleLower) && !content.includes(`[[${note.title}]]`)) {
-              suggestions.push(note.title);
-            }
-          } catch (e) { /* skip unreadable notes */ }
+        for (const row of allTitles) {
+          if (!row.title || row.path === selfPath) continue;
+          const titleLower = row.title.toLowerCase();
+          // Check if the note body mentions this title (and doesn't already have a wikilink)
+          if (titleLower.length > 3 && bodyLower.includes(titleLower) && !content.includes(`[[${row.title}]]`)) {
+            suggestions.push(row.title);
+          }
         }
 
         if (suggestions.length > 0) {
@@ -404,7 +402,7 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
 
       const notePath = path.join(VAULT_DIR, fileName);
       engine.writeNote(notePath, content);
-      engine.rebuild();
+      engine.incrementalBuild();
 
       // Increment capture counter in edit-tracker
       const trackerPathD = path.join(process.env.CLAUDE_PLUGIN_DATA || path.join(os.homedir(), '.zed-data'), 'edit-tracker.json');
@@ -421,9 +419,9 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
         const related = engine.searchNotes(title, 3);
         if (related.length > 1) { // >1 because the new note itself will match
           const relatedTitles = related
-            .filter(r => !r.path.includes(slug))
+            .filter(r => !r.node.path.includes(slug))
             .slice(0, 3)
-            .map(r => r.title);
+            .map(r => r.node.title);
           if (relatedTitles.length > 0) {
             resultText += `\n\nRelated decisions: ${relatedTitles.map(t => `[[${t}]]`).join(', ')}`;
           }

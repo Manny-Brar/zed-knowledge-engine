@@ -452,7 +452,9 @@ const commands = {
       if (append) {
         const existing = fs.readFileSync(notePath, 'utf-8');
         const timeStamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-        fs.writeFileSync(notePath, existing + `\n\n**${timeStamp}** — ${append}\n`, 'utf-8');
+        const tmpPath = notePath + '.tmp.' + process.pid;
+        fs.writeFileSync(tmpPath, existing + `\n\n**${timeStamp}** — ${append}\n`, 'utf-8');
+        fs.renameSync(tmpPath, notePath);
         engine.incrementalBuild();
         return output(jsonMode ? { action: 'appended', file: fileName } : `Appended to ${fileName}`);
       }
@@ -698,7 +700,9 @@ const commands = {
       }
       fullContent += note.content || '';
 
-      fs.writeFileSync(targetPath, fullContent);
+      const tmpPath = targetPath + '.tmp.' + process.pid;
+      fs.writeFileSync(tmpPath, fullContent);
+      fs.renameSync(tmpPath, targetPath);
     }
 
     // Rebuild graph to pick up new notes
@@ -1425,7 +1429,16 @@ Object.assign(commands, {
     }
 
     const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
-    const next = features.find(f => f.status === 'pending' || f.status === 'in_progress');
+
+    // H-5: If a feature is already in_progress, return it instead of starting a new one
+    const alreadyInProgress = features.find(f => f.status === 'in_progress');
+    if (alreadyInProgress) {
+      if (jsonMode) console.log(JSON.stringify({ next: alreadyInProgress }));
+      else console.log(`Feature already in progress (#${alreadyInProgress.id}): ${alreadyInProgress.description}`);
+      return;
+    }
+
+    const next = features.find(f => f.status === 'pending');
 
     if (!next) {
       if (jsonMode) console.log(JSON.stringify({ next: null, reason: 'all features complete' }));
@@ -1433,7 +1446,7 @@ Object.assign(commands, {
       return;
     }
 
-    // Mark as in_progress
+    // H-4: Only increment when transitioning from pending to in_progress
     next.status = 'in_progress';
     next.attempts++;
     fs.writeFileSync(featuresPath, JSON.stringify(features, null, 2));
@@ -1509,7 +1522,9 @@ Object.assign(commands, {
             const title = note.title || path.basename(notePath, '.md');
             content = `---\ntitle: "${title}"\ntags: [untagged]\n---\n\n${content}`;
           }
-          fs.writeFileSync(notePath, content, 'utf-8');
+          const tmpPath = notePath + '.tmp.' + process.pid;
+          fs.writeFileSync(tmpPath, content, 'utf-8');
+          fs.renameSync(tmpPath, notePath);
           fixed.push({ type: 'missing-tags', note: path.basename(notePath, '.md'), action: 'added tag "untagged"' });
         }
       } catch { /* skip unreadable notes */ }
@@ -1576,7 +1591,9 @@ Object.assign(commands, {
               '_Stub note created by `zed fix`. Add content here._',
               '',
             ].join('\n');
-            fs.writeFileSync(stubPath, stubContent, 'utf-8');
+            const tmpStubPath = stubPath + '.tmp.' + process.pid;
+            fs.writeFileSync(tmpStubPath, stubContent, 'utf-8');
+            fs.renameSync(tmpStubPath, stubPath);
             fixed.push({ type: 'broken-wikilink', note: cleanTarget, action: 'created stub note' });
           }
         }
@@ -1606,7 +1623,9 @@ Object.assign(commands, {
         ...orphanLinks,
         '',
       ].join('\n');
-      fs.writeFileSync(indexPath, indexContent, 'utf-8');
+      const tmpIndexPath = indexPath + '.tmp.' + process.pid;
+      fs.writeFileSync(tmpIndexPath, indexContent, 'utf-8');
+      fs.renameSync(tmpIndexPath, indexPath);
       for (const o of orphans) {
         fixed.push({ type: 'orphan-note', note: o.title, action: `linked from index ${date}` });
       }
