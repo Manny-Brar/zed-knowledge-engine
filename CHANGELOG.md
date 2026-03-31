@@ -1,5 +1,13 @@
 # Changelog
 
+## v7.5.0 (2026-04-01)
+
+### Bug Fixes (Gap Analysis — 18 findings resolved)
+- 5 CRITICAL: Atomic writes for merge/fix/daily commands, incrementalBuild in decide, TypeError in related decisions
+- 7 HIGH: Version string sync, loop-next double-increment guard, wikilink suggestion perf (DB vs file reads), git dir detection
+- 6 MEDIUM/CONSISTENCY: Code fence wikilinks, YAML inline comments, layer abstraction (getAllTags), empty vault rebuild, search limit, import traversal reporting
+- Schema migration resilience (always verify column existence)
+
 ## v7.4.0 (2026-03-25)
 
 ### New Features

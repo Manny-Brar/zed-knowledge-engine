@@ -670,7 +670,11 @@ const commands = {
         // Skip if content is identical
         const existing = fs.readFileSync(targetPath, 'utf8');
         const incoming = note.frontmatter
-          ? `---\n${Object.entries(note.frontmatter).map(([k,v]) => `${k}: ${JSON.stringify(v)}`).join('\n')}\n---\n\n${note.content}`
+          ? `---\n${Object.entries(note.frontmatter).map(([k,v]) => {
+              if (Array.isArray(v)) return `${k}: [${v.join(', ')}]`;
+              if (typeof v === 'string' && (v.includes(':') || v.includes('"'))) return `${k}: "${v.replace(/"/g, '\\"')}"`;
+              return `${k}: ${v}`;
+            }).join('\n')}\n---\n\n${note.content}`
           : note.content;
         if (existing.trim() === incoming.trim()) {
           skipped++;
@@ -693,6 +697,8 @@ const commands = {
         for (const [key, value] of Object.entries(note.frontmatter)) {
           if (Array.isArray(value)) {
             fullContent += `${key}: [${value.join(', ')}]\n`;
+          } else if (typeof value === 'string' && (value.includes(':') || value.includes('"'))) {
+            fullContent += `${key}: "${value.replace(/"/g, '\\"')}"\n`;
           } else {
             fullContent += `${key}: ${value}\n`;
           }
@@ -961,18 +967,24 @@ const commands = {
     const notes = engine.listNotes();
     const tags = engine.getAllTags();
 
-    // Group notes by date and type
+    // Single-pass: group notes by date, type, and detect stale notes
     const byDate = {};
     const byType = {};
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    const staleNotes = [];
     for (const notePath of notes) {
       try {
         const note = engine.readNote(notePath);
+        const stat = fs.statSync(notePath);
         const date = note.frontmatter?.date
           ? String(note.frontmatter.date).slice(0, 10)
-          : new Date(fs.statSync(notePath).mtime).toISOString().slice(0, 10);
+          : new Date(stat.mtime).toISOString().slice(0, 10);
         byDate[date] = (byDate[date] || 0) + 1;
         const type = note.frontmatter?.type || 'note';
         byType[type] = (byType[type] || 0) + 1;
+        if (stat.mtimeMs < thirtyDaysAgo) {
+          staleNotes.push({ title: note.title || path.basename(notePath), path: notePath, age: Math.floor((Date.now() - stat.mtimeMs) / (24 * 60 * 60 * 1000)) });
+        }
       } catch (e) { /* skip unreadable */ }
     }
 
@@ -1001,19 +1013,6 @@ const commands = {
     const clusters = engine.getClusters();
     const hubsWithLinks = allHubs.filter(h => h.backlink_count > 0).length;
     const healthResult = computeHealthScore(stats, clusters.length, hubsWithLinks);
-
-    // Freshness: stale note detection
-    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const staleNotes = [];
-    for (const notePath of notes) {
-      try {
-        const stat = fs.statSync(notePath);
-        if (stat.mtimeMs < thirtyDaysAgo) {
-          const note = engine.readNote(notePath);
-          staleNotes.push({ title: note.title || path.basename(notePath), path: notePath, age: Math.floor((Date.now() - stat.mtimeMs) / (24 * 60 * 60 * 1000)) });
-        }
-      } catch (e) { /* skip */ }
-    }
     const freshCount = notes.length - staleNotes.length;
 
     if (jsonMode) {

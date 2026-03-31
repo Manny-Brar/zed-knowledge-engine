@@ -128,7 +128,7 @@ These triggers are algorithmic. When the condition is met, the action is MANDATO
 | compound-learner | Task complete | MUST extract pattern or anti-pattern |
 | evolve-mode | `/evolve` active | MUST check loop state and drift score |
 | behavior-controller | Every prompt | MUST determine mode and apply rules |
-| wall-breaker | Execution blocked by error, unknown, or design conflict | MUST classify wall type and follow research protocol |
+| wall-breaker | Error/crash=ERROR, unknown API/tech=KNOWLEDGE, multiple approaches=DESIGN, missing package=DEPENDENCY, too complex=COMPLEXITY | MUST classify wall type and follow structured research protocol |
 | onboarding | Vault empty (<3 notes) or first session with ZED | MUST run first-session setup flow |
 
 ---
