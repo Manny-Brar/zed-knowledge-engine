@@ -431,7 +431,7 @@ const commands = {
     const query = commandArgs.join(' ');
     if (!query) error('Usage: zed snippets <query>');
     const engine = getEngine();
-    const results = engine.searchWithSnippets(query, { limit: 5 });
+    const results = engine.searchWithSnippets(query, { limit: 10 });
     if (jsonMode) return output({ query, results });
     if (results.length === 0) return output(`No results for "${query}"`);
     const lines = results.map((r, i) => {
@@ -568,14 +568,14 @@ const commands = {
     const targetDir = path.join(VAULT_DIR, subdir);
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
-    let imported = 0, skipped = 0;
+    let imported = 0, skipped = 0, blocked = 0;
     const resolvedVaultDir = path.resolve(VAULT_DIR);
     for (const sourceFile of sourceFiles) {
       const relativeName = path.relative(resolvedSource, sourceFile);
       const targetFile = path.join(targetDir, relativeName);
       // Path traversal guard: ensure target stays within vault
       const resolvedTarget = path.resolve(targetFile);
-      if (!resolvedTarget.startsWith(resolvedVaultDir + path.sep)) { skipped++; continue; }
+      if (!resolvedTarget.startsWith(resolvedVaultDir + path.sep)) { blocked++; continue; }
       if (fs.existsSync(targetFile)) { skipped++; continue; }
 
       const targetParent = path.dirname(targetFile);
@@ -594,7 +594,8 @@ const commands = {
 
     const engine = getEngine();
     engine.incrementalBuild();
-    output(jsonMode ? { imported, skipped, source: resolvedSource, target: targetDir } : `Imported ${imported} files (${skipped} skipped)`);
+    if (blocked > 0 && !jsonMode) console.log(`  Blocked: ${blocked} (path traversal attempt)`);
+    output(jsonMode ? { imported, skipped, blocked, source: resolvedSource, target: targetDir } : `Imported ${imported} files (${skipped} skipped)`);
   },
 
   export() {

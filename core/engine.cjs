@@ -300,15 +300,7 @@ class KnowledgeEngine {
    * @returns {Map<string, number>} tag -> count
    */
   getAllTags() {
-    const allNodes = this.graph.db.prepare('SELECT tags FROM nodes').all();
-    const tagCounts = new Map();
-    for (const node of allNodes) {
-      try {
-        const tags = JSON.parse(node.tags || '[]');
-        for (const t of tags) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
-      } catch {}
-    }
-    return tagCounts;
+    return this.graph.getAllTags();
   }
 
   // -------------------------------------------------------------------------

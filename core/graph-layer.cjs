@@ -277,8 +277,14 @@ class GraphLayer {
       }
     }
 
-    // If too many changes (>30%), just do a full rebuild
     const totalFiles = files.length;
+
+    // Empty vault with no prior files — nothing to do
+    if (totalFiles === 0 && storedMeta.size === 0) {
+      return { nodeCount: 0, edgeCount: 0, mode: 'none', changedFiles: 0 };
+    }
+
+    // If too many changes (>30%), just do a full rebuild
     if (changed.length + deleted.size > totalFiles * 0.3 || totalFiles === 0) {
       const result = this.buildGraph(vaultPath, opts);
       return { ...result, mode: 'full', changedFiles: changed.length };
@@ -580,6 +586,24 @@ class GraphLayer {
       }
     }
     this.db.prepare('INSERT INTO schema_version (version, migrated_at) VALUES (?, ?)').run(toVersion, new Date().toISOString());
+  }
+
+  /**
+   * Get all tags across the vault with their occurrence counts.
+   * @returns {Map<string, number>} tag -> count
+   */
+  getAllTags() {
+    const rows = this.db.prepare('SELECT tags FROM nodes').all();
+    const tagMap = new Map();
+    for (const row of rows) {
+      try {
+        const tags = JSON.parse(row.tags || '[]');
+        for (const tag of tags) {
+          tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
+        }
+      } catch (e) { /* skip */ }
+    }
+    return tagMap;
   }
 
   /**

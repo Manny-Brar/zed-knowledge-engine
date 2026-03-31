@@ -58,7 +58,8 @@ function parseFrontmatter(content) {
     const kvMatch = line.match(/^(\w[\w\s-]*):\s*(.*)/);
     if (kvMatch) {
       const key = kvMatch[1].trim();
-      const rawVal = kvMatch[2].trim();
+      // Strip inline YAML comments
+      let rawVal = kvMatch[2].trim().replace(/\s+#\s.*$/, '');
       currentKey = key;
 
       if (rawVal === '') {
@@ -105,11 +106,14 @@ function parseFrontmatter(content) {
 function parseWikilinks(content) {
   if (!content || typeof content !== 'string') return [];
 
+  // Strip code fences before parsing wikilinks
+  const contentNoCode = content.replace(/```[\s\S]*?```/g, '').replace(/`[^`]+`/g, '');
+
   const results = [];
   const regex = /\[\[([^\]]+)\]\]/g;
   let match;
 
-  while ((match = regex.exec(content)) !== null) {
+  while ((match = regex.exec(contentNoCode)) !== null) {
     const inner = match[1];
     const raw = match[0];
 
