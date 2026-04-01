@@ -86,14 +86,57 @@ if [ "$DRIFT" -ge 7 ]; then
   REASONS="${REASONS}DRIFT DETECTED (score $DRIFT/10): You are drifting. Re-read the objective at $OBJECTIVE. Confirm your current work directly serves it. If not, course-correct before continuing. "
 fi
 
-# Gate 4: If max iterations not reached, inject next iteration prompt
+# Check cron mode state
+CRON_STATE="$LOOP_DIR/cron-state.json"
+CRON_ACTIVE="false"
+if [ -f "$CRON_STATE" ]; then
+  CRON_ACTIVE=$(ZED_CRON="$CRON_STATE" node -e "try{const s=JSON.parse(require('fs').readFileSync(process.env.ZED_CRON,'utf8'));console.log(s.active?'true':'false')}catch(e){console.log('false')}")
+fi
+
+# Read scope boundary for enforcement
+SCOPE_BOUNDARY="$LOOP_DIR/scope-boundary.md"
+SCOPE_VIOLATION=""
+if [ -f "$SCOPE_BOUNDARY" ] && [ -f "$TRACKER" ]; then
+  # Check if any edited files are outside scope boundary
+  SCOPE_VIOLATION=$(ZED_TRACKER="$TRACKER" ZED_SCOPE="$SCOPE_BOUNDARY" node -e "
+    try {
+      const t = JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER, 'utf8'));
+      const scope = require('fs').readFileSync(process.env.ZED_SCOPE, 'utf8');
+      const files = t.files || [];
+      const outOfScope = files.filter(f => !scope.includes(f));
+      if (outOfScope.length > 0) {
+        console.log('OUT_OF_SCOPE: ' + outOfScope.join(', '));
+      }
+    } catch(e) {}
+  ")
+fi
+
+# Gate 4a: Scope violation check
+if [ -n "$SCOPE_VIOLATION" ]; then
+  REASONS="${REASONS}SCOPE VIOLATION: Files edited outside scope-boundary.md: $SCOPE_VIOLATION. Re-read the objective and scope boundary. Revert out-of-scope changes or justify adding these files to scope-boundary.md. "
+  DRIFT=$((DRIFT + 3))
+fi
+
+# Gate 4: If max iterations not reached OR cron mode active, inject next iteration prompt
+SHOULD_CONTINUE="false"
 if [ "$MAX_ITERATIONS" -gt 0 ] && [ "$ITERATION" -lt "$MAX_ITERATIONS" ]; then
+  SHOULD_CONTINUE="true"
+elif [ "$MAX_ITERATIONS" -eq 0 ]; then
+  # Unlimited iterations — always continue unless objective completed
+  SHOULD_CONTINUE="true"
+fi
+
+if [ "$SHOULD_CONTINUE" = "true" ]; then
   if [ -z "$REASONS" ]; then
     # No blocking reasons, but loop isn't done — inject next iteration
     # Read objective for re-anchoring
     OBJ_TITLE=$(ZED_OBJECTIVE="$OBJECTIVE" node -e "try{const c=require('fs').readFileSync(process.env.ZED_OBJECTIVE,'utf8');const m=c.match(/^title:\\s*[\"']?(.+?)[\"']?$/m);console.log(m?m[1]:'(unknown)')}catch(e){console.log('(unknown)')}")
 
-    REASONS="EVOLVE LOOP ACTIVE (iteration $ITERATION/$MAX_ITERATIONS). Continue working toward: $OBJ_TITLE. Steps: (1) Re-read objective at $OBJECTIVE, (2) Read progress at $PROGRESS, (3) Search vault for relevant prior work, (4) Research best practices for next task, (5) Execute one unit of work, (6) Run tests, (7) Capture knowledge, (8) Write handoff, (9) Run 'zed loop-tick' to advance iteration. "
+    if [ "$CRON_ACTIVE" = "true" ]; then
+      REASONS="EVOLVE CRON LOOP ACTIVE (iteration $ITERATION). Continue working toward: $OBJ_TITLE. CRON MODE: After completing this iteration, sleep 180 seconds, then start next iteration. Steps: (1) Re-read objective at $OBJECTIVE, (2) Re-read scope boundary at $SCOPE_BOUNDARY, (3) Use 5-Level ULTRATHINK to select highest-impact next task within scope, (4) Verify task passes scope-lock sentence: 'This action achieves [objective] by [mechanism]', (5) Execute one unit of work (IMPLEMENT/FIX/TEST/HARDEN/OPTIMIZE/DOCUMENT only), (6) Run tests, (7) Capture knowledge, (8) Write handoff, (9) Run 'zed loop-tick' to advance iteration, (10) Run evolve-cron.sh tick, (11) Sleep 180 seconds, (12) Check cron-state.json — if still active, begin next iteration. "
+    else
+      REASONS="EVOLVE LOOP ACTIVE (iteration $ITERATION$([ "$MAX_ITERATIONS" -gt 0 ] && echo "/$MAX_ITERATIONS")). Continue working toward: $OBJ_TITLE. Steps: (1) Re-read objective at $OBJECTIVE, (2) Re-read scope boundary at $SCOPE_BOUNDARY, (3) Use 5-Level ULTRATHINK to select highest-impact next task within scope, (4) Verify task passes scope-lock sentence: 'This action achieves [objective] by [mechanism]', (5) Execute one unit of work (IMPLEMENT/FIX/TEST/HARDEN/OPTIMIZE/DOCUMENT only), (6) Run tests, (7) Capture knowledge, (8) Write handoff, (9) Run 'zed loop-tick' to advance iteration. "
+    fi
   fi
 fi
 

@@ -113,9 +113,39 @@ Run a scoped, autonomous loop that works toward an objective:
 ```
 /zed:evolve "harden the test suite"
 /zed:evolve "refactor the payment module" --max 10
+/zed:evolve "optimize API performance" --cron
+/zed:evolve "security audit and hardening" --cron --max 20
 ```
 
 Each iteration: do one unit of work, check progress, drift-check against the objective. Survives conversation death — `/zed:evolve --resume` picks up where it left off.
+
+#### Cron mode (`--cron`)
+
+When `--cron` is active, the loop runs on a **3-minute recurring cycle**. After each iteration completes, ZED waits 3 minutes, then automatically starts the next iteration. The loop keeps running — improving, enhancing, fixing gaps, hardening security, and testing — until you stop it:
+
+```
+/zed:evolve --stop
+```
+
+Cron mode is ideal for overnight improvement runs or sustained hardening sessions.
+
+#### ULTRATHINK task selection
+
+After every iteration, ZED uses **5-Level ULTRATHINK** analysis to select the highest-impact next task:
+
+1. **Standard** — What gaps remain vs the objective?
+2. **Deep** — What edge cases, security holes, or test gaps exist?
+3. **Adversarial** — What would a hostile reviewer or attacker find wrong?
+4. **Meta** — Am I drifting from the original objective? Is this the highest-impact next action?
+5. **Compound** — What did I learn from previous iterations that applies here?
+
+#### Scope-hard-lock
+
+Every evolve iteration is locked to the original objective. ZED enforces this through:
+- **Action justification** — every edit must complete: "This achieves [objective] by [mechanism]"
+- **File boundary** — only files declared in `scope-boundary.md` may be edited
+- **Task category lock** — every task must be IMPLEMENT, FIX, TEST, HARDEN, OPTIMIZE, or DOCUMENT
+- **Drift detection** — circuit breaker triggers at drift score >= 7/10
 
 ### Everything else
 
@@ -206,6 +236,21 @@ Simple tasks skip gates 2-3. The engine is enforced by the Stop hook in evolve m
 
 ---
 
+## Peak performance tips
+
+ZED is optimized for Claude Code's actual behavior patterns:
+
+| Technique | What it does | Impact |
+|-----------|-------------|--------|
+| **Auto-compact at 50%** | ZED triggers `/compact` before the "dumb zone" (60-70% context usage where Claude degrades) | Prevents quality collapse on long sessions |
+| **Back-pressure gates** | Tests MUST pass before advancing — no "fix it later" | Catches bugs at creation time, not debug time |
+| **Subagent isolation** | Research and validation run in separate context windows | Keeps main context clean for execution |
+| **Scope-hard-lock** | Every evolve edit must justify against the objective | Prevents drift during autonomous loops |
+| **ULTRATHINK planning** | 5-level analysis (standard → adversarial → compound) | Better task selection, fewer dead-end iterations |
+| **Skills over CLAUDE.md** | ZED skills load on-demand, not every session | Lower token overhead, more context for actual work |
+
+---
+
 ## Under the hood
 
 **4 MCP tools** — Claude calls these automatically:
@@ -233,9 +278,11 @@ zed export         zed merge <file>         zed diff [hours]
 
 Add `--json` to any command for structured output.
 
-**9 behavioral skills** — loaded automatically, govern Claude's behavior.
+**9 behavioral skills** — loaded on-demand, govern Claude's behavior (context-efficient: only loaded when triggered, unlike CLAUDE.md which loads every session).
 
 **1 injected protocol** — `prompts/zed-protocol.md` is loaded at session start, not on demand.
+
+**1 cron engine** — `evolve-cron.sh` manages recurring 3-minute iteration cycles for autonomous improvement loops.
 
 ---
 

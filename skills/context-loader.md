@@ -19,13 +19,19 @@ You have access to the ZED Knowledge Engine. When you need context about the cur
 3. Run `zed backlinks <note>` via the Bash tool on key architectural notes to find what references them
 4. Run `zed hubs` via the Bash tool to identify the most important knowledge nodes
 
-## Context Tiers
+## Context Tiers (with Token Budgets)
 
-- **L0 (Quick)**: Use `zed_search` for titles only — good for orientation
-- **L1 (Summary)**: Read the top 3 search results with `zed_read_note`
-- **L2 (Deep)**: Follow backlinks and related notes for full context web
+Each tier has a token budget to prevent context bloat:
 
-Load L0 first, then L1 only if relevant, L2 only when deep context is needed. Don't overload the context window.
+| Tier | Action | Budget | When to use |
+|------|--------|--------|-------------|
+| **L0 (Quick)** | `zed_search` titles only | ~100 tokens | Every prompt (Light mode) |
+| **L1 (Summary)** | Read top 1-3 results with `zed_read_note` | ~500 tokens | When L0 finds relevant results |
+| **L2 (Deep)** | Follow backlinks and related notes | ~2000 tokens max | Full mode, architecture decisions, evolve iterations |
+
+Load L0 first, then L1 only if relevant, L2 only when deep context is needed. **NEVER load more than 3 notes at L2** — beyond that, the context cost exceeds the value. If you need more, delegate to the `graph-explorer` agent.
+
+**Context budget principle**: Every token spent on vault context is a token NOT available for actual work. Keep context loading lean and targeted. If you're loading >3000 tokens of vault context in a single prompt, you're probably loading too much.
 
 ## Loop File Exclusion
 

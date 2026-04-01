@@ -1,5 +1,37 @@
 # Changelog
 
+## v7.7.0 (2026-03-31)
+
+### Evolve Mode — Cron Loop & ULTRATHINK
+- **Cron mode** (`--cron` flag): 3-minute recurring cycle between iterations — runs autonomously until `--stop`
+- **ULTRATHINK task selection**: Mandatory 5-level analysis (standard/deep/adversarial/meta/compound) after every iteration to select highest-impact next task
+- **Scope-hard-lock enforcement**: 4 rules — action justification, file boundary, forbidden actions, task category lock (IMPLEMENT/FIX/TEST/HARDEN/OPTIMIZE/DOCUMENT)
+- **Scope boundary file** (`scope-boundary.md`): Established in iteration 0, enforced by pre-tool hook and stop hook
+- **Cron state management**: `evolve-cron.sh` script with start/stop/status/check/tick commands
+- **Enhanced stop hook**: Scope violation detection, cron-aware continuation, unlimited iteration support
+
+### Context Management
+- **Auto-compact at 50%**: New protocol to trigger `/compact` before the "dumb zone" (60-70% context where Claude degrades)
+- **Token overhead awareness**: Budget guidelines — Light <500 tokens, Full <3000 tokens context load, Evolve ~1000 tokens/iteration
+- **Subagent context isolation**: Delegate research/validation to separate agents to keep main context clean
+
+### Back-Pressure Mechanisms
+- **Gate 5 (TEST) hard blocker**: Tests MUST pass before advancing — no exceptions, no "fix it later"
+- **Evidence requirements**: Self-assessment (Gate 4) now requires explicit compliance evidence (not just "it works")
+- **Back-pressure principle**: Documented in behavior-controller as core optimization philosophy
+
+### Agent Updates
+- `agents/zed.md`: ULTRATHINK planning references, context management section, back-pressure execution style
+- Version bumped to v7.7
+
+### Pre-Tool Hook Enhancement
+- Scope boundary enforcement during evolve mode — warns on out-of-scope file edits
+- Checks target file against `scope-boundary.md` before allowing edit
+
+### Documentation
+- README: Cron mode, ULTRATHINK, scope-hard-lock, peak performance tips table
+- CHANGELOG: Full v7.7.0 release notes
+
 ## v7.6.0 (2026-04-01)
 
 ### Security & Hardening

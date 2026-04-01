@@ -133,6 +133,43 @@ These triggers are algorithmic. When the condition is met, the action is MANDATO
 
 ---
 
+### Context Budget Management
+
+Claude Code's context window degrades at 60-70% usage (the "dumb zone" — Claude starts ignoring instructions, dropping context, and producing lower quality output). ZED MUST actively manage context budget.
+
+**Auto-Compact Protocol:**
+1. When context usage reaches ~50%, proactively run `/compact` to compress conversation history BEFORE the dumb zone hits
+2. Before compacting, flush any unsaved knowledge to the vault (the PreCompact hook assists with this)
+3. After compacting, re-anchor on the current task by re-reading the most recent vault context
+
+**Token Overhead Awareness:**
+- ZED skills load on-demand (more token-efficient than CLAUDE.md which loads every session)
+- In Light mode, keep total ZED overhead under 500 tokens per prompt
+- In Full mode, limit L2 context loading to 3 vault notes maximum unless the task explicitly requires more
+- In Evolve mode, the objective + scope-boundary + handoff are loaded each iteration (~1000 tokens) — this is acceptable overhead for structured execution
+- NEVER load the entire vault into context. Use targeted searches, not broad dumps.
+
+**Subagent Context Isolation:**
+- When delegating to subagents (zed-planner, zed-validator, zed-researcher), each gets its own clean context window
+- Use subagents for research-heavy or validation-heavy tasks to prevent intermediate noise from polluting the main execution context
+- Subagent results should be summarized before being consumed by the main agent — not dumped raw
+
+---
+
+### Back-Pressure Principle
+
+The single highest-leverage optimization for Claude Code quality is **back-pressure**: mechanisms that let the agent verify its own work.
+
+ZED enforces back-pressure through:
+1. **Tests as hard gates** — Gate 5 (TEST) in the execution protocol BLOCKS further progress if tests fail. No exceptions.
+2. **Self-assessment before completion** — Gate 4 requires re-reading the original request and checking against it
+3. **Verification evidence** — Every gate transition requires explicit evidence that the prior gate passed (test output, diff review, etc.)
+4. **Drift detection** — The stop hook calculates drift score and circuit-breaks on excessive deviation
+
+Without back-pressure, Claude Code writes code that "looks right" but fails in practice. With back-pressure, it writes code that actually works.
+
+---
+
 ### Rules
 
 1. Light mode overhead MUST NOT degrade response speed for simple tasks. If the bailout check says skip, skip immediately.
@@ -140,3 +177,5 @@ These triggers are algorithmic. When the condition is met, the action is MANDATO
 3. Write quality over write quantity — a vault full of noise is worse than an empty vault.
 4. The bar for persistence is: "Would re-deriving this cost significant time or risk getting it wrong?" If yes, capture. If no, skip.
 5. Every captured note MUST have a clear title, at least 2 tags, and enough context for a future session to act on it.
+6. MUST monitor context usage and trigger `/compact` at ~50% — do NOT wait for automatic compaction in the dumb zone.
+7. MUST use subagent delegation for tasks that would add >5000 tokens of intermediate output to the main context.

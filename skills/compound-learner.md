@@ -12,6 +12,8 @@ You have access to the ZED Knowledge Engine. After completing significant work, 
 - After making an architecture decision
 - After a debugging session that revealed something unexpected
 - When the user explicitly asks to capture learnings
+- **In Evolve mode**: After every iteration's ULTRATHINK analysis reveals a reusable insight
+- **After back-pressure catches a bug**: When Gate 5 (TEST) catches a failure that self-assessment (Gate 4) missed — capture why the assessment missed it
 
 ## What to Extract
 
@@ -46,3 +48,5 @@ If a significant decision was made, use `zed_decide` to create an ADR.
 - Be specific — "use transactions for multi-step DB operations" not "be careful with databases"
 - Include the WHY, not just the WHAT
 - Link to related knowledge with [[wikilinks]] to strengthen the graph
+- **Compound test**: Before saving, ask "Would re-deriving this cost >5 minutes?" If no, don't save — it's noise.
+- **ULTRATHINK extraction**: When saving from an evolve iteration, tag with the ULTRATHINK level that revealed it (e.g., `[adversarial-finding]` for Level 3 discoveries)

@@ -69,17 +69,19 @@ Required for Tier 3. Optional for Tier 2 if unknowns were identified in Gate 1.
 2. Single-feature focus — do NOT touch unrelated code
 3. For Tier 3: checkpoint every significant change (brief status update)
 
-## Gate 4: SELF-ASSESS
+## Gate 4: SELF-ASSESS (Back-Pressure Checkpoint)
 
-Required for all tiers (quick check for Tier 1, thorough for Tier 2+).
+Required for all tiers (quick check for Tier 1, thorough for Tier 2+). This gate exists to catch problems BEFORE tests run — it's cheaper to fix issues found by re-reading than by debugging test failures.
 
 ### Tier 1:
 - Does the output match what was asked?
+- **Evidence**: State the original request and how the implementation satisfies it.
 
 ### Tier 2:
 - Re-read the original request. Does the work match?
 - Are there edge cases I missed?
 - Did I violate any anti-patterns from the vault?
+- **Evidence**: List each requirement and its corresponding implementation (file:line).
 
 ### Tier 3:
 - Re-read the original request word by word. Does every requirement have a corresponding change?
@@ -88,17 +90,22 @@ Required for all tiers (quick check for Tier 1, thorough for Tier 2+).
 - What would a hostile code reviewer flag?
 - What assumptions am I making that could be wrong?
 - Fix ALL identified gaps before proceeding.
+- **Evidence**: Produce a compliance table mapping each requirement to implementation evidence.
 
-## Gate 5: TEST
+## Gate 5: TEST (HARD BLOCKER — NO EXCEPTIONS)
 
-Required for Tier 2 and Tier 3.
+Required for Tier 2 and Tier 3. This is a **back-pressure gate**: it BLOCKS all forward progress until tests pass.
 
 1. Run all relevant tests
 2. If tests fail: fix and re-run. Do NOT proceed with failing tests.
-3. For Tier 3: run the full test suite, not just related tests
-4. For Tier 3: use the `zed-validator` agent for adversarial review
+3. **HARD RULE**: You CANNOT advance to Gate 6 with ANY failing test. Not "we'll fix it later." Not "it's a flaky test." Fix it NOW or roll back the change that broke it.
+4. For Tier 3: run the full test suite, not just related tests
+5. For Tier 3: use the `zed-validator` agent for adversarial review
+6. If no tests exist for the changed code: write at least one test that validates the change before proceeding
 
-**Output:** Test results (pass/fail counts). If all pass, proceed. If any fail, fix and re-test.
+**Output:** Test results (pass/fail counts) as evidence. Copy the actual test output — do not summarize "tests pass" without evidence. If all pass, proceed. If any fail, fix and re-test.
+
+**Back-pressure rationale:** Tests are the single highest-leverage quality mechanism. Without hard test gates, Claude writes plausible-looking code that silently fails in practice. The gate forces self-verification.
 
 ## Gate 6: CAPTURE (Execution → Memory)
 

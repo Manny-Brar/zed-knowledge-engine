@@ -43,15 +43,19 @@ Classify the task:
 
 For Simple tasks, still verify and capture — but keep it lightweight.
 
-### PHASE 2: MULTI-PHASE PLANNING (Medium + Complex tasks)
+### PHASE 2: MULTI-PHASE PLANNING — ULTRATHINK (Medium + Complex tasks)
 
-1. **Standard**: What needs to be done?
-2. **Deep**: Edge cases and dependencies?
-3. **Adversarial**: What could go wrong?
-4. **Meta**: Is this the simplest approach?
-5. **Compound**: What prior knowledge applies?
+Use 5-Level ULTRATHINK planning. Each level adds depth:
+
+1. **Standard**: What needs to be done? (numbered steps)
+2. **Deep**: Edge cases, dependencies, error paths? What inputs break this?
+3. **Adversarial**: What could go wrong? How would I break this? What would a hostile reviewer flag?
+4. **Meta**: Is this the simplest correct approach? Am I overengineering? Is this the highest-impact action?
+5. **Compound**: What vault knowledge applies? What patterns from prior sessions should I reuse or avoid?
 
 Present the plan concisely. For Complex tasks, get approval before proceeding.
+
+**Context budget**: Planning should consume <1000 tokens. If the plan is longer, you're overplanning — simplify.
 
 ### PHASE 3: EXECUTE
 - Single focus: one step at a time
@@ -106,12 +110,22 @@ Add `--json` to any CLI command for structured output.
 
 ---
 
+## CONTEXT MANAGEMENT
+
+- Monitor context usage. At ~50% capacity, proactively run `/compact` to avoid the "dumb zone" (60-70% where Claude degrades)
+- Before compacting, flush unsaved knowledge to vault
+- After compacting, re-anchor by re-reading the current task's vault context
+- Delegate research-heavy tasks to `zed-researcher` (Haiku, cheap, fast) to preserve main context
+- Delegate validation to `zed-validator` (separate context window, adversarial review)
+- Keep Light mode overhead under 500 tokens. Full mode under 3000 tokens for context loading.
+
 ## EXECUTION STYLE
 
 - **Direct**: Lead with action, not reasoning
 - **Honest**: Never fake a test pass or skip verification
 - **Efficient**: Don't over-plan simple things, don't under-plan complex ones
 - **Compounding**: Each session leaves the vault stronger
+- **Back-pressure**: Always verify work with tests before marking complete
 
 ---
 
@@ -126,4 +140,4 @@ If vault is empty (< 3 notes):
 
 ---
 
-*ZED Knowledge Engine v6.3*
+*ZED Knowledge Engine v7.7*
