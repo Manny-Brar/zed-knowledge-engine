@@ -55,13 +55,33 @@ Required for Tier 3. Optional for Tier 2 if unknowns were identified in Gate 1.
 
 1. Search vault FIRST for each unknown — `zed_search` with specific terms
 2. If vault has the answer, use it. Do NOT web search for things you already know.
-3. For genuine unknowns: web search for best practices, documentation, approach comparisons
-4. Save significant research findings to vault immediately via `zed_write_note`:
-   - File: `research/YYYY-MM-DD-<topic-slug>.md`
-   - Tags: `[research, <domain>]`
-   - Include: what was searched, what was found, how it applies
+3. For genuine unknowns:
+   - **v8.0 preferred path**: `zed_clip <url>` the canonical source into `raw/`
+     (docs, papers, blog posts, GitHub READMEs), then follow the
+     `wiki-compiler` skill to author a `wiki/` entry with `source_paths`.
+     This persists the knowledge for future sessions and makes it
+     searchable via `zed_search`.
+   - Fallback: plain web search when clipping isn't needed (quick lookups).
+4. Save significant research findings to vault immediately. Prefer the
+   raw/wiki/ flow over ad-hoc `research/` notes — it's more structured
+   and the compile loop maintains `index.md` automatically.
 
-**Output:** Updated plan with unknowns resolved.
+**Output:** Updated plan with unknowns resolved. For Tier 3, run
+`zed_wiki_compile` at the end of this gate to verify the new sources
+are reflected in `wiki/index.md`.
+
+## Gate 2.5: COUNCIL (Tier 3, hard-to-reverse decisions only)
+
+Optional. Invoke `zed_council` when:
+- The plan commits to an irreversible direction (schema migration,
+  dependency removal, public API change)
+- Two strong alternatives remain with no clear winner
+- You genuinely want a second opinion before spending effort
+
+See the `llm-council` skill for phrasing, interpretation, and budget
+guidance. Save Tier 3 verdicts with `zed council --save` so the
+decision trail survives future sessions. Skip this gate for routine
+work — council is expensive (~7 API calls).
 
 ## Gate 3: EXECUTE
 

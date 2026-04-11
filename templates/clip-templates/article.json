@@ -1,0 +1,19 @@
+{
+  "name": "article",
+  "description": "Generic article — falls through when no other template matches",
+  "behavior": "create",
+  "triggers": ["/.*/"],
+  "noteNameFormat": "{{date|date:\"YYYY-MM-DD\"}}-{{title|safe_filename}}",
+  "path": "raw/clips",
+  "properties": [
+    { "name": "title", "value": "{{title|trim}}", "type": "text" },
+    { "name": "type", "value": "clip", "type": "text" },
+    { "name": "source", "value": "{{url}}", "type": "text" },
+    { "name": "source_host", "value": "{{domain}}", "type": "text" },
+    { "name": "author", "value": "{{author|default:\"\"}}", "type": "text" },
+    { "name": "published", "value": "{{published|default:\"\"}}", "type": "text" },
+    { "name": "clipped", "value": "{{date|date:\"YYYY-MM-DDTHH:mm:ssZ\"}}", "type": "date" },
+    { "name": "tags", "value": "clip, {{domain}}", "type": "multitext" }
+  ],
+  "noteContentFormat": "# {{title}}\n\n> Source: [{{domain}}]({{url}})  \n> Author: {{author|default:\"—\"}}  \n> Published: {{published|default:\"—\"}}  \n\n{{content}}"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "arxiv",
+  "description": "arXiv paper abstract pages",
+  "behavior": "create",
+  "triggers": [
+    "https://arxiv.org/abs/",
+    "https://arxiv.org/pdf/",
+    "schema:@ScholarlyArticle"
+  ],
+  "noteNameFormat": "arxiv-{{title|safe_filename}}",
+  "path": "raw/papers",
+  "properties": [
+    { "name": "title", "value": "{{selector:h1.title|trim|default:\"{{title}}\"}}", "type": "text" },
+    { "name": "type", "value": "paper", "type": "text" },
+    { "name": "source", "value": "{{url}}", "type": "text" },
+    { "name": "source_host", "value": "arxiv.org", "type": "text" },
+    { "name": "authors", "value": "{{selector:.authors}}", "type": "text" },
+    { "name": "abstract", "value": "{{selector:blockquote.abstract|trim}}", "type": "text" },
+    { "name": "clipped", "value": "{{date|date:\"YYYY-MM-DDTHH:mm:ssZ\"}}", "type": "date" },
+    { "name": "tags", "value": "clip, paper, arxiv, research", "type": "multitext" }
+  ],
+  "noteContentFormat": "# {{title}}\n\n> Source: [arxiv.org]({{url}})  \n> Authors: {{selector:.authors}}  \n\n## Abstract\n\n{{selector:blockquote.abstract|trim}}\n\n## Full content\n\n{{content}}"
+}

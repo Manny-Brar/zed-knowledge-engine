@@ -73,7 +73,7 @@ const baseEnv = {
 
 function zed(cmd, opts = {}) {
   try {
-    const result = execSync(`node ${BIN} ${cmd}`, {
+    const result = execSync(`node "${BIN}" ${cmd}`, {
       env: baseEnv,
       encoding: 'utf-8',
       timeout: 30000,

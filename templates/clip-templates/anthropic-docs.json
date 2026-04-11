@@ -1,0 +1,23 @@
+{
+  "name": "anthropic-docs",
+  "description": "Anthropic documentation, engineering blog, and Claude Code docs — high priority for ZED's own knowledge base",
+  "behavior": "create",
+  "triggers": [
+    "https://docs.claude.com/",
+    "https://www.anthropic.com/engineering",
+    "https://www.anthropic.com/news",
+    "https://code.claude.com/"
+  ],
+  "noteNameFormat": "anthropic-{{title|safe_filename}}",
+  "path": "raw/clips/anthropic",
+  "properties": [
+    { "name": "title", "value": "{{title|trim}}", "type": "text" },
+    { "name": "type", "value": "clip", "type": "text" },
+    { "name": "source", "value": "{{url}}", "type": "text" },
+    { "name": "source_host", "value": "{{domain}}", "type": "text" },
+    { "name": "clipped", "value": "{{date|date:\"YYYY-MM-DDTHH:mm:ssZ\"}}", "type": "date" },
+    { "name": "tags", "value": "clip, anthropic, claude, official-docs", "type": "multitext" },
+    { "name": "priority", "value": "high", "type": "text" }
+  ],
+  "noteContentFormat": "# {{title}}\n\n> Source: [{{domain}}]({{url}}) · official Anthropic content  \n> Clipped: {{date|date:\"YYYY-MM-DD\"}}  \n\n{{content}}"
+}

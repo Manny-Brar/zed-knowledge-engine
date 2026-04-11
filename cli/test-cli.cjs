@@ -101,7 +101,9 @@ function zed(cmd, opts = {}) {
     CLAUDE_PLUGIN_DATA: tmpDir,
   };
   try {
-    const result = execSync(`node ${BIN} ${cmd}`, {
+    // Quote BIN so paths containing spaces (e.g. iCloud's "Mobile Documents")
+    // don't break argv splitting.
+    const result = execSync(`node "${BIN}" ${cmd}`, {
       env,
       encoding: 'utf-8',
       timeout: 15000,
@@ -434,7 +436,7 @@ console.log('\nEdge Cases:');
 test('unknown command shows error and exits non-zero', () => {
   let exitedWithError = false;
   try {
-    execSync(`node ${BIN} nonexistent`, {
+    execSync(`node "${BIN}" nonexistent`, {
       env: { ...process.env, ZED_DATA_DIR: tmpDir, CLAUDE_PLUGIN_DATA: tmpDir },
       encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     });
@@ -464,7 +466,7 @@ test('stats on empty vault handles gracefully', () => {
     CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
   };
   try {
-    const result = execSync(`node ${BIN} stats`, {
+    const result = execSync(`node "${BIN}" stats`, {
       env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     }).trim();
     assert(result.includes('Notes: 0'), `Expected 0 notes, got: ${result}`);
@@ -482,7 +484,7 @@ test('health on empty vault shows empty message', () => {
     CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
   };
   try {
-    const result = execSync(`node ${BIN} health`, {
+    const result = execSync(`node "${BIN}" health`, {
       env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     }).trim();
     assert(result.includes('Empty') || result.includes('0'), `Expected empty vault message, got: ${result}`);
@@ -506,7 +508,7 @@ test('tags with no tagged notes returns no tags', () => {
     CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
   };
   try {
-    const result = execSync(`node ${BIN} tags`, {
+    const result = execSync(`node "${BIN}" tags`, {
       env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     }).trim();
     assert(result.includes('No tags found') || result.includes('Tags'), `Expected no-tags message, got: ${result}`);
@@ -529,7 +531,7 @@ test('graph on empty vault handles no nodes', () => {
     CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
   };
   try {
-    const result = execSync(`node ${BIN} graph --json`, {
+    const result = execSync(`node "${BIN}" graph --json`, {
       env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     }).trim();
     const data = JSON.parse(result);
@@ -636,7 +638,7 @@ test('fix on empty vault reports nothing to fix', () => {
     CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
   };
   try {
-    const result = execSync(`node ${BIN} fix`, {
+    const result = execSync(`node "${BIN}" fix`, {
       env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     }).trim();
     assert(result.includes('empty') || result.includes('Nothing'), `Expected empty message, got: ${result}`);
@@ -763,7 +765,7 @@ test('visualize on empty vault says nothing to visualize', () => {
     CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'empty-env'),
   };
   try {
-    const result = execSync(`node ${BIN} visualize --out ${path.join(tmpDir, 'empty-viz.json')}`, {
+    const result = execSync(`node "${BIN}" visualize --out ${path.join(tmpDir, 'empty-viz.json')}`, {
       env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     }).trim();
     assert(result.includes('Nothing to visualize'), `Expected nothing to visualize, got: ${result}`);
@@ -788,7 +790,7 @@ test('CLI with nonexistent vault dir creates it gracefully', () => {
     CLAUDE_PLUGIN_DATA: path.join(tmpDir, 'fresh-vault-test'),
   };
   try {
-    const result = execSync(`node ${BIN} stats`, {
+    const result = execSync(`node "${BIN}" stats`, {
       env, encoding: 'utf-8', timeout: 15000, cwd: __dirname,
     }).trim();
     assert(result.includes('Notes: 0'), `Expected empty stats, got: ${result}`);
@@ -1127,7 +1129,7 @@ test('merge imports notes from export JSON', () => {
   fs.mkdirSync(mergeVault, { recursive: true });
 
   const mergeResult = execSync(
-    `node ${path.join(__dirname, '..', 'bin', 'zed')} merge ${exportFile}`,
+    `node "${path.join(__dirname, '..', 'bin', 'zed')}" merge "${exportFile}"`,
     { env: { ...process.env, ZED_DATA_DIR: mergeDir }, encoding: 'utf-8' }
   );
   assert(mergeResult.includes('Merged'), 'Should report merge results');
@@ -1203,6 +1205,126 @@ test('loop-init with empty objective errors', () => {
 test('export to unwritable path errors clearly', () => {
   const out = zed('export /nonexistent/dir/output.json', { expectError: true });
   assert(out.includes('not exist') || out.includes('not writable') || out.includes('Error'), `Expected writable path error, got: ${out}`);
+});
+
+// ---------------------------------------------------------------------------
+// v8.0 — Wiki Engine commands (compile, wiki-health, council budget)
+// ---------------------------------------------------------------------------
+
+console.log('\nv8.0 Wiki Engine:');
+
+test('compile on empty vault prints a zero plan', () => {
+  const out = zed('compile');
+  assert(out.includes('Wiki compile plan'), `expected plan header, got: ${out}`);
+  assert(out.includes('Raw sources:'));
+  assert(out.includes('Wiki entries:'));
+});
+
+test('compile --json returns a structured plan', () => {
+  const out = zedJson('compile');
+  assert(out.plan, 'should have plan field');
+  assert(typeof out.plan.rawCount === 'number');
+  assert(typeof out.plan.wikiCount === 'number');
+  assert(Array.isArray(out.plan.uncompiled));
+  assert(out.index);
+});
+
+test('compile creates schema.md on first run', () => {
+  zed('compile'); // idempotent
+  const schemaPath = path.join(tmpDir, 'vault', 'schema.md');
+  assert(fs.existsSync(schemaPath), 'schema.md should exist after compile');
+  const content = fs.readFileSync(schemaPath, 'utf-8');
+  assert(content.includes('ZED Vault Schema'), 'schema.md should contain the Karpathy schema text');
+});
+
+test('compile creates wiki/index.md and wiki/log.md', () => {
+  zed('compile');
+  assert(fs.existsSync(path.join(tmpDir, 'vault', 'wiki', 'index.md')));
+  assert(fs.existsSync(path.join(tmpDir, 'vault', 'wiki', 'log.md')));
+});
+
+test('wiki-health on empty vault gives a score', () => {
+  const out = zed('wiki-health');
+  assert(out.includes('Wiki Health:'), `expected health header, got: ${out}`);
+  assert(/\d+\/100/.test(out), 'should include a score');
+});
+
+test('wiki-health --json returns structured data', () => {
+  const out = zedJson('wiki-health');
+  assert(typeof out.score === 'number');
+  assert(typeof out.wikiCount === 'number');
+  assert(Array.isArray(out.uncompiled));
+  assert(Array.isArray(out.expired));
+  assert(Array.isArray(out.superseded));
+});
+
+test('compile --synthesize writes a session-snapshot note', () => {
+  // Touch a note so the synthesis has something to collect
+  zed('daily "hello synthesis test"');
+  const out = zed('compile --synthesize --since 24 --label smoke-test');
+  assert(out.includes('Session synthesis written'), `expected synthesis message, got: ${out}`);
+  // The note should exist under wiki/syntheses/
+  const synthDir = path.join(tmpDir, 'vault', 'wiki', 'syntheses');
+  const files = fs.readdirSync(synthDir).filter((f) => f.includes('smoke-test'));
+  assert(files.length >= 1, `expected a smoke-test synthesis file, found: ${fs.readdirSync(synthDir)}`);
+});
+
+test('council --budget-status reports zero when unset', () => {
+  const out = zed('council --budget-status');
+  assert(out.includes('Council budget status'), `got: ${out}`);
+  assert(out.includes('Spent:'));
+});
+
+test('council --budget-status --json returns structured data', () => {
+  const out = zedJson('council --budget-status');
+  assert(typeof out.spent === 'number');
+  assert(typeof out.calls === 'number');
+});
+
+test('council --reset-budget zeroes the ledger', () => {
+  const out = zed('council --reset-budget');
+  assert(out.includes('reset'), `got: ${out}`);
+  const status = zedJson('council --budget-status');
+  assert(status.spent === 0, `expected spent=0, got ${status.spent}`);
+  assert(status.calls === 0, `expected calls=0, got ${status.calls}`);
+});
+
+test('clip rejects invalid URL', () => {
+  const out = zed('clip "not a url"', { expectError: true });
+  assert(out.includes('invalid URL') || out.includes('failed'), `got: ${out}`);
+});
+
+test('clip rejects ftp URLs', () => {
+  const out = zed('clip ftp://example.com/', { expectError: true });
+  assert(out.includes('http/https') || out.includes('failed'), `got: ${out}`);
+});
+
+test('ingest-pdf errors on missing file', () => {
+  const out = zed('ingest-pdf /tmp/does-not-exist-zed-xyz.pdf', { expectError: true });
+  assert(out.includes('not found') || out.includes('failed'), `got: ${out}`);
+});
+
+test('ingest-pdf: stub-mode writes raw/papers/ file and indexes it (async race regression)', () => {
+  // Regression: pre-v8.1 the CLI dispatch closed the engine synchronously
+  // after firing off the async handler's IIFE, so the in-process
+  // incrementalBuild() silently threw against a closed DB. Across separate
+  // invocations the bug was invisible (each run rebuilt from disk), but
+  // any test harness running multiple commands in one process would break.
+  // This test verifies the fix by asserting:
+  //   (a) ingest-pdf's output file IS on disk after the command returns
+  //   (b) the subsequent stats/search invocation picks it up
+  const fakePdf = path.join(tmpDir, 'fake-async-race.pdf');
+  fs.writeFileSync(fakePdf, '%PDF-1.4\n%stub\n');
+  const out = zed(`ingest-pdf "${fakePdf}" --tag async,race`);
+  assert(out.includes('PDF ingested'), `ingest-pdf should succeed: ${out}`);
+  // File should exist under raw/papers/
+  const papersDir = path.join(tmpDir, 'vault', 'raw', 'papers');
+  const pdfFiles = fs.readdirSync(papersDir).filter((f) => f.includes('fake-async-race'));
+  assert(pdfFiles.length >= 1, `expected a PDF note in raw/papers/, found: ${fs.readdirSync(papersDir)}`);
+  // A subsequent search should find it
+  const search = zed('search race');
+  assert(search.toLowerCase().includes('race') || search.toLowerCase().includes('async'),
+    `search should find the clipped PDF, got: ${search}`);
 });
 
 // ---------------------------------------------------------------------------

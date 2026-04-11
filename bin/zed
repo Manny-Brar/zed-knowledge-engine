@@ -35,6 +35,17 @@ for (const dir of [
   path.join(GLOBAL_DIR, 'patterns'),
   path.join(GLOBAL_DIR, 'learnings'),
   path.join(VAULT_DIR, '_loop'),
+  // v8.0 — Karpathy-style raw/wiki/schema layout
+  path.join(VAULT_DIR, 'raw'),
+  path.join(VAULT_DIR, 'raw', 'clips'),
+  path.join(VAULT_DIR, 'raw', 'repos'),
+  path.join(VAULT_DIR, 'raw', 'papers'),
+  path.join(VAULT_DIR, 'raw', 'transcripts'),
+  path.join(VAULT_DIR, 'wiki'),
+  path.join(VAULT_DIR, 'wiki', 'concepts'),
+  path.join(VAULT_DIR, 'wiki', 'entities'),
+  path.join(VAULT_DIR, 'wiki', 'syntheses'),
+  path.join(VAULT_DIR, '_templates'),
 ]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
@@ -477,6 +488,373 @@ const commands = {
     engine.writeNote(notePath, content);
     engine.incrementalBuild();
     output(jsonMode ? { action: 'created', file: fileName } : `Daily note created: ${fileName}`);
+  },
+
+  // ---------------------------------------------------------------------
+  // v8.0 — Web ingestion (clip, ingest-yt, ingest-repo, ingest-pdf)
+  // ---------------------------------------------------------------------
+
+  async clip() {
+    const url = commandArgs[0];
+    if (!url) error('Usage: zed clip <url> [--tag a,b,c] [--auth path] [--strategy auto|playwright|fetch] [--template <name>] [--no-interpret]');
+
+    const tagFlagIdx = commandArgs.indexOf('--tag');
+    const authFlagIdx = commandArgs.indexOf('--auth');
+    const stratFlagIdx = commandArgs.indexOf('--strategy');
+    const tplFlagIdx = commandArgs.indexOf('--template');
+    const noInterpret = commandArgs.includes('--no-interpret');
+    const tags = tagFlagIdx >= 0 && commandArgs[tagFlagIdx + 1]
+      ? commandArgs[tagFlagIdx + 1].split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+    const authFile = authFlagIdx >= 0 ? commandArgs[authFlagIdx + 1] : undefined;
+    const strategy = stratFlagIdx >= 0 ? commandArgs[stratFlagIdx + 1] : 'auto';
+    const template = tplFlagIdx >= 0 ? commandArgs[tplFlagIdx + 1] : undefined;
+
+    const engine = getEngine();
+    const { clipUrl } = require('../core/ingest-layer.cjs');
+    try {
+      const result = await clipUrl(url, {
+        vaultPath: VAULT_DIR,
+        engine,
+        strategy,
+        authFile,
+        tags,
+        template,
+        interpret: noInterpret ? false : undefined,
+      });
+      if (jsonMode) return output(result);
+      const meta = result.metadata || {};
+      output(
+        `Clipped: ${meta.title || '(untitled)'}\n` +
+        `  Path:     ${result.relPath}\n` +
+        `  Source:   ${meta.source || url}\n` +
+        `  Author:   ${meta.author || '-'}\n` +
+        `  Strategy: ${meta.fetchStrategy} / ${meta.extractor}\n` +
+        `  Size:     ${result.bytes} bytes`
+      );
+    } catch (err) {
+      error('clip failed: ' + err.message);
+    }
+  },
+
+  async 'ingest-yt'() {
+    const url = commandArgs[0];
+    if (!url) error('Usage: zed ingest-yt <youtube-url> [--tag a,b]');
+    const tagFlagIdx = commandArgs.indexOf('--tag');
+    const tags = tagFlagIdx >= 0 && commandArgs[tagFlagIdx + 1]
+      ? commandArgs[tagFlagIdx + 1].split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    const engine = getEngine();
+    const { ingestYouTube } = require('../core/ingest-layer.cjs');
+    try {
+      const result = await ingestYouTube(url, { vaultPath: VAULT_DIR, engine, tags });
+      if (jsonMode) return output(result);
+      const meta = result.metadata || {};
+      output(
+        `Transcript ingested: ${meta.title || '(untitled)'}\n` +
+        `  Path:     ${result.relPath}\n` +
+        `  Segments: ${meta.segments}\n` +
+        `  Size:     ${result.bytes} bytes`
+      );
+    } catch (err) {
+      error('ingest-yt failed: ' + err.message);
+    }
+  },
+
+  async 'ingest-pdf'() {
+    const input = commandArgs[0];
+    if (!input) error('Usage: zed ingest-pdf <path-or-url> [--tag a,b]');
+    const tagFlagIdx = commandArgs.indexOf('--tag');
+    const tags = tagFlagIdx >= 0 && commandArgs[tagFlagIdx + 1]
+      ? commandArgs[tagFlagIdx + 1].split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const engine = getEngine();
+    const { ingestPdf } = require('../core/ingest-layer.cjs');
+    try {
+      const result = await ingestPdf(input, { vaultPath: VAULT_DIR, engine, tags });
+      if (jsonMode) return output(result);
+      const m = result.metadata || {};
+      output(
+        `PDF ingested: ${m.title}\n` +
+        `  Path:      ${result.relPath}\n` +
+        `  Source:    ${m.source}\n` +
+        `  Extractor: ${m.extractor}${m.hasText ? '' : ' (install poppler for full-text)'}\n` +
+        `  Size:      ${result.bytes} bytes`
+      );
+    } catch (err) {
+      error('ingest-pdf failed: ' + err.message);
+    }
+  },
+
+  async 'ingest-repo'() {
+    const gitUrl = commandArgs[0];
+    if (!gitUrl) error('Usage: zed ingest-repo <git-url>');
+    const engine = getEngine();
+    const { ingestRepo } = require('../core/ingest-layer.cjs');
+    try {
+      const result = await ingestRepo(gitUrl, { vaultPath: VAULT_DIR, engine });
+      if (jsonMode) return output(result);
+      output(
+        `Repo ingested: ${result.metadata.slug}\n` +
+        `  Path:   ${result.relPath}\n` +
+        `  Source: ${result.metadata.source}\n` +
+        `  Size:   ${result.bytes} bytes`
+      );
+    } catch (err) {
+      error('ingest-repo failed: ' + err.message);
+    }
+  },
+
+  compile() {
+    const engine = getEngine();
+    const wikiLayer = require('../core/wiki-layer.cjs');
+    // Flags: --since <hours>, --synthesize, --label <name>
+    const sinceIdx = commandArgs.indexOf('--since');
+    const labelIdx = commandArgs.indexOf('--label');
+    const synthesize = commandArgs.includes('--synthesize') || commandArgs.includes('--synth');
+    const since = sinceIdx >= 0 ? parseInt(commandArgs[sinceIdx + 1], 10) : null;
+    const label = labelIdx >= 0 ? commandArgs[labelIdx + 1] : null;
+
+    wikiLayer.ensureSchema(VAULT_DIR);
+
+    if (synthesize) {
+      try {
+        const result = wikiLayer.writeSessionSynthesis({
+          vaultPath: VAULT_DIR,
+          since: since || 24,
+          label,
+        });
+        engine.incrementalBuild();
+        if (jsonMode) return output(result);
+        return output(
+          `Session synthesis written: ${result.relPath}\n` +
+          `  ${result.noteCount} notes in the last ${since || 24}h captured.`
+        );
+      } catch (err) {
+        error('compile --synthesize failed: ' + err.message);
+      }
+    }
+
+    const plan = wikiLayer.planCompile({ vaultPath: VAULT_DIR, since });
+    const idx = wikiLayer.updateIndex({ vaultPath: VAULT_DIR });
+    wikiLayer.appendLog(
+      `compile: ${plan.rawCount} raw, ${plan.wikiCount} wiki, ${plan.uncompiled.length} uncompiled, ${plan.stale.length} stale, ${plan.orphanWiki.length} orphan`,
+      { vaultPath: VAULT_DIR }
+    );
+    engine.incrementalBuild();
+
+    if (jsonMode) return output({ plan, index: idx });
+
+    const lines = [
+      `Wiki compile plan`,
+      `  Raw sources:   ${plan.rawCount}`,
+      `  Wiki entries:  ${plan.wikiCount}   (excl. index.md / log.md; index updated with ${idx.entries} entries)`,
+      `  Uncompiled:    ${plan.uncompiled.length}`,
+      `  Stale:         ${plan.stale.length}`,
+      `  Orphan wiki:   ${plan.orphanWiki.length}`,
+      '',
+    ];
+    if (plan.uncompiled.length > 0) {
+      lines.push('Next uncompiled sources (read, classify, write to wiki/):');
+      for (const r of plan.uncompiled.slice(0, 15)) {
+        lines.push(`  - ${r.relPath}  "${r.title || '(untitled)'}"`);
+      }
+      if (plan.uncompiled.length > 15) {
+        lines.push(`  ...and ${plan.uncompiled.length - 15} more`);
+      }
+      lines.push('');
+      lines.push('Hint: Claude should read each raw file (zed_read_note), classify it into');
+      lines.push('  wiki/concepts/, wiki/entities/, or wiki/syntheses/, and write a compiled entry');
+      lines.push('  (zed_write_note) with source_paths frontmatter. See skills/wiki-compiler.md.');
+    }
+    if (plan.stale.length > 0) {
+      lines.push('');
+      lines.push('Stale wiki entries (raw source has been updated):');
+      for (const s of plan.stale.slice(0, 10)) {
+        lines.push(`  - ${s.wiki.relPath}  ← ${s.source.relPath}`);
+      }
+    }
+    output(lines.join('\n'));
+  },
+
+  async council() {
+    // Budget ledger subcommands — no LLM calls, no network
+    if (commandArgs.includes('--reset-budget')) {
+      const { resetBudgetLedger } = require('../core/council.cjs');
+      resetBudgetLedger();
+      return output(jsonMode ? { reset: true } : 'Council budget ledger reset to zero.');
+    }
+    if (commandArgs.includes('--budget-status')) {
+      const { readBudgetLedger, getBudgetCap } = require('../core/council.cjs');
+      const ledger = readBudgetLedger();
+      const cap = getBudgetCap();
+      const payload = {
+        cap,
+        spent: ledger.spent,
+        calls: ledger.calls,
+        reset_at: ledger.reset_at,
+        remaining: cap !== null ? Math.max(0, cap - ledger.spent) : null,
+      };
+      if (jsonMode) return output(payload);
+      const lines = [
+        `Council budget status`,
+        `  Cap:       ${cap !== null ? `$${cap}` : '(not set — ZED_COUNCIL_BUDGET unset)'}`,
+        `  Spent:     $${ledger.spent.toFixed(4)}`,
+        `  Calls:     ${ledger.calls}`,
+        `  Reset at:  ${ledger.reset_at}`,
+      ];
+      if (cap !== null) lines.push(`  Remaining: $${Math.max(0, cap - ledger.spent).toFixed(4)}`);
+      return output(lines.join('\n'));
+    }
+
+    const question = commandArgs.filter((a) => !a.startsWith('--')).join(' ').trim();
+    if (!question) error('Usage: zed council "<question>" [--models claude,gpt,gemini] [--chairman claude] [--save] [--budget-status|--reset-budget]');
+    const modelsIdx = commandArgs.indexOf('--models');
+    const chairIdx = commandArgs.indexOf('--chairman');
+    const save = commandArgs.includes('--save');
+    const models = modelsIdx >= 0 && commandArgs[modelsIdx + 1]
+      ? commandArgs[modelsIdx + 1].split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+    const chairman = chairIdx >= 0 ? commandArgs[chairIdx + 1] : undefined;
+
+    const { council } = require('../core/council.cjs');
+    try {
+      const result = await council(question, { models, chairman });
+      if (jsonMode) return output(result);
+
+      const lines = [`# Council: ${question}`, ''];
+      if (result.answers.length === 0) {
+        lines.push('_(no answers — check ANTHROPIC_API_KEY / OPENROUTER_API_KEY)_');
+        if (result.errors.length > 0) {
+          lines.push('');
+          lines.push('Errors:');
+          for (const e of result.errors.slice(0, 5)) {
+            lines.push(`- ${e.alias || '?'} [stage ${e.stage}]: ${e.error}`);
+          }
+        }
+        output(lines.join('\n'));
+        return;
+      }
+
+      lines.push('## Answers');
+      lines.push('');
+      for (const a of result.answers) {
+        lines.push(`### ${a.letter}. ${a.alias} (${a.model})`);
+        lines.push('');
+        lines.push(a.text);
+        lines.push('');
+      }
+      if (result.leaderboard.length > 0) {
+        lines.push('## Peer ranking');
+        lines.push('');
+        for (const entry of result.leaderboard) {
+          const rank = entry.avgRank !== null ? entry.avgRank.toFixed(2) : '—';
+          lines.push(`- ${entry.letter}. ${entry.alias}: avg rank ${rank} (${entry.votes} votes)`);
+        }
+        lines.push('');
+      }
+      if (result.verdict) {
+        lines.push(`## Chairman verdict (${result.verdict.chairman}: ${result.verdict.model})`);
+        lines.push('');
+        lines.push(result.verdict.text);
+      }
+      if (result.errors.length > 0) {
+        lines.push('');
+        lines.push('_Non-fatal errors:_');
+        for (const e of result.errors.slice(0, 5)) {
+          lines.push(`- ${e.alias || '?'} [stage ${e.stage}]: ${e.error}`);
+        }
+      }
+      if (result.budget) {
+        lines.push('');
+        lines.push(`_Budget: $${result.budget.spent.toFixed(4)} / $${result.budget.cap} (remaining $${result.budget.remaining.toFixed(4)})_`);
+      }
+
+      const rendered = lines.join('\n');
+      output(rendered);
+
+      if (save) {
+        try {
+          const engine = getEngine();
+          const slug = question
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 60) || 'council';
+          const date = new Date().toISOString().split('T')[0];
+          const fileName = `wiki/syntheses/${date}-council-${slug}.md`;
+          const fm = [
+            '---',
+            `title: "Council: ${question.replace(/"/g, '\\"').slice(0, 120)}"`,
+            `type: council`,
+            `date: ${date}`,
+            `models: [${(models || ['claude', 'gpt', 'gemini']).map((m) => `"${m}"`).join(', ')}]`,
+            `tags: [wiki, synthesis, council, decision]`,
+            '---',
+            '',
+          ].join('\n');
+          engine.writeNote(path.join(VAULT_DIR, fileName), fm + rendered);
+          engine.incrementalBuild();
+          console.log(`\nSaved: ${fileName}`);
+        } catch (e) {
+          console.error(`\n(could not save council note: ${e.message})`);
+        }
+      }
+    } catch (err) {
+      error('council failed: ' + err.message);
+    }
+  },
+
+  'wiki-health'() {
+    const wikiLayer = require('../core/wiki-layer.cjs');
+    const h = wikiLayer.healthCheck({ vaultPath: VAULT_DIR });
+
+    if (jsonMode) return output(h);
+
+    const lines = [
+      `Wiki Health: ${h.score}/100 (${h.grade})`,
+      '',
+      `  Raw sources:       ${h.rawCount}`,
+      `  Wiki entries:      ${h.wikiCount}   (excl. index.md / log.md)`,
+      `  Uncompiled:        ${h.uncompiled.length}`,
+      `  Stale:             ${h.stale.length}`,
+      `  Orphan wiki:       ${h.orphanWiki.length}`,
+      `  Broken wikilinks:  ${h.brokenLinks.length}`,
+      `  No provenance:     ${h.noProvenance.length}`,
+      `  Expired:           ${(h.expired || []).length}`,
+      `  Superseded:        ${(h.superseded || []).length}`,
+    ];
+
+    if (h.brokenLinks.length > 0) {
+      lines.push('', 'Broken wikilinks:');
+      for (const b of h.brokenLinks.slice(0, 10)) {
+        lines.push(`  - ${b.from} → [[${b.target}]]`);
+      }
+      if (h.brokenLinks.length > 10) lines.push(`  ...and ${h.brokenLinks.length - 10} more`);
+    }
+    if (h.noProvenance.length > 0) {
+      lines.push('', 'Wiki entries missing source_paths frontmatter:');
+      for (const w of h.noProvenance.slice(0, 10)) {
+        lines.push(`  - ${w.relPath}  "${w.title || '(untitled)'}"`);
+      }
+    }
+    if ((h.expired || []).length > 0) {
+      lines.push('', 'Expired entries (expires_at in the past):');
+      for (const e of h.expired.slice(0, 10)) {
+        lines.push(`  - ${e.wiki.relPath}  expired ${e.expired_at}`);
+      }
+    }
+    if ((h.superseded || []).length > 0) {
+      lines.push('', 'Superseded entries:');
+      for (const s of h.superseded.slice(0, 10)) {
+        const mark = s.replacement_found ? '✓' : '✗ missing';
+        lines.push(`  - ${s.wiki.relPath} → [[${s.superseded_by}]]  (${mark})`);
+      }
+    }
+
+    output(lines.join('\n'));
   },
 
   template() {
@@ -2286,15 +2664,33 @@ if (!handler) {
   process.exit(1);
 }
 
-try {
-  handler();
-} catch (err) {
-  error(err.message);
-} finally {
-  // Clean up
-  try { if (_engine) _engine.close(); } catch {}
-  try { if (_globalEngine) _globalEngine.close(); } catch {}
-}
+// Async-aware dispatch: if a handler returns a Promise (async commands like
+// clip, ingest-*, council), await it before closing the engine. Previously
+// the finally block closed the engine synchronously, which caused async
+// handlers' incrementalBuild() calls to silently throw against a closed DB.
+// Next CLI invocation re-indexed from disk so the bug was invisible in
+// shell workflows, but broke any test harness running multiple commands
+// in one process.
+(async () => {
+  let exitCode = 0;
+  try {
+    const result = handler();
+    if (result && typeof result.then === 'function') {
+      await result;
+    }
+  } catch (err) {
+    if (jsonMode) {
+      console.error(JSON.stringify({ error: err.message }));
+    } else {
+      console.error(`Error: ${err.message}`);
+    }
+    exitCode = 1;
+  } finally {
+    try { if (_engine) _engine.close(); } catch {}
+    try { if (_globalEngine) _globalEngine.close(); } catch {}
+  }
+  if (exitCode !== 0) process.exit(exitCode);
+})();
 
 // ---------------------------------------------------------------------------
 // Help
@@ -2330,6 +2726,17 @@ Content:
   snippets <query>          Search with context snippets
   search <query>            Alias for snippets
   suggest-links [note]      Find unlinked mentions
+
+Ingest (v8.0 — raw/ → wiki/):
+  clip <url> [--tag a,b]    Clip web page as markdown into raw/clips/
+         [--auth file]      (playwright storageState for authenticated pages)
+         [--strategy s]     auto | playwright | fetch
+  ingest-yt <url>           Ingest YouTube transcript into raw/transcripts/
+  ingest-pdf <path|url>     Ingest a PDF into raw/papers/ (poppler if available)
+  ingest-repo <git-url>     Ingest a code repo via repomix into raw/repos/
+  compile [--since h]       Compile raw/ → wiki/ (Karpathy loop)
+  wiki-health               Lint wiki/ (orphans, stale sources, broken links)
+  council "<q>" [--models]  Multi-model consultation (LLM council)
 
 Maintenance:
   fix                       Auto-fix vault health issues

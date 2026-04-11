@@ -1,0 +1,20 @@
+{
+  "name": "github-readme",
+  "description": "GitHub README / repo landing pages. For a full repo dump use `zed ingest-repo`.",
+  "behavior": "create",
+  "triggers": [
+    "https://github.com/"
+  ],
+  "noteNameFormat": "github-{{title|safe_filename}}",
+  "path": "raw/clips/github",
+  "properties": [
+    { "name": "title", "value": "{{title|trim}}", "type": "text" },
+    { "name": "type", "value": "clip", "type": "text" },
+    { "name": "source", "value": "{{url}}", "type": "text" },
+    { "name": "source_host", "value": "github.com", "type": "text" },
+    { "name": "description", "value": "{{meta:name:description}}", "type": "text" },
+    { "name": "clipped", "value": "{{date|date:\"YYYY-MM-DDTHH:mm:ssZ\"}}", "type": "date" },
+    { "name": "tags", "value": "clip, github, code", "type": "multitext" }
+  ],
+  "noteContentFormat": "# {{title}}\n\n> Repo: [{{url}}]({{url}})  \n> Description: {{meta:name:description}}  \n\n{{content}}\n\n---\n\n_For a full code dump, run:_ `zed ingest-repo {{url}}`"
+}

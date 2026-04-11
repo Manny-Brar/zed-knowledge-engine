@@ -123,14 +123,23 @@ async function runTests() {
   const client = new McpTestClient();
   await client.start();
 
-  console.log('\n── MCP Server Tests (Slim: 4 tools) ──\n');
+  console.log('\n── MCP Server Tests (v8.0: 8 tools) ──\n');
 
-  // Tool listing
-  await test('lists exactly 4 tools', async () => {
+  // Tool listing — v8.0 adds zed_clip, zed_wiki_compile, zed_wiki_health, zed_council
+  await test('lists all v8.0 MCP tools', async () => {
     const tools = await client.listTools();
-    assert.strictEqual(tools.length, 4, `Expected 4, got ${tools.length}: ${tools.map(t => t.name).join(', ')}`);
     const names = tools.map(t => t.name).sort();
-    assert.deepStrictEqual(names, ['zed_decide', 'zed_read_note', 'zed_search', 'zed_write_note']);
+    const expected = [
+      'zed_clip',
+      'zed_council',
+      'zed_decide',
+      'zed_read_note',
+      'zed_search',
+      'zed_wiki_compile',
+      'zed_wiki_health',
+      'zed_write_note',
+    ];
+    assert.deepStrictEqual(names, expected, `Tool set mismatch: got ${names.join(', ')}`);
   });
 
   // zed_write_note — create test data first

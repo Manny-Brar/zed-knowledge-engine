@@ -38,9 +38,24 @@ Before ANY gate processing:
 Follow the Phase-Gate Engine exactly:
 - Gate 0: RETRIEVE (search vault)
 - Gate 1: PLAN (one unit of work from the decomposition)
-- Gate 2: RESEARCH (vault first, then web for unknowns)
+- Gate 2: RESEARCH (vault first, then **ingest**, then web for unknowns)
+  - **Gate 2.5 — Ingest (v8.0)**: If the vault lacks authoritative source
+    material for this unit of work, use `zed_clip` (web pages),
+    `zed ingest-repo` (code repos), `zed ingest-pdf` (papers), or
+    `zed ingest-yt` (talks) to pull canonical sources into `raw/`. Then
+    run `zed_wiki_compile` to get a compile plan and, following the
+    `wiki-compiler` skill, author wiki/ entries before executing. This
+    is how evolve mode compounds external knowledge across iterations.
+  - **`raw/` and `wiki/` are auto-whitelisted** by scope-hard-lock during
+    this gate — ingestion never counts as drift.
 - Gate 3: EXECUTE
 - Gate 4: SELF-ASSESS (against objective AND original prompt)
+  - **Gate 4.5 — Council (v8.0, Tier 3 only)**: For hard-to-reverse
+    decisions (architecture boundaries, schema changes, dependency
+    swaps), invoke `zed_council` before continuing. If the council's
+    dissent raises a concern the consensus ignores, FAVOUR the dissent
+    and adjust the plan. Save the verdict via `zed council --save`.
+    Council is AT MOST once per iteration, never inside a retry loop.
 
 **Excellence checkpoint**: Before proceeding to Gate 5, ask:
 - Is this implementation the simplest correct solution?
@@ -109,10 +124,20 @@ Research is NOT triggered by failure. It is part of every iteration.
 
 Each iteration MUST include:
 1. **Vault search** for the current unit of work — what patterns/decisions/anti-patterns apply?
-2. **Best practices check** — a targeted web search for the specific technique being used
-3. **Research capture** — save any significant finding to `research/` in the vault
+2. **Ingestion (v8.0)** — if vault coverage is thin, clip the canonical
+   source into `raw/` via `zed_clip`, then compile it into `wiki/`
+   following the `wiki-compiler` skill. One new source per iteration
+   is fine; five is too many (stay focused on the objective).
+3. **Best practices check** — a targeted web search for the specific technique being used
+4. **Research capture** — save any significant finding to `research/` in the vault
 
 This is what makes evolve mode compound. Each iteration generates knowledge that future iterations can use.
+
+**Wiki compile at iteration end (v8.0)**: After Gate 8 (Handoff), run
+`zed_wiki_compile` (or `zed compile` via Bash). If the plan shows any
+uncompiled raw sources from this iteration's research phase, author the
+wiki entries before the cron cycle sleeps. This keeps `index.md` and
+`log.md` current and prevents a raw/ backlog from accumulating.
 
 ## Scope Hard-Lock (ENFORCED — NOT ADVISORY)
 
@@ -129,6 +154,13 @@ Only files listed in `_loop/scope-boundary.md` may be edited. To add a file:
 1. Explain why it's necessary
 2. Show how it serves the objective
 3. Add it to scope-boundary.md BEFORE editing it
+
+**v8.0 exception**: `raw/` and `wiki/` are AUTOMATICALLY WHITELISTED
+during Gate 2 (research) ingestion and the wiki compile pass. Writing
+to `raw/` via `zed_clip`/`zed ingest-*` and writing to `wiki/` via
+`zed_write_note` with `source_paths` frontmatter do NOT count as scope
+violations. This is what enables continuous knowledge compounding
+inside evolve loops. All other directories remain locked.
 
 ### Rule 3: Forbidden Actions During Evolve
 These actions are NEVER permitted during an evolve loop unless the objective EXPLICITLY requires them:

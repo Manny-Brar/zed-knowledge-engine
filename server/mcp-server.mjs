@@ -32,6 +32,9 @@ import os from 'os';
 // Import CJS core engine
 const require = createRequire(import.meta.url);
 const KnowledgeEngine = require('../core/engine.cjs');
+const ingestLayer = require('../core/ingest-layer.cjs');
+const wikiLayer = require('../core/wiki-layer.cjs');
+const councilLib = require('../core/council.cjs');
 const pkgVersion = require('../package.json').version;
 
 // ---------------------------------------------------------------------------
@@ -51,6 +54,17 @@ try {
     path.join(VAULT_DIR, 'sessions'),
     path.join(VAULT_DIR, 'architecture'),
     path.join(VAULT_DIR, '_loop'),
+    // v8.0 — Karpathy-style raw/wiki/schema layout
+    path.join(VAULT_DIR, 'raw'),
+    path.join(VAULT_DIR, 'raw', 'clips'),
+    path.join(VAULT_DIR, 'raw', 'repos'),
+    path.join(VAULT_DIR, 'raw', 'papers'),
+    path.join(VAULT_DIR, 'raw', 'transcripts'),
+    path.join(VAULT_DIR, 'wiki'),
+    path.join(VAULT_DIR, 'wiki', 'concepts'),
+    path.join(VAULT_DIR, 'wiki', 'entities'),
+    path.join(VAULT_DIR, 'wiki', 'syntheses'),
+    path.join(VAULT_DIR, '_templates'),
   ]) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   }
@@ -446,6 +460,269 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
       return { content: [{ type: 'text', text: resultText }] };
     } catch (err) {
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 5 (v8.0): zed_clip — Web clip URL → raw/clips/ markdown
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'zed_clip',
+  `Clip a web page as clean markdown into the vault's raw/clips/ directory. Uses Playwright + Defuddle for JS-rendered extraction and falls back to fetch() + Readability when Playwright is unavailable.
+
+Use this when you want to persist an external article, documentation page, research paper HTML, or any URL as a first-class node in the knowledge graph. The clipped note is indexed immediately — a subsequent zed_search will find it.
+
+Do NOT use for:
+- Code repositories (use Bash: 'zed ingest-repo <url>')
+- YouTube videos (use Bash: 'zed ingest-yt <url>')
+- PDFs (use the native Claude PDF support or 'zed ingest-pdf')
+
+The clipped note includes YAML frontmatter (title, source, author, clipped-at, extractor, tags). Use the returned path with zed_read_note if you want to examine the full text afterward.
+
+Strategy flag:
+- 'auto' (default): try playwright if available, else fetch
+- 'playwright': force playwright (needed for SPAs, auth)
+- 'fetch': plain HTTP (fast, no JS rendering)`,
+  {
+    url: z.string().url().describe('HTTP/HTTPS URL to clip'),
+    tags: z.array(z.string()).default([]).describe('Optional tags to add to frontmatter'),
+    strategy: z.enum(['auto', 'playwright', 'fetch']).default('auto').describe('Fetch strategy'),
+  },
+  async ({ url, tags, strategy }) => {
+    const guard = requireEngine();
+    if (guard) return guard;
+    try {
+      const result = await ingestLayer.clipUrl(url, {
+        vaultPath: VAULT_DIR,
+        engine,
+        strategy,
+        tags,
+      });
+      const m = result.metadata || {};
+      const text = [
+        `Clipped: **${m.title || '(untitled)'}**`,
+        '',
+        `- Path: \`${result.relPath}\``,
+        `- Source: ${m.source || url}`,
+        `- Author: ${m.author || '-'}`,
+        `- Strategy: ${m.fetchStrategy} / ${m.extractor}`,
+        `- Size: ${result.bytes} bytes`,
+        '',
+        'Indexed into the knowledge graph. Search for it with zed_search or read with zed_read_note.',
+      ].join('\n');
+      return { content: [{ type: 'text', text }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Clip error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 6 (v8.0): zed_wiki_compile — Karpathy-style compile plan + index
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'zed_wiki_compile',
+  `Run the Karpathy-style wiki compile pass. Scans vault/raw/ for clips, papers, repo dumps, and transcripts; cross-references them against vault/wiki/ entries; reports a plan (uncompiled, stale, orphaned); and rebuilds wiki/index.md + wiki/log.md.
+
+This tool is DETERMINISTIC — it does not call an LLM. It produces a job list that YOU (Claude, in this session) are expected to act on:
+
+For each uncompiled raw file:
+1. Read the raw file (zed_read_note)
+2. Classify into wiki/concepts/ | wiki/entities/ | wiki/syntheses/
+3. Write a wiki entry (zed_write_note) with frontmatter containing
+   'source_paths' (list of raw/ relPaths) and 'summary' (one-sentence).
+4. Run zed_wiki_compile again to update the index.
+
+See the wiki-compiler skill for the full compile protocol. Use the 'synthesize' flag to instead write a deterministic session-snapshot note under wiki/syntheses/ — useful as a pre-compaction hook to persist recent vault activity as a searchable artifact.`,
+  {
+    since: z.number().int().positive().optional().describe('Only scan raw files modified in the last N hours'),
+    synthesize: z.boolean().default(false).describe('Write a session-synthesis snapshot instead of running a compile plan'),
+    label: z.string().optional().describe('Label for the synthesis file (only with synthesize:true)'),
+  },
+  async ({ since, synthesize, label }) => {
+    const guard = requireEngine();
+    if (guard) return guard;
+    try {
+      wikiLayer.ensureSchema(VAULT_DIR);
+
+      if (synthesize) {
+        const result = wikiLayer.writeSessionSynthesis({ vaultPath: VAULT_DIR, since: since || 24, label });
+        try { engine.incrementalBuild(); } catch {}
+        return { content: [{ type: 'text', text:
+          `Session synthesis written: \`${result.relPath}\` (${result.noteCount} notes, last ${since || 24}h).`
+        }] };
+      }
+
+      const plan = wikiLayer.planCompile({ vaultPath: VAULT_DIR, since });
+      const idx = wikiLayer.updateIndex({ vaultPath: VAULT_DIR });
+      wikiLayer.appendLog(
+        `compile: ${plan.rawCount} raw, ${plan.wikiCount} wiki, ${plan.uncompiled.length} uncompiled, ${plan.stale.length} stale`,
+        { vaultPath: VAULT_DIR }
+      );
+      try { engine.incrementalBuild(); } catch {}
+
+      const lines = [
+        `## Wiki Compile Plan`,
+        '',
+        `- Raw sources:  **${plan.rawCount}**`,
+        `- Wiki entries: **${plan.wikiCount}** (excl. index.md / log.md; index updated with ${idx.entries} entries)`,
+        `- Uncompiled:   **${plan.uncompiled.length}**`,
+        `- Stale:        **${plan.stale.length}**`,
+        `- Orphan wiki:  **${plan.orphanWiki.length}**`,
+        '',
+      ];
+      if (plan.uncompiled.length > 0) {
+        lines.push('### Next uncompiled sources');
+        lines.push('');
+        for (const r of plan.uncompiled.slice(0, 15)) {
+          lines.push(`- \`${r.relPath}\` — ${r.title || '(untitled)'}`);
+        }
+        if (plan.uncompiled.length > 15) lines.push(`- _...and ${plan.uncompiled.length - 15} more_`);
+        lines.push('');
+        lines.push('**Next step**: Read each raw file with `zed_read_note`, classify into wiki/concepts/, wiki/entities/, or wiki/syntheses/, then write the wiki entry with `zed_write_note` and include a `source_paths` frontmatter field.');
+      }
+      if (plan.stale.length > 0) {
+        lines.push('', '### Stale wiki entries');
+        lines.push('');
+        for (const s of plan.stale.slice(0, 10)) {
+          lines.push(`- \`${s.wiki.relPath}\` ← \`${s.source.relPath}\``);
+        }
+      }
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Compile error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 7 (v8.0): zed_wiki_health — lint the wiki layer
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'zed_wiki_health',
+  `Lint the vault/wiki/ layer: find uncompiled raw sources, stale entries, orphaned wiki files, broken [[wikilinks]], and entries missing source_paths provenance. Returns a 0-100 health score with a breakdown and specific remediation items.
+
+Use this:
+- At session start (check for work left behind)
+- After a compile pass (verify the output)
+- Periodically during evolve loops (keep the knowledge base clean)
+
+The score penalises uncompiled raw, stale entries, orphans, broken links, and entries with no provenance.`,
+  {},
+  async () => {
+    const guard = requireEngine();
+    if (guard) return guard;
+    try {
+      const h = wikiLayer.healthCheck({ vaultPath: VAULT_DIR });
+      const lines = [
+        `## Wiki Health: ${h.score}/100 (${h.grade})`,
+        '',
+        `- Raw sources:      **${h.rawCount}**`,
+        `- Wiki entries:     **${h.wikiCount}** (excl. index.md / log.md)`,
+        `- Uncompiled:       ${h.uncompiled.length}`,
+        `- Stale:            ${h.stale.length}`,
+        `- Orphan wiki:      ${h.orphanWiki.length}`,
+        `- Broken wikilinks: ${h.brokenLinks.length}`,
+        `- No provenance:    ${h.noProvenance.length}`,
+        `- Expired:          ${(h.expired || []).length}`,
+        `- Superseded:       ${(h.superseded || []).length}`,
+      ];
+      if (h.brokenLinks.length > 0) {
+        lines.push('', '### Broken wikilinks');
+        for (const b of h.brokenLinks.slice(0, 10)) {
+          lines.push(`- \`${b.from}\` → [[${b.target}]]`);
+        }
+      }
+      if (h.noProvenance.length > 0) {
+        lines.push('', '### Wiki entries missing source_paths');
+        for (const w of h.noProvenance.slice(0, 10)) {
+          lines.push(`- \`${w.relPath}\` — ${w.title || '(untitled)'}`);
+        }
+      }
+      if ((h.expired || []).length > 0) {
+        lines.push('', '### Expired entries');
+        for (const e of h.expired.slice(0, 10)) {
+          lines.push(`- \`${e.wiki.relPath}\` — expired ${e.expired_at}`);
+        }
+      }
+      if ((h.superseded || []).length > 0) {
+        lines.push('', '### Superseded entries');
+        for (const s of h.superseded.slice(0, 10)) {
+          const mark = s.replacement_found ? '✓ replacement exists' : '✗ replacement missing';
+          lines.push(`- \`${s.wiki.relPath}\` → [[${s.superseded_by}]]  (${mark})`);
+        }
+      }
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `wiki-health error: ${err.message}` }], isError: true };
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool 8 (v8.0): zed_council — Karpathy llm-council for tier-3 decisions
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'zed_council',
+  `Run an LLM council for a high-stakes decision. Implements Karpathy's llm-council pattern:
+  1. Stage 1: dispatch the question to N models (claude + gpt + gemini by default)
+  2. Stage 2: each model anonymously ranks the others' answers and gives a 1-sentence critique
+  3. Stage 3: a "chairman" model synthesizes a final consensus + dissent answer
+
+REQUIRES environment variables: ANTHROPIC_API_KEY (for claude) and/or OPENROUTER_API_KEY (for gpt/gemini/grok). If neither is set, returns a structured failure note rather than throwing.
+
+Use this for Tier 3 decisions only — it is expensive (3 parallel model calls + 3 ranking calls + 1 synthesis = 7 API calls). Do NOT use for routine questions.
+
+Good use cases:
+- "Should we use Defuddle or Mozilla Readability as the primary extractor?"
+- "Is this architecture safe under concurrent writes?"
+- "What are the failure modes of this evolve-mode loop?"
+
+The returned verdict has a 'consensus' and 'dissent' section — read both before acting. If the models strongly disagree, PREFER the dissent reasoning over the consensus.`,
+  {
+    question: z.string().min(3).describe('The question for the council to deliberate'),
+    models: z.array(z.string()).optional().describe('Model aliases (claude, gpt, gemini, claude-sonnet, ...)'),
+    chairman: z.string().optional().describe('Alias for the synthesizer (default: claude)'),
+  },
+  async ({ question, models, chairman }) => {
+    const guard = requireEngine();
+    if (guard) return guard;
+    try {
+      const result = await councilLib.council(question, { models, chairman });
+      if (result.answers.length === 0) {
+        const errLines = (result.errors || []).slice(0, 5).map((e) => `- ${e.alias} [stage ${e.stage}]: ${e.error}`);
+        return { content: [{ type: 'text', text:
+          `## Council failed\n\n${result.note || 'no models returned an answer'}\n\n${errLines.join('\n')}`
+        }], isError: true };
+      }
+      const out = [`# Council: ${question}`, '', '## Answers', ''];
+      for (const a of result.answers) {
+        out.push(`### ${a.letter}. ${a.alias} — ${a.model}`);
+        out.push('');
+        out.push(a.text);
+        out.push('');
+      }
+      if (result.leaderboard.length > 0) {
+        out.push('## Peer ranking');
+        for (const e of result.leaderboard) {
+          const r = e.avgRank !== null ? e.avgRank.toFixed(2) : '—';
+          out.push(`- ${e.letter}. ${e.alias}: avg rank ${r} (${e.votes} votes)`);
+        }
+        out.push('');
+      }
+      if (result.verdict) {
+        out.push(`## Chairman verdict (${result.verdict.chairman}: ${result.verdict.model})`);
+        out.push('');
+        out.push(result.verdict.text);
+      }
+      return { content: [{ type: 'text', text: out.join('\n') }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `council error: ${err.message}` }], isError: true };
     }
   }
 );

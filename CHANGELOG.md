@@ -1,5 +1,294 @@
 # Changelog
 
+## v8.1.0 (2026-04-10)
+
+Quality and coverage pass on top of v8.0.0. **385 tests (+29)**, all passing.
+
+### Defuddle extraction fixed
+
+`extractFromHtml()` was silently falling through to the Readability + Turndown
+fallback for every clip because:
+
+1. The browser-sync Defuddle class was being instantiated with a JSDOM
+   *wrapper* instead of the Document instance — defuddle does nothing silently
+   when passed the wrong type.
+2. The `markdown: true` option only takes effect in `defuddle/node` (ESM-only
+   async variant), not the sync `defuddle` main export, so even when defuddle
+   returned content it was HTML, not markdown.
+
+Fixed both:
+- Pass `dom.window.document` (the Document instance) into `new Defuddle()`.
+- Pipe Defuddle's cleaned HTML through Turndown for the markdown conversion.
+- Suppress Defuddle's unconditional `console.log("Initial parse returned very
+  little content")` noise around the call site (can be re-enabled with
+  `ZED_DEBUG_EXTRACTOR=1`).
+
+End-to-end verification: clipping produces `Strategy: fetch / defuddle` with
+proper code-fence language hints, `[text](url)` link preservation, and clean
+list rendering. A new regression test asserts defuddle is the active
+extractor when the dep is installed.
+
+### New: `zed ingest-pdf`
+
+PDF ingestion for `raw/papers/`. Strategy:
+
+1. **`pdftotext`** (poppler) if on PATH → full text extraction
+2. **Stub fallback** otherwise → metadata-only note pointing at the PDF,
+   with instructions for Claude to read the file directly via its native
+   PDF support
+
+Supports both local file paths and `http(s)://` URLs (downloads to tmp,
+extracts, cleans up). Writes source metadata (`source`, `source_path`,
+`extractor`) so `wiki-health` can track provenance.
+
+CLI: `zed ingest-pdf <path|url> [--tag a,b]`.
+Export: `ingestLayer.ingestPdf(pathOrUrl, opts)`.
+4 new tests in `core/test-ingest.cjs` (stub path + poppler path when available).
+
+### New: LLM interpreter wired into `zed clip`
+
+Templates that use `{{"prompt text"}}` Interpreter variables (Obsidian Web
+Clipper's batch-prompt feature) now actually call an LLM. Auto-detection:
+
+- If `ANTHROPIC_API_KEY` is set → claude-haiku for cost
+- Else if `OPENROUTER_API_KEY` is set → `anthropic/claude-haiku` via OR
+- Else → returns empty strings (templates degrade gracefully)
+
+Disabled by `--no-interpret` on the CLI or `interpret: false` in opts.
+Tested in `core/test-ingest.cjs` (3 new tests) — verifies the auto-wire
+logic without making real API calls.
+
+New export: `ingestLayer.buildInterpreter(opts)`.
+
+### New: `ZED_COUNCIL_BUDGET` enforcement
+
+The `llm-council` skill promised a budget cap; now it actually enforces one.
+
+**Ledger**: `<data-dir>/council-budget.json` tracks `{spent, calls, reset_at}`
+across invocations. `estimateCost()` uses rough USD-per-million-token prices
+per provider (conservative — the cap is a safety rail, not billing).
+
+**Pre-check**: if `ZED_COUNCIL_BUDGET` is set and `ledger.spent >= cap`, the
+council refuses to start and returns a structured failure note. `result.budget`
+reports `{cap, spent, remaining, calls}`.
+
+**Mid-run check**: after stage 2 (rankings), if the budget is now exceeded,
+stage 3 (chairman synthesis) is skipped and an error is recorded at
+`{stage: 3, error: "budget cap reached"}`. Stages 1+2 still return.
+
+**CLI**:
+- `zed council --budget-status` → show current spend / cap / remaining
+- `zed council --reset-budget` → zero the ledger
+
+**Tests**: 4 new tests in `core/test-council.cjs` covering pre-check,
+mid-run skip, ledger tracking, and reset.
+
+### Wiki temporal metadata (Graphiti-style)
+
+`listWikiFiles()` now surfaces optional frontmatter fields:
+
+- `created` — when the entry was first authored
+- `updated` — last semantic update
+- `expires_at` — when the knowledge becomes stale
+- `superseded_by` — wikilink to a replacement entry
+
+`healthCheck()` uses these:
+
+- `h.expired` — entries whose `expires_at` is in the past (score penalty)
+- `h.superseded` — entries with `superseded_by`, plus a `replacement_found` flag
+- `h.wikiCount` — now correctly **excludes `index.md` and `log.md`** (they're
+  scaffolding, not knowledge)
+
+3 new wiki tests + 1 updated wikiCount test. Skill updates
+([skills/wiki-compiler.md](skills/wiki-compiler.md)) document the fields.
+
+### Session-start shows the schema
+
+[scripts/session-start.sh](scripts/session-start.sh) now prints the first 30
+lines of `vault/schema.md` at session start, grounding Claude in the Karpathy
+vault contract before any work happens.
+
+### New CLI integration tests
+
+13 new tests in [cli/test-cli.cjs](cli/test-cli.cjs) covering the v8.0 surface:
+
+- `compile` (plain + `--json` + schema creation + index/log creation)
+- `compile --synthesize --since --label`
+- `wiki-health` (plain + `--json`)
+- `council --budget-status` (plain + `--json`)
+- `council --reset-budget`
+- `clip` URL validation (invalid + ftp)
+- `ingest-pdf` missing-file error
+
+### Test totals
+
+**356 → 385 (+29), all passing**:
+
+| Suite | v8.0 | v8.1 |
+|---|---|---|
+| core | 52 | 52 |
+| ingest | 34 | **42** (+8) |
+| template | 69 | 69 |
+| wiki | 21 | **25** (+4) |
+| council | 19 | **23** (+4) |
+| MCP | 19 | 19 |
+| CLI | 94 | **107** (+13) |
+| E2E | 18 | 18 |
+| Eval | 30 | 30 |
+
+## v8.0.0 (2026-04-10)
+
+### Wiki Engine — Karpathy-style raw/wiki/schema architecture
+
+A major release that turns ZED from a capture-first knowledge graph into a
+full **ingest → compile → compound** engine based on Andrej Karpathy's
+[LLM wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+and his
+[llm-council](https://github.com/karpathy/llm-council) multi-model review
+pattern.
+
+### New vault layout
+
+```
+vault/
+├── raw/                # IMMUTABLE external sources
+│   ├── clips/          #   web clips (zed clip)
+│   ├── repos/          #   repomix dumps (zed ingest-repo)
+│   ├── papers/         #   PDFs
+│   └── transcripts/    #   YouTube + other transcripts (zed ingest-yt)
+├── wiki/               # LLM-compiled knowledge artifact
+│   ├── index.md        #   auto-maintained TOC
+│   ├── log.md          #   append-only change log
+│   ├── concepts/
+│   ├── entities/
+│   └── syntheses/      #   cross-source + pre-compact snapshots
+├── _templates/         # user-override clip templates (Web Clipper JSON format)
+└── schema.md           # the agent-facing contract for the whole vault
+```
+
+### New core modules
+
+- **`core/ingest-layer.cjs`** — `clipUrl()`, `ingestYouTube()`, `ingestRepo()`,
+  `htmlToNote()`, `extractFromHtml()`, `emitFrontmatter()`, `slugify()`,
+  `fetchHtml()`. Lazy-loads Playwright, Defuddle, Readability, Turndown, jsdom.
+  Graceful degradation: Defuddle → Readability+Turndown → naive HTML strip.
+- **`core/template-engine.cjs`** — Web-Clipper-compatible template DSL.
+  Variable resolver for `{{preset}}`, `{{meta:name:X}}`, `{{selector:.css}}`,
+  `{{selectorHtml:...}}`, `{{schema:@Type:field}}`, and `{{"prompt"}}`
+  interpreter slots. **28+ filters** (trim, lower, upper, capitalize,
+  title_case, reverse, length, strip_md, slice, replace, default, split,
+  join, first, last, unique, map, safe_name, safe_filename, date, markdown,
+  blockquote, callout, link, wikilink, image, list, number, safe). Supports
+  both `,` and `:` as filter-argument separators. Sync `render()` and
+  async `renderAsync()` that batches interpreter prompts.
+- **`core/wiki-layer.cjs`** — Deterministic Karpathy compile loop:
+  `planCompile({since})`, `updateIndex()`, `appendLog()`, `healthCheck()`,
+  `writeSessionSynthesis({since, label})`, `ensureSchema()`. Never calls an
+  LLM — the compile plan is a structured task list that Claude (in the
+  user's current session) is expected to act on via `zed_read_note` +
+  `zed_write_note`.
+- **`core/council.cjs`** — Three-stage LLM council:
+  1. **Stage 1** — dispatch the question to N models in parallel
+  2. **Stage 2** — anonymous peer ranking + 1-sentence critique
+  3. **Stage 3** — chairman synthesis with consensus + dissent
+  Native `fetch` to Anthropic and OpenRouter — no new SDK dependencies.
+  Injected `providers` registry makes the three-stage flow fully
+  unit-testable with zero real API calls.
+
+### New CLI commands
+
+- `zed clip <url> [--tag a,b] [--auth file] [--strategy auto|playwright|fetch]`
+- `zed ingest-yt <url>` — YouTube transcript via `youtube-transcript`
+- `zed ingest-repo <git-url>` — repo dump via `npx repomix`
+- `zed compile [--since <hours>] [--synthesize] [--label <name>]` — show
+  the compile plan, rebuild `index.md`, append to `log.md`, or write a
+  deterministic session synthesis
+- `zed wiki-health` — 0-100 wiki quality score with breakdown: uncompiled
+  raw, stale entries, orphan wiki, broken wikilinks, entries without
+  provenance
+- `zed council "<question>" [--models claude,gpt,gemini] [--chairman claude] [--save]`
+
+### New MCP tools (8 total now)
+
+| | Tool | Purpose |
+|---|---|---|
+| existing | `zed_search` | Graph-boosted FTS |
+| existing | `zed_read_note` | Read a note |
+| existing | `zed_write_note` | Create/update a note |
+| existing | `zed_decide` | Create an ADR |
+| **new** | `zed_clip` | Clip a URL into `raw/clips/` |
+| **new** | `zed_wiki_compile` | Run the Karpathy compile plan |
+| **new** | `zed_wiki_health` | Lint the wiki |
+| **new** | `zed_council` | Multi-model consultation for Tier 3 decisions |
+
+### New skills
+
+- `skills/wiki-compiler.md` — how Claude should behave when the compile
+  plan has uncompiled raw files (classify → read → write → cross-link)
+- `skills/clip-ingestion.md` — when to use `zed_clip` vs specialized
+  ingesters, template routing, dedup, auth handling
+- `skills/llm-council.md` — when to fire the council, how to phrase
+  questions, how to interpret verdicts, budget discipline
+
+### Skill updates
+
+- `skills/evolve-mode.md`: adds **Gate 2.5 (Ingest)** and **Gate 4.5
+  (Council)** to the phase-gate engine. Auto-whitelists `raw/` and
+  `wiki/` in scope-hard-lock so ingestion never counts as drift.
+- `skills/execution-protocol.md`: adds **Gate 2.5 (Council)** for Tier 3
+  hard-to-reverse decisions. Gate 2 (Research) now prefers the
+  clip→compile flow over ad-hoc `research/` notes.
+
+### Hook updates
+
+- **Pre-compact hook rewritten**: now actively runs
+  `zed compile --synthesize --since 4 --label pre-compact`, which writes
+  a deterministic session snapshot to `wiki/syntheses/session-*.md`
+  BEFORE context compaction. The snapshot is search-indexed and survives
+  compaction — turning a destructive event into a durable artifact.
+- **Session-start hook**: now reports uncompiled raw source count at
+  session start so Claude notices work left behind.
+
+### Bundled clip templates (`templates/clip-templates/`)
+
+Ships with 6 starter templates (Obsidian Web Clipper-compatible JSON):
+`article.json` (generic fallthrough), `anthropic-docs.json`,
+`arxiv.json`, `github-readme.json`, `youtube.json`, `hackernews.json`.
+User overrides go in `<vault>/_templates/`.
+
+### Dependencies added
+
+- `playwright` — JS-rendered page fetching (chromium postinstall,
+  skip with `ZED_SKIP_PLAYWRIGHT=1`)
+- `defuddle` — primary extractor (by the Obsidian Web Clipper author)
+- `@mozilla/readability` + `turndown` + `jsdom` — fallback pipeline
+- `youtube-transcript` — transcript ingestion
+
+### Testing
+
+Total tests: **213 → 356** (+143).
+
+- `core/test-ingest.cjs`: **34 tests** — slugify, hostFromUrl,
+  emitFrontmatter (round-trip through file-layer parser), extractFromHtml
+  (HTML fixtures), htmlToNote, stubbed fetch-based clipUrl with template
+  selection
+- `core/test-template.cjs`: **69 tests** — every filter, tokenizer,
+  variable parser, selector/meta/schema.org resolvers, async interpreter
+  batching, template matching + loading
+- `core/test-wiki.cjs`: **21 tests** — inventory, planCompile (uncompiled,
+  stale, orphan, since-filter), updateIndex, appendLog, healthCheck,
+  writeSessionSynthesis, ensureSchema
+- `core/test-council.cjs`: **19 tests** — resolveAlias, parseRanking,
+  prompt builders, full three-stage flow with mocked providers including
+  parallel-dispatch verification and graceful degradation
+- MCP server test updated to the v8.0 tool surface (8 tools)
+
+### Bug fixes (pre-existing)
+
+- `cli/test-cli.cjs`, `cli/test-e2e.cjs`, `cli/test-eval.cjs`: quoted the
+  `bin/zed` path in `execSync` calls so spaces in the installed path
+  (e.g. iCloud's `Mobile Documents`) no longer break the CLI test suite.
+
 ## v7.7.0 (2026-03-31)
 
 ### Evolve Mode — Cron Loop & ULTRATHINK

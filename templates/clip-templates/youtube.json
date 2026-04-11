@@ -1,0 +1,22 @@
+{
+  "name": "youtube",
+  "description": "YouTube video pages — routes users to `zed ingest-yt` for full transcripts",
+  "behavior": "create",
+  "triggers": [
+    "https://www.youtube.com/watch",
+    "https://youtu.be/",
+    "https://youtube.com/watch"
+  ],
+  "noteNameFormat": "youtube-{{title|safe_filename}}",
+  "path": "raw/transcripts",
+  "properties": [
+    { "name": "title", "value": "{{title|trim}}", "type": "text" },
+    { "name": "type", "value": "video", "type": "text" },
+    { "name": "source", "value": "{{url}}", "type": "text" },
+    { "name": "source_host", "value": "youtube.com", "type": "text" },
+    { "name": "channel", "value": "{{meta:name:author}}", "type": "text" },
+    { "name": "clipped", "value": "{{date|date:\"YYYY-MM-DDTHH:mm:ssZ\"}}", "type": "date" },
+    { "name": "tags", "value": "clip, video, youtube", "type": "multitext" }
+  ],
+  "noteContentFormat": "# {{title}}\n\n> Source: [YouTube]({{url}})  \n> Channel: {{meta:name:author}}  \n\n{{meta:name:description}}\n\n---\n\n_For the full transcript, run:_ `zed ingest-yt {{url}}`"
+}

@@ -69,6 +69,43 @@ if [ -f "$LOOP_OBJ" ]; then
   fi
 fi
 
+# v8.0: surface the schema.md contract (first 30 lines) if present. This is
+# Karpathy's "schema doc" — the agent-facing description of how the vault is
+# organised. Showing it at session start grounds Claude in the conventions.
+SCHEMA="$VAULT_DIR/schema.md"
+if [ -f "$SCHEMA" ]; then
+  echo ""
+  echo "=== ZED Vault Schema (first 30 lines) ==="
+  head -30 "$SCHEMA" 2>/dev/null
+  echo "========================================="
+fi
+
+# v8.0: surface uncompiled raw/ sources (Karpathy compile pass)
+RAW_DIR="$VAULT_DIR/raw"
+WIKI_DIR="$VAULT_DIR/wiki"
+if [ -d "$RAW_DIR" ]; then
+  RAW_COUNT=$(find "$RAW_DIR" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$RAW_COUNT" -gt 0 ]; then
+    WIKI_COUNT=0
+    if [ -d "$WIKI_DIR" ]; then
+      WIKI_COUNT=$(find "$WIKI_DIR" -name "*.md" -not -name "index.md" -not -name "log.md" 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    # Use zed compile --json to get the uncompiled count accurately
+    UNCOMPILED=$(node "$PLUGIN_ROOT/bin/zed" compile --json 2>/dev/null | node -e "
+      let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+        try{const j=JSON.parse(d);console.log((j.plan&&j.plan.uncompiled||[]).length)}catch(e){console.log(0)}
+      });
+    " 2>/dev/null || echo 0)
+    if [ "$UNCOMPILED" -gt 0 ]; then
+      echo ""
+      echo "=== ZED v8.0: Uncompiled raw sources ==="
+      echo "  $UNCOMPILED raw source(s) in \`raw/\` not yet in \`wiki/\`."
+      echo "  Run \`zed compile\` to see the plan, or read the wiki-compiler skill."
+      echo "========================================="
+    fi
+  fi
+fi
+
 # Reset edit tracker for new session
 TRACKER="$DATA_DIR/edit-tracker.json"
 echo '{"edit_count":0,"files":[],"started":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","captures":0}' > "$TRACKER"

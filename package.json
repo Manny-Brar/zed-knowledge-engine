@@ -1,6 +1,6 @@
 {
   "name": "zed-knowledge-engine",
-  "version": "7.6.0",
+  "version": "8.1.0",
   "description": "ZED — Every prompt. Planned. Verified. Remembered. Knowledge engine + execution protocol for Claude Code.",
   "main": "core/engine.cjs",
   "bin": {
@@ -12,14 +12,25 @@
     "test:cli": "node cli/test-cli.cjs",
     "test:e2e": "node cli/test-e2e.cjs",
     "test:eval": "node cli/test-eval.cjs",
-    "test:all": "cd core && node test.cjs && cd .. && node server/test-mcp.cjs && node cli/test-cli.cjs && node cli/test-e2e.cjs && node cli/test-eval.cjs",
+    "test:ingest": "node core/test-ingest.cjs",
+    "test:template": "node core/test-template.cjs",
+    "test:wiki": "node core/test-wiki.cjs",
+    "test:council": "node core/test-council.cjs",
+    "test:all": "cd core && node test.cjs && cd .. && node core/test-ingest.cjs && node core/test-template.cjs && node core/test-wiki.cjs && node core/test-council.cjs && node server/test-mcp.cjs && node cli/test-cli.cjs && node cli/test-e2e.cjs && node cli/test-eval.cjs",
     "bench": "node core/bench.cjs",
     "start": "node server/mcp-server.mjs",
-    "setup": "bash scripts/setup.sh"
+    "setup": "bash scripts/setup.sh",
+    "postinstall": "node scripts/postinstall.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@mozilla/readability": "^0.5.0",
     "better-sqlite3": "^11.10.0",
+    "defuddle": "^0.6.4",
+    "jsdom": "^24.1.1",
+    "playwright": "^1.48.0",
+    "turndown": "^7.2.0",
+    "youtube-transcript": "^1.2.1",
     "zod": "^4.3.6"
   },
   "engines": {

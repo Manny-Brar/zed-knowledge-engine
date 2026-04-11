@@ -1,0 +1,20 @@
+{
+  "name": "hackernews",
+  "description": "Hacker News threads",
+  "behavior": "create",
+  "triggers": [
+    "https://news.ycombinator.com/item"
+  ],
+  "noteNameFormat": "hn-{{title|safe_filename}}",
+  "path": "raw/clips/hackernews",
+  "properties": [
+    { "name": "title", "value": "{{selector:.titleline>a}}", "type": "text" },
+    { "name": "type", "value": "clip", "type": "text" },
+    { "name": "source", "value": "{{url}}", "type": "text" },
+    { "name": "source_host", "value": "news.ycombinator.com", "type": "text" },
+    { "name": "upstream_url", "value": "{{selector:.titleline>a?href}}", "type": "text" },
+    { "name": "clipped", "value": "{{date|date:\"YYYY-MM-DDTHH:mm:ssZ\"}}", "type": "date" },
+    { "name": "tags", "value": "clip, hackernews, discussion", "type": "multitext" }
+  ],
+  "noteContentFormat": "# {{selector:.titleline>a}}\n\n> HN thread: [{{url}}]({{url}})  \n> Upstream link: {{selector:.titleline>a?href}}  \n\n{{content}}"
+}
