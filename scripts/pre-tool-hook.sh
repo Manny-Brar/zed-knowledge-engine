@@ -8,6 +8,30 @@ LOOP_DIR="$DATA_DIR/vault/_loop"
 SCOPE_BOUNDARY="$LOOP_DIR/scope-boundary.md"
 OBJECTIVE="$LOOP_DIR/objective.md"
 
+# v8.1: Once-per-session search suggestion
+# If no zed_search has been called yet this session, gently remind.
+# Uses a flag file so the reminder only fires once.
+SEARCH_REMINDED="$DATA_DIR/.search-reminded"
+if [ ! -f "$SEARCH_REMINDED" ]; then
+  PLUGIN_ROOT="${SCRIPT_DIR}/.."
+  HAS_SEARCHED=$(ZED_DATA="$DATA_DIR" node -e "
+    try {
+      const el = require('$PLUGIN_ROOT/core/event-log.cjs');
+      const sid = el.getSessionId({ dataDir: '$DATA_DIR' });
+      if (!sid) { console.log('unknown'); process.exit(0); }
+      const events = el.readEvents({ dataDir: '$DATA_DIR', sessionId: sid });
+      const searched = events.some(e => e.tool === 'zed_search');
+      console.log(searched ? 'yes' : 'no');
+    } catch(e) { console.log('unknown'); }
+  " 2>/dev/null || echo "unknown")
+  if [ "$HAS_SEARCHED" = "no" ]; then
+    echo "ZED: No vault search this session. Consider running zed_search before editing to check for relevant prior work."
+    touch "$SEARCH_REMINDED"
+  elif [ "$HAS_SEARCHED" = "yes" ]; then
+    touch "$SEARCH_REMINDED"  # Don't remind again
+  fi
+fi
+
 # Read current drift metrics
 if [ ! -f "$TRACKER" ]; then
   exit 0  # No tracker = no drift data = allow

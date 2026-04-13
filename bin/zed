@@ -1376,6 +1376,130 @@ const commands = {
 
   // --- Analytics ---
 
+  metrics() {
+    const engine = getEngine();
+    const metrics = require('../core/metrics.cjs');
+    const windowIdx = commandArgs.indexOf('--window');
+    const windowDays = windowIdx >= 0 ? parseInt(commandArgs[windowIdx + 1], 10) || 30 : 30;
+
+    const m = metrics.computeMetrics({ vaultPath: VAULT_DIR, engine, windowDays });
+
+    if (jsonMode) return output(m);
+
+    const trendStr = m.trends && m.trends.vsLast
+      ? ` ${m.trends.vsLast.scoreDelta >= 0 ? '↑' : '↓'} ${m.trends.vsLast.scoreDelta >= 0 ? '+' : ''}${m.trends.vsLast.scoreDelta} from last run`
+      : '';
+    const dirStr = m.trends && m.trends.direction
+      ? ` (${m.trends.direction})`
+      : '';
+
+    const lines = [
+      `ZED Effectiveness: ${m.score}/100 (${m.grade})${trendStr}${dirStr}`,
+      '',
+      '── Growth ──',
+      `  Notes:      ${m.growth.total} total, ${m.growth.inWindow} in last ${m.growth.windowDays}d`,
+      `  Rate:       ${m.growth.perWeek} notes/week`,
+      `  Trajectory: ${m.growth.trajectory}`,
+    ];
+
+    if (m.growth.byWeek.length > 0) {
+      lines.push('  Weekly:');
+      for (const w of m.growth.byWeek.slice(-6)) {
+        const bar = '\u2588'.repeat(Math.min(w.count, 30));
+        lines.push(`    ${w.week}: ${bar || '\u00b7'} (${w.count})`);
+      }
+    }
+
+    const types = Object.entries(m.growth.byType).sort((a, b) => b[1] - a[1]);
+    if (types.length > 0) {
+      lines.push('  By type: ' + types.map(([t, c]) => `${t}(${c})`).join(', '));
+    }
+
+    lines.push('');
+    lines.push('── Connectivity ──');
+    lines.push(`  Edges/node:     ${m.connectivity.edgesPerNode} ${m.connectivity.edgesPerNode >= 1.5 ? '(healthy)' : m.connectivity.edgesPerNode > 0 ? '(low)' : '(none)'}`);
+    lines.push(`  Orphan rate:    ${Math.round(m.connectivity.orphanRatio * 100)}%`);
+    lines.push(`  Clusters:       ${m.connectivity.clusterCount}${m.connectivity.largestCluster ? ` (largest: ${m.connectivity.largestCluster})` : ''}`);
+    lines.push(`  Hub notes (3+): ${m.connectivity.hubCount}`);
+    lines.push(`  Verdict:        ${m.connectivity.verdict}`);
+
+    lines.push('');
+    lines.push('── Wiki Compile ──');
+    if (m.compileRate.rawCount > 0) {
+      lines.push(`  Raw sources:     ${m.compileRate.rawCount}`);
+      lines.push(`  Compiled:        ${m.compileRate.compiledRawCount}/${m.compileRate.rawCount} (${m.compileRate.rate}%)`);
+      lines.push(`  Backlog:         ${m.compileRate.uncompiledCount}`);
+      if (Object.keys(m.compileRate.uncompiledByCategory).length > 0) {
+        lines.push('  Uncompiled by:   ' +
+          Object.entries(m.compileRate.uncompiledByCategory).map(([c, n]) => `${c}(${n})`).join(', '));
+      }
+      lines.push(`  Verdict:         ${m.compileRate.verdict}`);
+    } else {
+      lines.push('  (no raw sources yet — use `zed clip <url>` to start)');
+    }
+
+    lines.push('');
+    lines.push('── Capture Ratio ──');
+    lines.push(`  Sessions:    ${m.captureRatio.sessions}`);
+    lines.push(`  Decisions:   ${m.captureRatio.decisions}`);
+    lines.push(`  Patterns:    ${m.captureRatio.patterns}`);
+    lines.push(`  Wiki:        ${m.captureRatio.wikiEntries}`);
+    lines.push(`  Clips:       ${m.captureRatio.clips}`);
+    if (m.captureRatio.ratio !== null) {
+      lines.push(`  Ratio:       ${m.captureRatio.ratio} captures/session (${m.captureRatio.verdict})`);
+    } else {
+      lines.push(`  Ratio:       — (no sessions yet)`);
+    }
+
+    lines.push('');
+    lines.push('── Freshness ──');
+    lines.push(`  Fresh (${m.knowledgeAge.windowDays}d): ${m.knowledgeAge.fresh}/${m.knowledgeAge.total} (${m.knowledgeAge.freshRatio}%)`);
+    lines.push(`  Avg age:     ${m.knowledgeAge.avgAgeDays} days`);
+    lines.push(`  Verdict:     ${m.knowledgeAge.verdict}`);
+
+    if (m.toolUsage && m.toolUsage.totalCalls > 0) {
+      lines.push('');
+      lines.push('── Tool Usage ──');
+      const tu = m.toolUsage;
+      lines.push(`  Total calls:    ${tu.totalCalls} across ${tu.sessionCount} session(s)`);
+      lines.push(`  Avg/session:    ${tu.avgPerSession}`);
+      const sorted = Object.entries(tu.byTool).sort((a, b) => b[1] - a[1]);
+      lines.push('  By tool: ' + sorted.map(([t, c]) => `${t.replace('zed_', '')}(${c})`).join(', '));
+    }
+
+    if (m.protocolAdherence && (m.protocolAdherence.searchesTotal > 0 || m.protocolAdherence.writesTotal > 0)) {
+      lines.push('');
+      lines.push('── Protocol Adherence ──');
+      const pa = m.protocolAdherence;
+      if (pa.searchBeforeWriteRate !== null) {
+        lines.push(`  Search-before-write: ${pa.searchBeforeWriteRate}% (${pa.writesWithPriorSearch}/${pa.writesTotal})`);
+      }
+      if (pa.searchHitRate !== null) {
+        lines.push(`  Search hit rate:     ${pa.searchHitRate}% (${pa.searchHits}/${pa.searchesTotal})`);
+      }
+    }
+
+    if (m.evolveEfficiency.completedIterations > 0 || m.evolveEfficiency.activeLoop) {
+      lines.push('');
+      lines.push('── Evolve Loops ──');
+      if (m.evolveEfficiency.objectiveTitle) {
+        lines.push(`  Objective:   ${m.evolveEfficiency.objectiveTitle}`);
+      }
+      lines.push(`  Status:      ${m.evolveEfficiency.verdict}`);
+      lines.push(`  Iterations:  ${m.evolveEfficiency.completedIterations}`);
+    }
+
+    if (m.searchUtility.compilePasses > 0 || m.searchUtility.sessionSyntheses > 0) {
+      lines.push('');
+      lines.push('── System Activity ──');
+      lines.push(`  Compile passes:     ${m.searchUtility.compilePasses}`);
+      lines.push(`  Session syntheses:  ${m.searchUtility.sessionSyntheses}`);
+      lines.push(`  Session notes:      ${m.searchUtility.sessionNotes}`);
+    }
+
+    output(lines.join('\n'));
+  },
+
   analytics() {
     const engine = getEngine();
     const stats = engine.getStats();
@@ -2710,6 +2834,7 @@ Graph:
   path <from> <to>          Shortest path between notes
 
 Info:
+  metrics [--window N]      Effectiveness dashboard (is ZED helping?)
   stats                     Vault statistics
   health                    Vault quality score
   tags [tag]                List tags or browse by tag

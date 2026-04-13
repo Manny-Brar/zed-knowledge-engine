@@ -7,6 +7,10 @@
     "compound-learner",
     "full-mode",
     "evolve-mode",
-    "onboarding"
+    "onboarding",
+    "wall-breaker",
+    "wiki-compiler",
+    "clip-ingestion",
+    "llm-council"
   ]
 }

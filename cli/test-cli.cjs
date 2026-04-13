@@ -1213,6 +1213,26 @@ test('export to unwritable path errors clearly', () => {
 
 console.log('\nv8.0 Wiki Engine:');
 
+test('metrics shows effectiveness dashboard', () => {
+  const out = zed('metrics');
+  assert(out.includes('ZED Effectiveness:'), `expected effectiveness header, got: ${out}`);
+  assert(out.includes('Growth'), 'should have growth section');
+  assert(out.includes('Connectivity'), 'should have connectivity section');
+  assert(out.includes('Capture Ratio'), 'should have capture ratio section');
+  assert(out.includes('Freshness'), 'should have freshness section');
+});
+
+test('metrics --json returns structured data', () => {
+  const out = zedJson('metrics');
+  assert(typeof out.score === 'number', 'should have numeric score');
+  assert(out.growth, 'should have growth');
+  assert(out.connectivity, 'should have connectivity');
+  assert(out.compileRate, 'should have compileRate');
+  assert(out.captureRatio, 'should have captureRatio');
+  assert(out.knowledgeAge, 'should have knowledgeAge');
+  assert(out.generated, 'should have generated timestamp');
+});
+
 test('compile on empty vault prints a zero plan', () => {
   const out = zed('compile');
   assert(out.includes('Wiki compile plan'), `expected plan header, got: ${out}`);

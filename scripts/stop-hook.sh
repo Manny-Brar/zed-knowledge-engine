@@ -20,6 +20,40 @@ VAULT_DIR="$DATA_DIR/vault"
 LOOP_DIR="$VAULT_DIR/_loop"
 TRACKER="$DATA_DIR/edit-tracker.json"
 
+# v8.1: Session grading — read MCP event log and report session quality
+# before allowing stop (informational, never blocks)
+SESSION_GRADE=$(ZED_DATA="$DATA_DIR" node -e "
+  try {
+    const el = require('$PLUGIN_ROOT/core/event-log.cjs');
+    const sid = el.getSessionId({ dataDir: '$DATA_DIR' });
+    if (!sid) { process.exit(0); }
+    const events = el.readEvents({ dataDir: '$DATA_DIR', sessionId: sid });
+    if (events.length === 0) { process.exit(0); }
+    const agg = el.aggregateToolUsage(events);
+    const adh = el.aggregateProtocolAdherence(events);
+    let grade = 'C';
+    const searched = (agg.byTool.zed_search || 0) > 0;
+    const captured = (agg.byTool.zed_write_note || 0) + (agg.byTool.zed_decide || 0) > 0;
+    if (searched && captured) grade = 'A';
+    else if (searched || captured) grade = 'B';
+    else if (agg.totalCalls <= 3) grade = 'C';
+    else grade = 'D';
+    const parts = [
+      'Session grade: ' + grade,
+      agg.totalCalls + ' tool calls',
+      (agg.byTool.zed_search || 0) + ' searches',
+      (agg.byTool.zed_write_note || 0) + (agg.byTool.zed_decide || 0) + ' captures',
+    ];
+    if (adh.searchBeforeWriteRate !== null) {
+      parts.push(adh.searchBeforeWriteRate + '% search-before-write');
+    }
+    console.log('ZED: ' + parts.join(', '));
+  } catch(e) {}
+" 2>/dev/null || true)
+if [ -n "$SESSION_GRADE" ]; then
+  echo "$SESSION_GRADE"
+fi
+
 # If no active evolve loop, allow stop
 OBJECTIVE="$LOOP_DIR/objective.md"
 if [ ! -f "$OBJECTIVE" ]; then

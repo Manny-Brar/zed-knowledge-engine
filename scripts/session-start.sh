@@ -110,4 +110,7 @@ fi
 TRACKER="$DATA_DIR/edit-tracker.json"
 echo '{"edit_count":0,"files":[],"started":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","captures":0}' > "$TRACKER"
 
+# v8.1: Reset the search-reminded flag so the pre-tool hook can fire once
+rm -f "$DATA_DIR/.search-reminded"
+
 echo "========================="

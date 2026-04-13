@@ -230,15 +230,18 @@ async function runTests() {
   // Wikilink suggestion tests
   // ---------------------------------------------------------------------------
 
-  await test('zed_write_note suggests wikilinks for mentioned titles', async () => {
-    // "API Design" already exists as a note title from earlier test
+  await test('zed_write_note auto-links mentioned titles (v8.1 autolink)', async () => {
+    // "API Design" already exists as a note title from earlier test.
+    // v8.1 auto-injects [[wikilinks]] rather than just suggesting them.
     const result = await client.callTool('zed_write_note', {
       file_name: 'research/api-research.md',
       content: '---\ntitle: "API Research"\ntags: [research, api]\n---\n# API Research\nWe looked at API Design patterns and considered alternatives.',
     });
     const text = result.content[0].text;
-    assert.ok(text.includes('Suggested wikilinks'), `Expected "Suggested wikilinks" in: ${text}`);
-    assert.ok(text.includes('[[API Design]]'), `Expected "[[API Design]]" in: ${text}`);
+    assert.ok(
+      text.includes('Auto-linked') || text.includes('[[API Design]]'),
+      `Expected auto-link report in: ${text}`
+    );
   });
 
   // ---------------------------------------------------------------------------

@@ -1,5 +1,104 @@
 # Changelog
 
+## v8.2.0 (2026-04-13)
+
+### Effectiveness enforcement — ZED now enforces its own rules
+
+The strategic plan "Enforce Before Expand" — no new features until the
+system proves it compounds knowledge. Four phases shipped:
+
+#### Phase 1: MCP Event Logging (telemetry foundation)
+
+- **`core/event-log.cjs`** — append-only JSONL log of every MCP tool
+  invocation. Records: tool name, timestamp, result count, duration,
+  session ID. Never logs argument values (privacy).
+- **Auto-instrumented**: monkey-patches `server.tool()` so all 8 MCP
+  tools are wrapped automatically — zero per-tool edits.
+- **Aggregation**: `aggregateToolUsage()` (per-tool call counts, avg per
+  session) and `aggregateProtocolAdherence()` (search-before-write rate,
+  search hit rate).
+- **Auto-prune**: keeps last 30 days of events.
+- 12 new tests in `core/test-event-log.cjs`.
+
+#### Phase 2: Auto-Wikilink Injection (connectivity)
+
+- **`core/autolink.cjs`** — `injectWikilinks(content, titleList, opts)`
+  scans note body for mentions of existing note titles and wraps them
+  in `[[wikilinks]]` before writing. Replaces the old "suggest only"
+  approach that reported links but never applied them.
+- **Longest-first matching** prevents "Auth Strategy" → "[[Auth]] Strategy".
+- **Skip rules**: titles ≤3 chars, code blocks (fenced + inline),
+  existing wikilinks, markdown links, URLs, frontmatter.
+- **Whole-word boundaries** via `(?<!\w)..(?!\w)` lookaround (not `\b`)
+  so titles with special chars like "C++ Design Patterns" work.
+- **Wired into `zed_write_note`**: every note written via MCP gets
+  auto-linked against the current knowledge graph. Response includes
+  "Auto-linked: [[X]], [[Y]]".
+- Configurable: `ZED_AUTOLINK=0` disables.
+- 17 new tests in `core/test-autolink.cjs`.
+
+#### Phase 3: Metric History + Trends
+
+- Each `zed metrics` run auto-persists to `metrics-history.jsonl`.
+- **Trend display**: "66/100 (C) ↑ +6 from last run (improving)".
+- `computeTrends()` compares vs. last run and vs. 7 days ago.
+- Direction: 'improving' / 'stable' / 'declining' based on last 3 scores.
+- Auto-dedup (within 60s) and auto-prune (365 entries max).
+
+#### Phase 4: Protocol Enforcement
+
+- **Session grading** in `scripts/stop-hook.sh`: reads the MCP event log
+  for the current session and grades it:
+  - A: searched vault AND captured knowledge
+  - B: searched OR captured
+  - C: few tool calls (neutral)
+  - D: many edits, no search, no capture
+  Reports tool calls, searches, captures, and search-before-write rate.
+- **Pre-tool search suggestion** in `scripts/pre-tool-hook.sh`: fires
+  ONCE per session (flag-file gated) if no `zed_search` has been called
+  before the first Edit/Write. Non-blocking, informational.
+- **Session-start cleanup**: resets the search-reminded flag each session.
+
+#### `zed metrics` upgraded output
+
+```
+ZED Effectiveness: 72/100 (B) ↑ +6 from last run (improving)
+
+── Growth ──
+── Connectivity ──
+── Wiki Compile ──
+── Capture Ratio ──
+── Freshness ──
+── Tool Usage ──        ← NEW: per-tool call counts, avg/session
+── Protocol Adherence ──← NEW: search-before-write %, search hit rate
+── Evolve Loops ──
+```
+
+#### Bug fix: settings.json missing new skills
+
+`settings.json` was only listing 7 of 11 skills. The v8.0 skills
+(`wiki-compiler`, `clip-ingestion`, `llm-council`) and `wall-breaker`
+were on disk but not registered. Fixed — all 11 skills now listed.
+
+#### Testing
+
+407 → **436 tests** (+29), all passing:
+
+| Suite | v8.1 | v8.2 |
+|---|---|---|
+| core | 52 | 52 |
+| ingest | 42 | 42 |
+| template | 69 | 69 |
+| wiki | 26 | 26 |
+| council | 23 | 23 |
+| metrics | 18 | 18 |
+| event-log | — | **12** |
+| autolink | — | **17** |
+| MCP | 19 | 19 |
+| CLI | 110 | 110 |
+| E2E | 18 | 18 |
+| Eval | 30 | 30 |
+
 ## v8.1.0 (2026-04-10)
 
 Quality and coverage pass on top of v8.0.0. **385 tests (+29)**, all passing.

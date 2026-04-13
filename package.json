@@ -1,6 +1,6 @@
 {
   "name": "zed-knowledge-engine",
-  "version": "8.1.0",
+  "version": "8.2.0",
   "description": "ZED — Every prompt. Planned. Verified. Remembered. Knowledge engine + execution protocol for Claude Code.",
   "main": "core/engine.cjs",
   "bin": {
@@ -16,7 +16,10 @@
     "test:template": "node core/test-template.cjs",
     "test:wiki": "node core/test-wiki.cjs",
     "test:council": "node core/test-council.cjs",
-    "test:all": "cd core && node test.cjs && cd .. && node core/test-ingest.cjs && node core/test-template.cjs && node core/test-wiki.cjs && node core/test-council.cjs && node server/test-mcp.cjs && node cli/test-cli.cjs && node cli/test-e2e.cjs && node cli/test-eval.cjs",
+    "test:metrics": "node core/test-metrics.cjs",
+    "test:eventlog": "node core/test-event-log.cjs",
+    "test:autolink": "node core/test-autolink.cjs",
+    "test:all": "cd core && node test.cjs && cd .. && node core/test-ingest.cjs && node core/test-template.cjs && node core/test-wiki.cjs && node core/test-council.cjs && node core/test-metrics.cjs && node core/test-event-log.cjs && node core/test-autolink.cjs && node server/test-mcp.cjs && node cli/test-cli.cjs && node cli/test-e2e.cjs && node cli/test-eval.cjs",
     "bench": "node core/bench.cjs",
     "start": "node server/mcp-server.mjs",
     "setup": "bash scripts/setup.sh",

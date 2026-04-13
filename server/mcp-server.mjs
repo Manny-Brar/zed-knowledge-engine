@@ -35,6 +35,8 @@ const KnowledgeEngine = require('../core/engine.cjs');
 const ingestLayer = require('../core/ingest-layer.cjs');
 const wikiLayer = require('../core/wiki-layer.cjs');
 const councilLib = require('../core/council.cjs');
+const eventLog = require('../core/event-log.cjs');
+const autolink = require('../core/autolink.cjs');
 const pkgVersion = require('../package.json').version;
 
 // ---------------------------------------------------------------------------
@@ -108,6 +110,49 @@ const server = new McpServer({
   name: 'zed-knowledge-engine',
   version: pkgVersion,
 });
+
+// ---------------------------------------------------------------------------
+// Telemetry: auto-wrap every tool handler with event logging
+// ---------------------------------------------------------------------------
+// Monkey-patches server.tool() so ALL subsequently registered tools get
+// timing + invocation logging for free. No per-tool edits needed.
+
+const _origServerTool = server.tool.bind(server);
+server.tool = function (toolName, ...rest) {
+  // The handler is always the last argument
+  const handler = rest[rest.length - 1];
+  if (typeof handler !== 'function') {
+    return _origServerTool(toolName, ...rest);
+  }
+
+  const wrappedHandler = async (args) => {
+    const start = Date.now();
+    try {
+      const result = await handler(args);
+      const durationMs = Date.now() - start;
+      // Heuristic result count
+      let resultCount = 0;
+      if (result && result.content && result.content[0] && result.content[0].text) {
+        const text = result.content[0].text;
+        if (toolName === 'zed_search') {
+          resultCount = (text.match(/^\d+\.\s+\*\*/gm) || []).length;
+        } else if (text.startsWith('Error') || result.isError) {
+          resultCount = 0;
+        } else {
+          resultCount = 1;
+        }
+      }
+      eventLog.logEvent({ tool: toolName, resultCount, durationMs, isError: !!(result && result.isError) });
+      return result;
+    } catch (err) {
+      eventLog.logEvent({ tool: toolName, resultCount: 0, durationMs: Date.now() - start, isError: true, note: 'exception' });
+      throw err;
+    }
+  };
+
+  rest[rest.length - 1] = wrappedHandler;
+  return _origServerTool(toolName, ...rest);
+};
 
 // ---------------------------------------------------------------------------
 // Tool 1: zed_search — Graph-boosted full-text search
@@ -305,6 +350,20 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
         }
       } catch (e) { /* non-fatal */ }
 
+      // v8.1: Auto-inject [[wikilinks]] before writing — the single
+      // highest-leverage change for connectivity. Replaces the old
+      // "suggest wikilinks" approach (which only reported, not applied).
+      let autolinkReport = '';
+      try {
+        const allTitles = engine.graph.db.prepare('SELECT title, path FROM nodes').all();
+        const selfPath = path.resolve(path.join(VAULT_DIR, file_name.trim()));
+        const { content: linked, injected } = autolink.injectWikilinks(content, allTitles, { selfPath });
+        if (injected.length > 0) {
+          content = linked;
+          autolinkReport = `\nAuto-linked: ${injected.map(t => `[[${t}]]`).join(', ')}`;
+        }
+      } catch (e) { /* non-fatal — write the original content */ }
+
       engine.writeNote(notePath, content);
       engine.incrementalBuild();
 
@@ -316,28 +375,7 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
         fs.writeFileSync(trackerPathW, JSON.stringify(tracker));
       } catch (e) { /* tracker may not exist yet — that's fine */ }
 
-      let resultText = `Note written: ${file_name}\nGraph updated.`;
-
-      // Auto-suggest wikilinks for the new note (H-6: use DB query instead of O(N) file reads)
-      try {
-        const suggestions = [];
-        const allTitles = engine.graph.db.prepare('SELECT title, path FROM nodes').all();
-        const bodyLower = content.toLowerCase();
-        const selfPath = path.join(VAULT_DIR, file_name.trim());
-
-        for (const row of allTitles) {
-          if (!row.title || row.path === selfPath) continue;
-          const titleLower = row.title.toLowerCase();
-          // Check if the note body mentions this title (and doesn't already have a wikilink)
-          if (titleLower.length > 3 && bodyLower.includes(titleLower) && !content.includes(`[[${row.title}]]`)) {
-            suggestions.push(row.title);
-          }
-        }
-
-        if (suggestions.length > 0) {
-          resultText += `\n\nSuggested wikilinks (mentioned but not linked): ${suggestions.slice(0, 5).map(t => `[[${t}]]`).join(', ')}`;
-        }
-      } catch (e) { /* non-fatal */ }
+      let resultText = `Note written: ${file_name}\nGraph updated.${autolinkReport}`;
 
       return { content: [{ type: 'text', text: resultText + duplicateWarning }] };
     } catch (err) {
