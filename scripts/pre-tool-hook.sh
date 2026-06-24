@@ -17,10 +17,16 @@ OBJECTIVE="$LOOP_DIR/objective.md"
 # - warn:    print a warning (every fire — but only when goal is vague/stale/missing AND mode=warn)
 # - block:   emit a JSON block decision to stop the tool call
 GOAL_CHECK=$(ZED_DATA_DIR="$DATA_DIR" node "$PLUGIN_ROOT/bin/zed" goal-check --json 2>/dev/null || echo '{}')
-GOAL_ACTION=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.recommendedAction||'allow')}catch(e){console.log('allow')}" "$GOAL_CHECK")
-GOAL_REASON=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.reason||'')}catch(e){console.log('')}" "$GOAL_CHECK")
-GOAL_TITLE=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.goalTitle||'')}catch(e){console.log('')}" "$GOAL_CHECK")
-GOAL_ID=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.goalId||'')}catch(e){console.log('')}" "$GOAL_CHECK")
+# Parse all four fields in ONE node spawn (was 4 separate spawns) — the JSON is
+# passed via env (not argv) to avoid quoting issues, and the four values are read
+# newline-delimited. Defaults are pre-set so a failed/empty read can't misbranch.
+GOAL_ACTION=allow; GOAL_REASON=; GOAL_TITLE=; GOAL_ID=
+{ IFS= read -r GOAL_ACTION; IFS= read -r GOAL_REASON; IFS= read -r GOAL_TITLE; IFS= read -r GOAL_ID; } < <(ZED_GC="$GOAL_CHECK" node -e '
+  let j = {};
+  try { j = JSON.parse(process.env.ZED_GC || "{}"); } catch (e) {}
+  process.stdout.write([(j.recommendedAction || "allow"), (j.reason || ""), (j.goalTitle || ""), (j.goalId || "")].join("\n") + "\n");
+')
+GOAL_ACTION="${GOAL_ACTION:-allow}"
 
 if [ "$GOAL_ACTION" = "block" ]; then
   ZED_REASON="$GOAL_REASON" node -e "
@@ -64,10 +70,10 @@ if [ ! -f "$SEARCH_REMINDED" ]; then
   " 2>/dev/null || echo "unknown")
   if [ "$HAS_SEARCHED" = "no" ]; then
     echo "ZED: No vault search this session. Consider running zed_search before editing to check for relevant prior work."
-    touch "$SEARCH_REMINDED"
-  elif [ "$HAS_SEARCHED" = "yes" ]; then
-    touch "$SEARCH_REMINDED"  # Don't remind again
   fi
+  # Touch on ANY outcome (yes/no/unknown) so a failed event-log read can't
+  # re-spawn this node check on every edit for the rest of the session.
+  touch "$SEARCH_REMINDED" 2>/dev/null || true
 fi
 
 # Read current drift metrics
@@ -75,8 +81,14 @@ if [ ! -f "$TRACKER" ]; then
   exit 0  # No tracker = no drift data = allow
 fi
 
-EDIT_COUNT=$(ZED_TRACKER="$TRACKER" node -e "try{console.log(JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8')).edit_count||0)}catch(e){console.log(0)}")
-FILE_COUNT=$(ZED_TRACKER="$TRACKER" node -e "try{console.log((JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8')).files||[]).length)}catch(e){console.log(0)}")
+# Read edit_count and file_count in ONE node spawn (was 2) from the same file.
+EDIT_COUNT=0; FILE_COUNT=0
+{ IFS= read -r EDIT_COUNT; IFS= read -r FILE_COUNT; } < <(ZED_TRACKER="$TRACKER" node -e '
+  let t = {};
+  try { t = JSON.parse(require("fs").readFileSync(process.env.ZED_TRACKER, "utf8")); } catch (e) {}
+  process.stdout.write((t.edit_count || 0) + "\n" + ((t.files || []).length) + "\n");
+')
+EDIT_COUNT="${EDIT_COUNT:-0}"; FILE_COUNT="${FILE_COUNT:-0}"
 
 # --- Scope Boundary Enforcement (Evolve Mode Only) ---
 # When an evolve loop is active AND a scope-boundary.md exists,

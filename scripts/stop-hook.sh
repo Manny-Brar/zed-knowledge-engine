@@ -133,9 +133,13 @@ EDIT_COUNT=0
 CAPTURES=0
 FILE_COUNT=0
 if [ -f "$TRACKER" ]; then
-  EDIT_COUNT=$(ZED_TRACKER="$TRACKER" node -e "try{const t=JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8'));console.log(t.edit_count||0)}catch(e){console.log(0)}")
-  CAPTURES=$(ZED_TRACKER="$TRACKER" node -e "try{const t=JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8'));console.log(t.captures||0)}catch(e){console.log(0)}")
-  FILE_COUNT=$(ZED_TRACKER="$TRACKER" node -e "try{const t=JSON.parse(require('fs').readFileSync(process.env.ZED_TRACKER,'utf8'));console.log((t.files||[]).length)}catch(e){console.log(0)}")
+  # Read all three tracker fields in ONE node spawn (was 3).
+  { IFS= read -r EDIT_COUNT; IFS= read -r CAPTURES; IFS= read -r FILE_COUNT; } < <(ZED_TRACKER="$TRACKER" node -e '
+    let t = {};
+    try { t = JSON.parse(require("fs").readFileSync(process.env.ZED_TRACKER, "utf8")); } catch (e) {}
+    process.stdout.write((t.edit_count || 0) + "\n" + (t.captures || 0) + "\n" + ((t.files || []).length) + "\n");
+  ')
+  EDIT_COUNT="${EDIT_COUNT:-0}"; CAPTURES="${CAPTURES:-0}"; FILE_COUNT="${FILE_COUNT:-0}"
 fi
 
 # Read current iteration from progress
