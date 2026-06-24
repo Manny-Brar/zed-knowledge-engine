@@ -20,11 +20,14 @@ VAULT_DIR="$DATA_DIR/vault"
 LOOP_DIR="$VAULT_DIR/_loop"
 TRACKER="$DATA_DIR/edit-tracker.json"
 
-# v8.1: Session grading — read MCP event log and report session quality
-# before allowing stop (informational, never blocks)
+# v8.1 + v8.3: Session grading — read MCP event log and report session
+# quality before allowing stop (informational, never blocks). v8.3 adds
+# a "G" dimension for goal alignment alongside the existing A/B/C/D scale,
+# and emits an ambient suggestion when heavy work happened without a goal.
 SESSION_GRADE=$(ZED_DATA="$DATA_DIR" node -e "
   try {
     const el = require('$PLUGIN_ROOT/core/event-log.cjs');
+    const G = require('$PLUGIN_ROOT/core/goal-layer.cjs');
     const sid = el.getSessionId({ dataDir: '$DATA_DIR' });
     if (!sid) { process.exit(0); }
     const events = el.readEvents({ dataDir: '$DATA_DIR', sessionId: sid });
@@ -33,21 +36,77 @@ SESSION_GRADE=$(ZED_DATA="$DATA_DIR" node -e "
     const adh = el.aggregateProtocolAdherence(events);
     let grade = 'C';
     const searched = (agg.byTool.zed_search || 0) > 0;
-    const captured = (agg.byTool.zed_write_note || 0) + (agg.byTool.zed_decide || 0) > 0;
-    if (searched && captured) grade = 'A';
-    else if (searched || captured) grade = 'B';
+    const captures = (agg.byTool.zed_write_note || 0) + (agg.byTool.zed_decide || 0);
+
+    // Brain upgrade: connectivity-aware grading. An orphan capture must NOT
+    // earn the top grade (the old rule rewarded ANY write, manufacturing
+    // orphans). Best-effort: builds a throwaway in-memory graph and checks
+    // whether this session's recent captures actually connected. On ANY
+    // failure recentConnected stays null and we fall back to the old signal,
+    // so the hook never breaks.
+    let recentConnected = null;
+    if (captures > 0) {
+      try {
+        const p = require('path');
+        const fsx = require('fs');
+        const KE = require('$PLUGIN_ROOT/core/engine.cjs');
+        const eng = new KE({ vaultPath: '$VAULT_DIR' });
+        eng.graph.buildGraph(eng.vaultPath, eng.ignoreOpts);
+        const orphanSet = new Set(eng.graph.getOrphans().map((o) => p.resolve(o.path)));
+        const acc = [];
+        const walk = (dir) => {
+          for (const ent of fsx.readdirSync(dir, { withFileTypes: true })) {
+            if (ent.name.startsWith('.')) continue;
+            const fp = p.join(dir, ent.name);
+            if (ent.isDirectory()) walk(fp);
+            else if (ent.name.endsWith('.md')) { try { acc.push([fp, fsx.statSync(fp).mtimeMs]); } catch (e) {} }
+          }
+        };
+        walk('$VAULT_DIR');
+        const recent = acc.sort((a, b) => b[1] - a[1]).slice(0, captures);
+        recentConnected = recent.filter((r) => !orphanSet.has(p.resolve(r[0]))).length;
+      } catch (e) { recentConnected = null; }
+    }
+
+    if (searched && captures > 0 && recentConnected !== 0) grade = 'A';
+    else if (searched && captures > 0 && recentConnected === 0) grade = 'B';
+    else if (searched || captures > 0) grade = 'B';
     else if (agg.totalCalls <= 3) grade = 'C';
     else grade = 'D';
-    const parts = [
-      'Session grade: ' + grade,
-      agg.totalCalls + ' tool calls',
-      (agg.byTool.zed_search || 0) + ' searches',
-      (agg.byTool.zed_write_note || 0) + (agg.byTool.zed_decide || 0) + ' captures',
-    ];
+
+    // v8.3: goal-alignment sub-grade (G dimension)
+    const writeLike = new Set(['zed_write_note','zed_decide','zed_clip','zed_wiki_compile']);
+    let wTotal = 0, wWithGoal = 0;
+    for (const e of events) {
+      if (!writeLike.has(e.tool)) continue;
+      wTotal++;
+      if (e.gid) wWithGoal++;
+    }
+    let goalGrade = null;
+    if (wTotal > 0) {
+      const align = wWithGoal / wTotal;
+      if (align >= 0.9) goalGrade = 'A';
+      else if (align >= 0.6) goalGrade = 'B';
+      else if (align >= 0.3) goalGrade = 'C';
+      else goalGrade = 'D';
+    }
+
+    const parts = ['Session grade: ' + grade];
+    if (goalGrade) parts.push('Goal: ' + goalGrade + ' (' + Math.round((wWithGoal/wTotal)*100) + '% aligned)');
+    parts.push(agg.totalCalls + ' tool calls');
+    parts.push((agg.byTool.zed_search || 0) + ' searches');
+    parts.push(captures + ' captures');
     if (adh.searchBeforeWriteRate !== null) {
       parts.push(adh.searchBeforeWriteRate + '% search-before-write');
     }
     console.log('ZED: ' + parts.join(', '));
+
+    // v8.3: ambient suggestion — heavy work, no goal declared
+    const { effective } = G.resolveEffectiveGoal({ dataDir: '$DATA_DIR' });
+    const heavyEdits = (agg.byTool.Edit || 0) + (agg.byTool.Write || 0) + (agg.byTool.MultiEdit || 0);
+    if (!effective && (heavyEdits >= 5 || wTotal >= 3)) {
+      console.log('ZED Goal: ' + (heavyEdits + wTotal) + ' write actions this session with no declared goal. Consider: zed goal-pin \"title\" --criteria \"...\" (project) or zed goal-set \"title\" (session).');
+    }
   } catch(e) {}
 " 2>/dev/null || true)
 if [ -n "$SESSION_GRADE" ]; then

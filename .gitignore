@@ -37,3 +37,7 @@ dist/
 
 # Test artifacts
 .test-vault/
+
+# Stray vault dir created by an unexpanded ${CLAUDE_PLUGIN_DATA} env var (ZED bug) — never commit
+${CLAUDE_PLUGIN_DATA}/
+mcp-events.jsonl

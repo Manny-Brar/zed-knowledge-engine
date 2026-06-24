@@ -6,6 +6,22 @@ Announce: **"ZED: Full mode active"**
 
 Full mode combines deep context retrieval with active knowledge capture. Every output is evaluated for persistence-worthy insights.
 
+## Step 0 — Goal Alignment (MANDATORY, BEFORE context load)
+
+Before any L0 search, resolve the goal stack and decide whether to interrogate.
+
+1. Run `zed goal-check --json` via the Bash tool.
+2. Parse `recommendedAction` and `clarity` from the response.
+3. Follow the goal-awareness skill's decision tree:
+   - `inEvolveLoop=true` → skip Step 0 entirely; evolve-mode owns enforcement. Continue to Deep Context Load.
+   - `clarity=clear` → proceed silently to Deep Context Load. Do not announce the goal — it's already in the session-start injection.
+   - `clarity=missing` → use the AskUserQuestion tool to ask the user what we're working toward. Options: "Set a quick session focus" / "Pin a project North Star" / "Skip — one-off" / "Help me figure it out". Route the answer through `zed goal-set` or `zed goal-pin` as the skill describes. THEN continue.
+   - `clarity=vague` → ask the user for measurable success criteria, then run `zed goal-set <title> --criteria "a;b;c"` (or `zed goal-pin` if North Star). THEN continue.
+   - `clarity=stale` → confirm Keep / Replace / Clear-and-skip. THEN continue.
+4. If `$ARGUMENTS` is non-empty and clearly orthogonal to the active goal (e.g. user asks about feature X while the goal is about feature Y), flag the misalignment and ask whether this is an explicit off-goal detour or whether the goal should be refined.
+
+This step is non-negotiable in Full Mode. The full goal-awareness skill is the source of truth — read it for edge cases.
+
 ## Deep Context Load
 
 1. **L0 — Vault search**: Run `zed_search` with the user's task or query ("$ARGUMENTS") to find relevant notes. If no argument was provided, search for terms related to the current conversation context.

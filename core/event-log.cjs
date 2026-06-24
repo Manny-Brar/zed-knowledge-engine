@@ -7,7 +7,8 @@
  *
  * Privacy: NEVER logs argument values (URLs, note content, queries).
  * Only structural metadata: tool name, timestamp, result count, duration,
- * session ID.
+ * session ID, goal ID. Goal IDs are derived from title + date and contain
+ * no extra information beyond what is already in the user's CLAUDE.md.
  *
  * Storage: <data-dir>/mcp-events.jsonl
  * Auto-prune: keeps last 30 days on each prune() call.
@@ -58,6 +59,21 @@ function getSessionId(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// Active goal ID — read lazily; failures return null so event logging never
+// becomes coupled to goal-layer availability.
+// ---------------------------------------------------------------------------
+
+function getActiveGoalId(opts) {
+  try {
+    const goalLayer = require('./goal-layer.cjs');
+    const { effective } = goalLayer.resolveEffectiveGoal(opts);
+    return effective ? effective.id : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // logEvent — append one event line
 // ---------------------------------------------------------------------------
 
@@ -83,6 +99,7 @@ function logEvent(event, opts) {
     const entry = {
       ts: new Date().toISOString(),
       sid: getSessionId(opts),
+      gid: getActiveGoalId(opts),
       tool: event.tool || 'unknown',
       resultCount: event.resultCount !== undefined ? event.resultCount : null,
       durationMs: event.durationMs !== undefined ? event.durationMs : null,
@@ -274,6 +291,7 @@ module.exports = {
   readEvents,
   pruneEvents,
   getSessionId,
+  getActiveGoalId,
   getLogPath,
   aggregateToolUsage,
   aggregateProtocolAdherence,

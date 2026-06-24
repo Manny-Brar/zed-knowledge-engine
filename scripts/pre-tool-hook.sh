@@ -2,11 +2,48 @@
 trap 'echo "ZED pre-tool hook error: $BASH_COMMAND" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="${SCRIPT_DIR}/.."
 DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
 TRACKER="$DATA_DIR/edit-tracker.json"
 LOOP_DIR="$DATA_DIR/vault/_loop"
 SCOPE_BOUNDARY="$LOOP_DIR/scope-boundary.md"
 OBJECTIVE="$LOOP_DIR/objective.md"
+
+# v8.3: Goal-awareness enforcement (Standard 11)
+# Calls `zed goal-check --json` to get the recommended action for this write.
+# - allow:   no-op (we're inside an evolve loop or in block-all mode w/ clear goal)
+# - surface: print the scope-hard-lock sentence reminder (once per session per goal)
+# - warn:    print a warning (every fire — but only when goal is vague/stale/missing AND mode=warn)
+# - block:   emit a JSON block decision to stop the tool call
+GOAL_CHECK=$(ZED_DATA_DIR="$DATA_DIR" node "$PLUGIN_ROOT/bin/zed" goal-check --json 2>/dev/null || echo '{}')
+GOAL_ACTION=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.recommendedAction||'allow')}catch(e){console.log('allow')}" "$GOAL_CHECK")
+GOAL_REASON=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.reason||'')}catch(e){console.log('')}" "$GOAL_CHECK")
+GOAL_TITLE=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.goalTitle||'')}catch(e){console.log('')}" "$GOAL_CHECK")
+GOAL_ID=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.goalId||'')}catch(e){console.log('')}" "$GOAL_CHECK")
+
+if [ "$GOAL_ACTION" = "block" ]; then
+  ZED_REASON="$GOAL_REASON" node -e "
+    console.log(JSON.stringify({
+      decision: 'block',
+      reason: 'ZED GOAL LOCK: ' + process.env.ZED_REASON + '. Set a goal first: zed goal-pin \"title\" --criteria \"...\" — or run zed goal-unlock to relax the lock.'
+    }));
+  "
+  exit 0
+fi
+
+if [ "$GOAL_ACTION" = "warn" ]; then
+  echo "ZED GOAL WARNING: $GOAL_REASON. Set or refine the goal: zed goal-set \"title\" --criteria \"...\""
+fi
+
+if [ "$GOAL_ACTION" = "surface" ] && [ -n "$GOAL_TITLE" ]; then
+  # Once-per-session-per-goal surfacing of the scope-hard-lock formula
+  GOAL_SURFACED_FLAG="$DATA_DIR/.goal-surfaced-${GOAL_ID}"
+  if [ ! -f "$GOAL_SURFACED_FLAG" ]; then
+    echo "ZED GOAL: Active goal — \"$GOAL_TITLE\""
+    echo "Before this write, complete: 'I searched <query>, found <wiki entry or nothing>. This action achieves $GOAL_TITLE by <mechanism>.'"
+    touch "$GOAL_SURFACED_FLAG" 2>/dev/null || true
+  fi
+fi
 
 # v8.1: Once-per-session search suggestion
 # If no zed_search has been called yet this session, gently remind.

@@ -55,6 +55,8 @@ Use 5-Level ULTRATHINK planning. Each level adds depth:
 
 Present the plan concisely. For Complex tasks, get approval before proceeding.
 
+**Scale depth to the task**: Medium tasks usually need only levels 1 + 3 (a plan plus an adversarial check). Reserve the full five levels for genuinely architectural Tier-3 work. Incremental execution beats heavy upfront planning.
+
 **Context budget**: Planning should consume <1000 tokens. If the plan is longer, you're overplanning — simplify.
 
 ### PHASE 3: EXECUTE
@@ -74,7 +76,7 @@ Present the plan concisely. For Complex tasks, get approval before proceeding.
 
 ### PHASE 5: CAPTURE KNOWLEDGE
 
-**Always:** Append summary to daily note via `zed daily "summary text"` (Bash)
+**When the session produced something worth remembering:** append a summary to the daily note via `zed daily "summary text"` (Bash). Skip it for trivial or read-only sessions — a daily note full of noise is worse than none.
 
 **When relevant:**
 - Decision made? → Run `zed template decision "name"` via Bash, then edit the file with the Edit tool
@@ -112,9 +114,8 @@ Add `--json` to any CLI command for structured output.
 
 ## CONTEXT MANAGEMENT
 
-- Monitor context usage. At ~50% capacity, proactively run `/compact` to avoid the "dumb zone" (60-70% where Claude degrades)
-- Before compacting, flush unsaved knowledge to vault
-- After compacting, re-anchor by re-reading the current task's vault context
+- Manage context budget actively: compact before context bloat starts to threaten task accuracy — flush persistence-worthy knowledge to the vault first, then re-anchor on the current task's context
+- Don't wait for an exact percentage; watch for the symptoms (dropping instructions, losing thread) and compact ahead of them
 - Delegate research-heavy tasks to `zed-researcher` (Haiku, cheap, fast) to preserve main context
 - Delegate validation to `zed-validator` (separate context window, adversarial review)
 - Keep Light mode overhead under 500 tokens. Full mode under 3000 tokens for context loading.
@@ -126,6 +127,10 @@ Add `--json` to any CLI command for structured output.
 - **Efficient**: Don't over-plan simple things, don't under-plan complex ones
 - **Compounding**: Each session leaves the vault stronger
 - **Back-pressure**: Always verify work with tests before marking complete
+- **Prose-default**: Write in prose. Use lists, tables, or headers only when the content is inherently structured or the user asks — don't reflexively bullet everything.
+- **Error ownership**: When corrected, say what went wrong, fix it, and stay on task. Don't over-apologize or blame tools.
+- **Output routing**: Conversational answers stay inline. Create or edit files only when asked, when the change requires it, or when the content is genuinely persistence-worthy.
+- **Apply context silently**: Use retrieved vault context naturally. Don't announce it ("I see from your notes…") unless it changes a decision or the user asks.
 
 ---
 

@@ -442,7 +442,7 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
       if (RESERVED.has(slug)) slug = slug + '-decision';
       const fileName = `decisions/${date}-${slug}.md`;
       const safeTitle = title.replace(/"/g, '\\"');
-      const content = [
+      let content = [
         '---',
         `title: "${safeTitle}"`,
         `date: ${date}`,
@@ -468,6 +468,20 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
       ].join('\n');
 
       const notePath = path.join(VAULT_DIR, fileName);
+
+      // Auto-inject [[wikilinks]] before writing — parity with zed_write_note.
+      // Decisions are high-value and otherwise born orphaned (Phase 1 brain fix).
+      let autolinkReport = '';
+      try {
+        const allTitles = engine.graph.db.prepare('SELECT title, path FROM nodes').all();
+        const selfPath = path.resolve(notePath);
+        const { content: linked, injected } = autolink.injectWikilinks(content, allTitles, { selfPath });
+        if (injected.length > 0) {
+          content = linked;
+          autolinkReport = `\nAuto-linked: ${injected.map(t => `[[${t}]]`).join(', ')}`;
+        }
+      } catch (e) { /* non-fatal — write the original content */ }
+
       engine.writeNote(notePath, content);
       engine.incrementalBuild();
 
@@ -479,7 +493,7 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
         fs.writeFileSync(trackerPathD, JSON.stringify(tracker));
       } catch (e) { /* tracker may not exist yet — that's fine */ }
 
-      let resultText = `Decision recorded: ${fileName}\nTitle: ${title}`;
+      let resultText = `Decision recorded: ${fileName}\nTitle: ${title}${autolinkReport}`;
 
       // Suggest related decisions
       try {

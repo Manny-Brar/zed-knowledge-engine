@@ -41,6 +41,16 @@ This skill governs your behavior for the entire session. It is not optional. Whe
 
 On EVERY prompt, before doing any work, determine if vault context is relevant. This is the first thing you do, not an afterthought. This is MANDATORY.
 
+### Goal Awareness (Standard 11 — added v8.3)
+
+When Full Mode is activated (`/zed` or `/zed-full`), goal-awareness runs **before** vault context loading. The activation sequence is:
+
+1. `zed goal-check --json` — resolve effective goal stack
+2. If clarity ≠ "clear" AND not inside an active evolve loop → interrogate the user via AskUserQuestion (per the goal-awareness skill's decision tree)
+3. THEN proceed to L0 vault search
+
+This is non-negotiable. A session that does work without knowing what it's working toward violates Standard 11. The goal-awareness skill is the source of truth — read it for edge cases (headless mode, evolve loops, stale goals).
+
 ---
 
 ### Light Mode (Default — Always On)
@@ -72,9 +82,7 @@ Light mode runs automatically. No activation needed. No mode indicator displayed
 
 ### Full Mode
 
-Activated by the `/zed` command or auto-escalation. MUST prefix first response with:
-
-> **ZED: Full mode active**
+Activated by the `/zed` command or auto-escalation. You may briefly confirm Full mode is active in one line — but never narrate the retrieval or the reasoning behind it; apply vault context silently.
 
 **Context loading**: L0 -> L1 -> L2. This sequence is MANDATORY.
 - MUST search vault broadly for the task domain
@@ -108,11 +116,7 @@ MUST automatically escalate from Light to Full mode when ANY of the following co
 - **Research tasks**: Prompt contains "compare", "evaluate", "investigate", "options for", "pros and cons"
 - **Post-mortems, audits, reviews**: Retrospective analysis of what happened and why
 
-When auto-escalating, MUST note it at the start of the response:
-
-> **ZED: Full mode** (detected [reason])
-
-Then operate under Full mode rules for the remainder of that task.
+When auto-escalating, operate under Full mode rules for the rest of the task. Don't narrate the escalation or announce the reason — just do the deeper work.
 
 ---
 
@@ -122,6 +126,7 @@ These triggers are algorithmic. When the condition is met, the action is MANDATO
 
 | Skill | Trigger Condition | Mandatory Action |
 |---|---|---|
+| goal-awareness | `/zed` or `/zed-full` activated, OR `zed goal-check` returns recommendedAction ∈ {warn, surface, block} | MUST resolve the effective goal and apply the goal-awareness decision tree BEFORE any other work. Skip only if inside an active evolve loop (where evolve-mode owns enforcement) |
 | context-loader | Every task start | MUST run L0 vault search before any work |
 | execution-protocol | Task has 3+ steps | MUST load and follow phased execution |
 | full-mode | Architecture decision made | MUST evaluate all output for capture |
@@ -135,10 +140,10 @@ These triggers are algorithmic. When the condition is met, the action is MANDATO
 
 ### Context Budget Management
 
-Claude Code's context window degrades at 60-70% usage (the "dumb zone" — Claude starts ignoring instructions, dropping context, and producing lower quality output). ZED MUST actively manage context budget.
+Long contexts degrade quality — instructions get dropped and output gets sloppier as the window fills. ZED actively manages context budget instead of waiting for a specific percentage.
 
 **Auto-Compact Protocol:**
-1. When context usage reaches ~50%, proactively run `/compact` to compress conversation history BEFORE the dumb zone hits
+1. Compact proactively when context bloat starts to threaten task accuracy — watch the symptoms (dropping instructions, losing the thread), don't wait for a fixed threshold
 2. Before compacting, flush any unsaved knowledge to the vault (the PreCompact hook assists with this)
 3. After compacting, re-anchor on the current task by re-reading the most recent vault context
 
@@ -177,5 +182,5 @@ Without back-pressure, Claude Code writes code that "looks right" but fails in p
 3. Write quality over write quantity — a vault full of noise is worse than an empty vault.
 4. The bar for persistence is: "Would re-deriving this cost significant time or risk getting it wrong?" If yes, capture. If no, skip.
 5. Every captured note MUST have a clear title, at least 2 tags, and enough context for a future session to act on it.
-6. MUST monitor context usage and trigger `/compact` at ~50% — do NOT wait for automatic compaction in the dumb zone.
+6. Monitor context budget and compact proactively on the symptoms of degradation — don't wait for automatic compaction.
 7. MUST use subagent delegation for tasks that would add >5000 tokens of intermediate output to the main context.

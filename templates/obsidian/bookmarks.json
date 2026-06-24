@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "type": "file",
+      "title": "Wiki Index",
+      "path": "wiki/index.md"
+    },
+    {
+      "type": "file",
+      "title": "Vault Schema (agent-facing contract)",
+      "path": "schema.md"
+    },
+    {
+      "type": "search",
+      "title": "Active goal",
+      "query": "path:\"goals/NORTH_STAR.md\""
+    },
+    {
+      "type": "search",
+      "title": "Completed goals",
+      "query": "path:\"goals/completed\""
+    },
+    {
+      "type": "search",
+      "title": "Recent decisions",
+      "query": "path:\"decisions\" sort:created"
+    },
+    {
+      "type": "search",
+      "title": "Synthesis notes",
+      "query": "path:\"wiki/syntheses\""
+    }
+  ]
+}

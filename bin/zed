@@ -132,30 +132,11 @@ function error(msg) {
 
 // ---------------------------------------------------------------------------
 // Health score computation (shared by health + overview commands)
+// CANONICAL scorer now lives in core/metrics.cjs (Phase 0 brain upgrade) so
+// every consumer shares one source of truth. Imported here, used unchanged.
 // ---------------------------------------------------------------------------
 
-function computeHealthScore(stats, clusterCount, hubsWithLinks) {
-  if (stats.nodeCount === 0) return { score: 0, grade: 'N/A', connectivityRatio: 0, orphanRatio: 0 };
-  const connectivityRatio = stats.edgeCount / stats.nodeCount;
-  const orphanRatio = stats.orphanCount / stats.nodeCount;
-
-  let score = 50;
-  score += Math.min(20, connectivityRatio * 10);
-  score -= Math.min(20, orphanRatio * 30);
-  score += Math.min(15, hubsWithLinks * 3);
-  const clusterPenalty = clusterCount > 1 ? Math.min(15, (clusterCount - 1) * 2) : 0;
-  score += 15 - clusterPenalty;
-  score = Math.max(0, Math.min(100, Math.round(score)));
-
-  let grade;
-  if (score >= 90) grade = 'A';
-  else if (score >= 75) grade = 'B';
-  else if (score >= 60) grade = 'C';
-  else if (score >= 40) grade = 'D';
-  else grade = 'F';
-
-  return { score, grade, connectivityRatio, orphanRatio };
-}
+const { computeHealthScore } = require('../core/metrics.cjs');
 
 // ---------------------------------------------------------------------------
 // Note path resolution (same logic as MCP server)
@@ -2778,6 +2759,339 @@ Object.assign(commands, {
 });
 
 // ---------------------------------------------------------------------------
+// Goal commands (North Star + Focus)
+// ---------------------------------------------------------------------------
+
+// Lazy-load goal-layer — only required for goal-* commands.
+function getGoalLayer() {
+  return require('../core/goal-layer.cjs');
+}
+
+// Parse `--flag value` or `--flag=value` from commandArgs. Returns array
+// (multiple `--criteria` collected) or single string.
+function flagValues(name) {
+  const out = [];
+  for (let i = 0; i < commandArgs.length; i++) {
+    const a = commandArgs[i];
+    if (a === `--${name}`) {
+      if (commandArgs[i + 1] !== undefined && !commandArgs[i + 1].startsWith('--')) {
+        out.push(commandArgs[i + 1]);
+        i++;
+      }
+    } else if (a.startsWith(`--${name}=`)) {
+      out.push(a.slice(name.length + 3));
+    }
+  }
+  return out;
+}
+
+function flagFirst(name) {
+  const vs = flagValues(name);
+  return vs.length ? vs[0] : null;
+}
+
+// Split a semicolon-separated string into trimmed non-empty parts.
+function splitList(s) {
+  if (!s) return [];
+  return String(s).split(/[;\n]/).map((x) => x.trim()).filter(Boolean);
+}
+
+Object.assign(commands, {
+
+  'goal-pin'() {
+    const G = getGoalLayer();
+    const title = commandArgs[0];
+    if (!title || !title.trim() || title.startsWith('--')) {
+      error('Usage: zed goal-pin "title" --criteria "a;b;c" [--anti "x;y"] [--horizon quarter|sprint|ongoing]');
+    }
+
+    // Collect criteria from --criteria (semicolon-list) or multiple --criterion flags
+    const criteriaList = []
+      .concat(...flagValues('criteria').map(splitList))
+      .concat(flagValues('criterion'));
+    if (criteriaList.length === 0) {
+      error('North Star requires at least one success criterion. Use --criteria "a;b;c" or pass --criterion repeatedly.');
+    }
+    const antiList = []
+      .concat(...flagValues('anti').map(splitList))
+      .concat(flagValues('anti-goal'));
+    const horizon = flagFirst('horizon') || 'ongoing';
+
+    const goal = G.writeNorthStar({
+      title: title.trim(),
+      successCriteria: criteriaList,
+      antiGoals: antiList,
+      horizon,
+    });
+
+    output(jsonMode
+      ? { action: 'goal-pin', goal }
+      : `North Star set: "${goal.title}"\n  ID: ${goal.id}\n  Criteria: ${goal.successCriteria.length}\n  Horizon: ${goal.horizon}\n  Written to: CLAUDE.md + vault/goals/NORTH_STAR.md`
+    );
+  },
+
+  'goal-set'() {
+    const G = getGoalLayer();
+    const title = commandArgs[0];
+    if (!title || !title.trim() || title.startsWith('--')) {
+      error('Usage: zed goal-set "title" [--criteria "a;b;c"] [--pinned]');
+    }
+    const criteriaList = []
+      .concat(...flagValues('criteria').map(splitList))
+      .concat(flagValues('criterion'));
+    const pinned = commandArgs.includes('--pinned');
+
+    const goal = G.writeFocus({
+      title: title.trim(),
+      successCriteria: criteriaList,
+      pinned,
+    });
+
+    output(jsonMode
+      ? { action: 'goal-set', goal }
+      : `Focus set: "${goal.title}"${pinned ? ' (pinned)' : ''}\n  ID: ${goal.id}\n  Criteria: ${goal.successCriteria.length}`
+    );
+  },
+
+  'goal-get'() {
+    const G = getGoalLayer();
+    const stack = G.resolveEffectiveGoal();
+    const clarity = G.classifyGoalClarity();
+
+    if (jsonMode) {
+      return output({ ...stack, clarity });
+    }
+    const rendered = G.renderStack();
+    output(rendered || 'No goal set. Run: zed goal-pin "title" --criteria "..." (project) or zed goal-set "title" (session).');
+  },
+
+  'goal-clear'() {
+    const G = getGoalLayer();
+    const cleared = G.clearFocus();
+    output(jsonMode
+      ? { action: 'goal-clear', cleared }
+      : cleared ? `Focus cleared: "${cleared.title}"` : 'No active focus to clear.'
+    );
+  },
+
+  'goal-complete'() {
+    const G = getGoalLayer();
+    const skipSynthesis = commandArgs.includes('--no-synthesis');
+    const note = commandArgs.find((a) => !a.startsWith('--')) || null;
+    const result = G.completeNorthStar(note, { skipSynthesis });
+
+    if (!result) {
+      return output(jsonMode
+        ? { action: 'goal-complete', completed: null }
+        : 'No North Star to complete.'
+      );
+    }
+
+    if (jsonMode) {
+      return output({
+        action: 'goal-complete',
+        goal: result.goal,
+        synthesisPath: result.synthesisPath
+          ? path.relative(VAULT_DIR, result.synthesisPath)
+          : null,
+      });
+    }
+
+    const lines = [
+      `North Star completed: "${result.goal.title}"`,
+      `  Archived to: vault/goals/completed/${result.goal.id}.md`,
+    ];
+    if (result.synthesisPath) {
+      lines.push(`  Synthesis: ${path.relative(VAULT_DIR, result.synthesisPath)}`);
+    } else if (skipSynthesis) {
+      lines.push('  Synthesis: skipped (--no-synthesis)');
+    } else {
+      lines.push('  Synthesis: (failed silently — closure still recorded)');
+    }
+    output(lines.join('\n'));
+  },
+
+  'goal-archive'() {
+    const G = getGoalLayer();
+    const reason = commandArgs.find((a) => !a.startsWith('--')) || 'manual';
+    const archived = G.archiveNorthStar(reason);
+    output(jsonMode
+      ? { action: 'goal-archive', archived }
+      : archived
+        ? `North Star archived: "${archived.title}"\n  Reason: ${reason}\n  Moved to: vault/goals/archived/${archived.id}.md`
+        : 'No North Star to archive.'
+    );
+  },
+
+  'goal-list'() {
+    const G = getGoalLayer();
+    const stack = G.resolveEffectiveGoal();
+    const completedDir = path.join(VAULT_DIR, 'goals', 'completed');
+    const archivedDir = path.join(VAULT_DIR, 'goals', 'archived');
+
+    const listMd = (dir) => {
+      if (!fs.existsSync(dir)) return [];
+      return fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => {
+        try {
+          const content = fs.readFileSync(path.join(dir, f), 'utf-8');
+          const title = (content.match(/^title:\s*"(.+?)"/m) || [])[1] || f.replace(/\.md$/, '');
+          const id = (content.match(/^id:\s*(\S+)/m) || [])[1] || null;
+          return { file: f, title, id };
+        } catch {
+          return { file: f, title: f.replace(/\.md$/, '') };
+        }
+      });
+    };
+
+    const result = {
+      active: stack,
+      completed: listMd(completedDir),
+      archived: listMd(archivedDir),
+    };
+
+    if (jsonMode) return output(result);
+
+    const lines = [];
+    lines.push(`North Star: ${stack.northStar ? stack.northStar.title : '(none)'}`);
+    lines.push(`Focus: ${stack.focus ? stack.focus.title : '(none)'}`);
+    lines.push(`Completed: ${result.completed.length}`);
+    for (const g of result.completed) lines.push(`  - ${g.title} [${g.id || g.file}]`);
+    lines.push(`Archived: ${result.archived.length}`);
+    for (const g of result.archived) lines.push(`  - ${g.title} [${g.id || g.file}]`);
+    output(lines.join('\n'));
+  },
+
+  'goal-events'() {
+    const G = getGoalLayer();
+    const limitArg = commandArgs.find((a) => !a.startsWith('--'));
+    const limit = limitArg ? parseInt(limitArg, 10) || 50 : 50;
+    const events = G.readGoalEvents().slice(-limit);
+    if (jsonMode) return output(events);
+    if (events.length === 0) return output('No goal events recorded yet.');
+    output(events.map((e) => `${e.ts}  ${e.kind.padEnd(22)}  ${e.title || e.id || ''}`).join('\n'));
+  },
+
+  'goal-clarity'() {
+    const G = getGoalLayer();
+    const clarity = G.classifyGoalClarity();
+    output(jsonMode
+      ? clarity
+      : `Clarity: ${clarity.clarity}${clarity.reason ? ' — ' + clarity.reason : ''} (source: ${clarity.source})`
+    );
+  },
+
+  'goal-lock'() {
+    const G = getGoalLayer();
+    const mode = commandArgs[0];
+    if (!mode) {
+      const current = G.readLockMode();
+      output(jsonMode
+        ? { mode: current }
+        : `Lock mode: ${current}\n\nValid modes:\n  advise        Surface scope-hard-lock sentence (default, no blocking)\n  warn          Print warnings on vague/missing goals before writes\n  block-writes  Block Edit/Write/MultiEdit when goal is missing/vague/stale\n  block-all     Block all non-read tools when goal is missing/vague/stale\n\nSet: zed goal-lock <mode>\nClear (back to advise): zed goal-unlock`
+      );
+      return;
+    }
+    if (!G.VALID_LOCK_MODES.includes(mode)) {
+      error(`Invalid mode: ${mode}. Must be one of: ${G.VALID_LOCK_MODES.join(', ')}`);
+    }
+    G.writeLockMode(mode);
+    output(jsonMode
+      ? { action: 'goal-lock', mode }
+      : `Lock mode set: ${mode}`
+    );
+  },
+
+  'goal-unlock'() {
+    const G = getGoalLayer();
+    G.clearLockMode();
+    output(jsonMode
+      ? { action: 'goal-unlock', mode: 'advise' }
+      : 'Lock mode cleared (back to: advise)'
+    );
+  },
+
+  'goal-check'() {
+    const G = getGoalLayer();
+    const result = G.goalCheck();
+    if (jsonMode) return output(result);
+    const lines = [
+      `Goal: ${result.goalTitle || '(none)'}`,
+      `Source: ${result.source}`,
+      `Clarity: ${result.clarity}${result.clarityReason ? ' — ' + result.clarityReason : ''}`,
+      `Lock mode: ${result.lockMode}`,
+      `Evolve loop active: ${result.inEvolveLoop}`,
+      `Recommended action: ${result.recommendedAction}${result.reason ? ' — ' + result.reason : ''}`,
+    ];
+    output(lines.join('\n'));
+  },
+
+  'obsidian-bootstrap'() {
+    const force = commandArgs.includes('--force');
+    const dryRun = commandArgs.includes('--dry-run');
+
+    const templateDir = path.join(__dirname, '..', 'templates', 'obsidian');
+    if (!fs.existsSync(templateDir)) {
+      error(`Obsidian template directory missing: ${templateDir}`);
+    }
+
+    const obsidianDir = path.join(VAULT_DIR, '.obsidian');
+    if (!fs.existsSync(obsidianDir) && !dryRun) {
+      fs.mkdirSync(obsidianDir, { recursive: true });
+    }
+
+    const files = fs.readdirSync(templateDir);
+    const copied = [];
+    const skipped = [];
+
+    for (const f of files) {
+      const src = path.join(templateDir, f);
+      const dst = path.join(obsidianDir, f);
+      const exists = fs.existsSync(dst);
+
+      if (exists && !force) {
+        skipped.push(f);
+        continue;
+      }
+
+      if (!dryRun) {
+        fs.copyFileSync(src, dst);
+      }
+      copied.push(f);
+    }
+
+    if (jsonMode) {
+      return output({
+        action: 'obsidian-bootstrap',
+        vault: VAULT_DIR,
+        obsidianDir,
+        copied,
+        skipped,
+        dryRun,
+        force,
+      });
+    }
+
+    const lines = [];
+    lines.push(dryRun ? 'DRY RUN — no files written.' : 'Obsidian bootstrap complete.');
+    lines.push(`  Vault: ${VAULT_DIR}`);
+    lines.push(`  .obsidian/: ${obsidianDir}`);
+    if (copied.length > 0) {
+      lines.push(`  ${dryRun ? 'Would copy' : 'Copied'} (${copied.length}): ${copied.join(', ')}`);
+    }
+    if (skipped.length > 0) {
+      lines.push(`  Skipped (${skipped.length}, already present): ${skipped.join(', ')}`);
+      lines.push('  Use --force to overwrite.');
+    }
+    lines.push('');
+    lines.push('Next steps:');
+    lines.push('  1. Open Obsidian → Open another vault → select the vault directory above');
+    lines.push('  2. Trust the config when prompted');
+    lines.push('  3. See docs/obsidian-recommended.md for plugin recommendations');
+    output(lines.join('\n'));
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -2885,6 +3199,29 @@ Evolve Loop:
   loop-complete              Mark current feature as done
   loop-stop "reason"          Stop loop gracefully
   loop-promote                Promote findings to vault
+
+Goal System (v8.3 — North Star + Focus):
+  goal-get                    Show effective goal stack (--json for parse)
+  goal-pin "title"            Set project North Star (in <repo>/CLAUDE.md)
+     --criteria "a;b;c"         At least one success criterion required
+     [--anti "x;y"]             Optional anti-goals (out of scope)
+     [--horizon h]              ongoing | quarter | sprint (default: ongoing)
+  goal-set "title"            Set session Focus (--criteria optional, --pinned to survive compact)
+  goal-clear                  Clear session Focus
+  goal-complete ["note"]      Mark North Star complete, archive, clean CLAUDE.md
+  goal-archive ["reason"]     Archive North Star without completing (for replacement)
+  goal-list                   List active + completed + archived goals
+  goal-events [N]             Tail last N goal mutation events
+  goal-clarity                One-line clarity verdict (clear|vague|stale|missing)
+  goal-lock [<mode>]          Show or set enforcement gradient
+     advise | warn | block-writes | block-all
+  goal-unlock                 Clear lock mode (back to advise default)
+  goal-check                  One-shot resolver for hooks (goal + clarity + lock + recommended action)
+
+Obsidian Integration (v8.3):
+  obsidian-bootstrap          Drop .obsidian/ config into vault (idempotent)
+     [--force]                  Overwrite existing config files
+     [--dry-run]                Show what would be copied without writing
 
 Other:
   vault-info                Compact JSON vault state (for scripts)

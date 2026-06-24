@@ -1,0 +1,5 @@
+{
+  "format": "YYYY-MM-DD",
+  "folder": "sessions",
+  "template": "_templates/daily-session"
+}

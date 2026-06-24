@@ -39,7 +39,7 @@ fi
 SOUL="$PLUGIN_ROOT/memory/ZED_SOUL.md"
 if [ -f "$SOUL" ]; then
   echo ""
-  head -30 "$SOUL" 2>/dev/null || echo "ZED: Soul document exists but could not be read."
+  head -32 "$SOUL" 2>/dev/null || echo "ZED: Soul document exists but could not be read."
 fi
 
 # ZED-First Principle reminder
@@ -67,6 +67,25 @@ if [ -f "$LOOP_OBJ" ]; then
     echo ""
     echo "ZED: Evolve loop active — run '/evolve --status' or '/evolve --resume' to continue."
   fi
+fi
+
+# v8.3: Goal stack injection (Standard 11 — Goal Awareness)
+# Reads CLAUDE.md (project) + active-goal.json (session) and renders a stack
+# block so Claude sees the effective goal on every session start.
+GOAL_STACK=$(node "$PLUGIN_ROOT/bin/zed" goal-get 2>/dev/null || true)
+if [ -n "$GOAL_STACK" ] && [ "$GOAL_STACK" != "No goal set. Run: zed goal-pin \"title\" --criteria \"...\" (project) or zed goal-set \"title\" (session)." ]; then
+  echo ""
+  echo "$GOAL_STACK"
+  # If clarity is not "clear", nudge once.
+  CLARITY=$(node "$PLUGIN_ROOT/bin/zed" goal-clarity --json 2>/dev/null || echo '{}')
+  CLARITY_VAL=$(node -e "try{const j=JSON.parse(process.argv[1]||'{}');console.log(j.clarity||'')}catch(e){console.log('')}" "$CLARITY")
+  if [ -n "$CLARITY_VAL" ] && [ "$CLARITY_VAL" != "clear" ]; then
+    echo "ZED Goal: clarity=$CLARITY_VAL. The goal-awareness skill will interrogate before non-trivial work."
+  fi
+else
+  # No goal at all — flag it so goal-awareness skill triggers Branch B on /zed
+  echo ""
+  echo "ZED Goal: no goal declared. /zed activation will prompt for one."
 fi
 
 # v8.0: surface the schema.md contract (first 30 lines) if present. This is
@@ -112,5 +131,8 @@ echo '{"edit_count":0,"files":[],"started":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'",
 
 # v8.1: Reset the search-reminded flag so the pre-tool hook can fire once
 rm -f "$DATA_DIR/.search-reminded"
+
+# v8.3: Reset goal-surfaced flags so the scope-hard-lock reminder fires once per goal per session
+rm -f "$DATA_DIR"/.goal-surfaced-* 2>/dev/null || true
 
 echo "========================="

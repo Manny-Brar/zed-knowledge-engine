@@ -171,6 +171,36 @@ function computeConnectivity(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// Vault health score (graph connectivity grade) — CANONICAL, single source
+// of truth. Extracted from bin/zed (Phase 0 brain upgrade) so health,
+// overview, status, and any other consumer share one scorer instead of
+// re-deriving it. Pure function: takes graph stats, returns score + grade.
+// ---------------------------------------------------------------------------
+
+function computeHealthScore(stats, clusterCount, hubsWithLinks) {
+  if (stats.nodeCount === 0) return { score: 0, grade: 'N/A', connectivityRatio: 0, orphanRatio: 0 };
+  const connectivityRatio = stats.edgeCount / stats.nodeCount;
+  const orphanRatio = stats.orphanCount / stats.nodeCount;
+
+  let score = 50;
+  score += Math.min(20, connectivityRatio * 10);
+  score -= Math.min(20, orphanRatio * 30);
+  score += Math.min(15, hubsWithLinks * 3);
+  const clusterPenalty = clusterCount > 1 ? Math.min(15, (clusterCount - 1) * 2) : 0;
+  score += 15 - clusterPenalty;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  let grade;
+  if (score >= 90) grade = 'A';
+  else if (score >= 75) grade = 'B';
+  else if (score >= 60) grade = 'C';
+  else if (score >= 40) grade = 'D';
+  else grade = 'F';
+
+  return { score, grade, connectivityRatio, orphanRatio };
+}
+
+// ---------------------------------------------------------------------------
 // Compile rate — is raw/ being processed into wiki/?
 // ---------------------------------------------------------------------------
 
@@ -461,6 +491,128 @@ function computeProtocolAdherence(opts) {
 }
 
 // ---------------------------------------------------------------------------
+// Goal telemetry (v8.3 — Standard 11)
+// ---------------------------------------------------------------------------
+
+const WRITE_LIKE_TOOLS = new Set([
+  'zed_write_note',
+  'zed_decide',
+  'zed_clip',
+  'zed_wiki_compile',
+]);
+
+/**
+ * Goal alignment — % of write-like MCP events in the window that had an
+ * active goal (gid) attributed. High = work consistently served a goal.
+ * Returns null when there are no write-like events.
+ */
+function computeGoalAlignment(opts) {
+  const eventLogMod = require('./event-log.cjs');
+  const windowDays = (opts && opts.windowDays) || 30;
+  const events = eventLogMod.readEvents({ sinceDays: windowDays });
+
+  let writeTotal = 0;
+  let writeWithGoal = 0;
+  for (const e of events) {
+    if (!WRITE_LIKE_TOOLS.has(e.tool)) continue;
+    writeTotal++;
+    if (e.gid) writeWithGoal++;
+  }
+  const alignmentRate = writeTotal > 0
+    ? Math.round((writeWithGoal / writeTotal) * 100)
+    : null;
+
+  let verdict = 'no-data';
+  if (alignmentRate !== null) {
+    if (alignmentRate >= 90) verdict = 'aligned';
+    else if (alignmentRate >= 60) verdict = 'mostly-aligned';
+    else if (alignmentRate >= 30) verdict = 'drifting';
+    else verdict = 'unmoored';
+  }
+
+  return {
+    alignmentRate,
+    writeTotal,
+    writeWithGoal,
+    verdict,
+    windowDays,
+  };
+}
+
+/**
+ * Goal velocity — North Star goals completed per 7 days in the window.
+ * Reads goal-events.jsonl for `north-star.completed` events.
+ */
+function computeGoalVelocity(opts) {
+  const windowDays = (opts && opts.windowDays) || 28;
+  const goalLayer = (() => { try { return require('./goal-layer.cjs'); } catch { return null; } })();
+  if (!goalLayer) return { completed: 0, perWeek: 0, windowDays, verdict: 'no-data' };
+
+  const events = goalLayer.readGoalEvents(opts);
+  const cutoff = Date.now() - windowDays * 24 * 3600 * 1000;
+  const completed = events.filter(
+    (e) => e.kind === 'north-star.completed' && Date.parse(e.ts) >= cutoff
+  ).length;
+  const perWeek = windowDays > 0 ? Math.round((completed / windowDays) * 7 * 10) / 10 : 0;
+
+  let verdict;
+  if (completed === 0) verdict = events.length > 0 ? 'no-completions' : 'no-data';
+  else if (perWeek >= 1) verdict = 'shipping';
+  else if (perWeek >= 0.25) verdict = 'steady';
+  else verdict = 'slow';
+
+  return { completed, perWeek, windowDays, verdict };
+}
+
+/**
+ * Goal drift — sessions in the window where < 50% of write-events had a
+ * goal attributed. Sessions without writes are excluded.
+ */
+function computeGoalDrift(opts) {
+  const eventLogMod = require('./event-log.cjs');
+  const windowDays = (opts && opts.windowDays) || 30;
+  const events = eventLogMod.readEvents({ sinceDays: windowDays });
+
+  const sessions = new Map(); // sid → { total, withGoal }
+  for (const e of events) {
+    if (!WRITE_LIKE_TOOLS.has(e.tool)) continue;
+    const sid = e.sid || '__none__';
+    if (!sessions.has(sid)) sessions.set(sid, { total: 0, withGoal: 0 });
+    const s = sessions.get(sid);
+    s.total++;
+    if (e.gid) s.withGoal++;
+  }
+
+  let driftedCount = 0;
+  let totalSessions = 0;
+  for (const [sid, s] of sessions) {
+    if (s.total === 0) continue;
+    totalSessions++;
+    if (s.withGoal / s.total < 0.5) driftedCount++;
+  }
+
+  const driftRate = totalSessions > 0
+    ? Math.round((driftedCount / totalSessions) * 100)
+    : null;
+
+  let verdict = 'no-data';
+  if (driftRate !== null) {
+    if (driftRate <= 10) verdict = 'focused';
+    else if (driftRate <= 30) verdict = 'mostly-focused';
+    else if (driftRate <= 60) verdict = 'drift-prone';
+    else verdict = 'chronic-drift';
+  }
+
+  return {
+    driftRate,
+    driftedSessions: driftedCount,
+    totalSessions,
+    verdict,
+    windowDays,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Metric history persistence & trends
 // ---------------------------------------------------------------------------
 
@@ -503,6 +655,12 @@ function appendHistory(metricsResult, opts) {
     growthRate: metricsResult.growth.perWeek,
     edgesPerNode: metricsResult.connectivity.edgesPerNode,
     orphanRatio: metricsResult.connectivity.orphanRatio,
+    // Raw, formula-independent counters (Phase 0 brain upgrade): frozen so
+    // deltas stay comparable across phases even if the grade formula changes.
+    nodeCount: metricsResult.connectivity.nodeCount,
+    edgeCount: metricsResult.connectivity.edgeCount,
+    orphanCount: metricsResult.connectivity.orphanCount,
+    clusterCount: metricsResult.connectivity.clusterCount,
     compileRate: metricsResult.compileRate.rate,
     captureRatio: metricsResult.captureRatio.ratio,
     freshRatio: metricsResult.knowledgeAge.freshRatio,
@@ -586,6 +744,16 @@ function computeMetrics(opts) {
     protocolAdherence = computeProtocolAdherence({ windowDays });
   } catch (e) { /* event log may not exist yet */ }
 
+  // Goal telemetry (v8.3 — Standard 11)
+  let goalAlignment = null;
+  let goalVelocity = null;
+  let goalDrift = null;
+  try {
+    goalAlignment = computeGoalAlignment({ windowDays });
+    goalVelocity = computeGoalVelocity({ windowDays });
+    goalDrift = computeGoalDrift({ windowDays });
+  } catch (e) { /* goal telemetry is additive — never fail the dashboard */ }
+
   // Composite effectiveness score (0-100)
   // Weights reflect what matters for "is ZED helping?"
   let score = 0;
@@ -643,6 +811,9 @@ function computeMetrics(opts) {
     knowledgeAge,
     toolUsage,
     protocolAdherence,
+    goalAlignment,
+    goalVelocity,
+    goalDrift,
     generated: new Date().toISOString(),
   };
 
@@ -665,6 +836,7 @@ function computeMetrics(opts) {
 
 module.exports = {
   computeMetrics,
+  computeHealthScore,
   computeGrowth,
   computeConnectivity,
   computeCompileRate,
@@ -674,6 +846,9 @@ module.exports = {
   computeKnowledgeAge,
   computeToolUsage,
   computeProtocolAdherence,
+  computeGoalAlignment,
+  computeGoalVelocity,
+  computeGoalDrift,
   appendHistory,
   readHistory,
   computeTrends,

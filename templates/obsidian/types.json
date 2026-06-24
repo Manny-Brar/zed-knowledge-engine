@@ -1,0 +1,20 @@
+{
+  "types": {
+    "type": "multitext",
+    "id": "text",
+    "title": "text",
+    "tags": "tags",
+    "created": "date",
+    "updated": "date",
+    "set_at": "date",
+    "completed_at": "datetime",
+    "horizon": "text",
+    "status": "text",
+    "source_paths": "multitext",
+    "summary": "text",
+    "expires_at": "date",
+    "superseded_by": "text",
+    "goal_id": "text",
+    "synthesis_path": "text"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "collapse-filter": false,
+  "search": "-path:\"raw/\" -path:\"_loop/\" -path:\".obsidian/\"",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:\"wiki/concepts\"",
+      "color": { "a": 1, "rgb": 5431476 }
+    },
+    {
+      "query": "path:\"wiki/entities\"",
+      "color": { "a": 1, "rgb": 8965120 }
+    },
+    {
+      "query": "path:\"wiki/syntheses\"",
+      "color": { "a": 1, "rgb": 14855296 }
+    },
+    {
+      "query": "path:\"decisions\"",
+      "color": { "a": 1, "rgb": 11550720 }
+    },
+    {
+      "query": "path:\"patterns\"",
+      "color": { "a": 1, "rgb": 1741568 }
+    },
+    {
+      "query": "path:\"goals\"",
+      "color": { "a": 1, "rgb": 16711935 }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1.2,
+  "lineSizeMultiplier": 1.0,
+  "collapse-forces": false,
+  "centerStrength": 0.5,
+  "repelStrength": 12,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1,
+  "close": false
+}

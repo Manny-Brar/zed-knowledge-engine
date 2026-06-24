@@ -46,7 +46,7 @@ When execution is blocked, DO NOT retry blindly. Classify the wall, research sys
 - Apply the solution from research
 - Verify it works (run tests, check output)
 - If it fails → classify the NEW wall and repeat from Step 1
-- Maximum 5 attempts per wall. After 5 failures, escalate to user.
+- Maximum 5 attempts per wall. If a different in-house approach (attempt 4) still fails, you may try a cross-model pass via the `codex:codex-rescue` subagent (attempt 4.5) before escalating. After exhausting attempts, escalate to user.
 
 ## Escalation Ladder
 
@@ -55,8 +55,11 @@ When execution is blocked, DO NOT retry blindly. Classify the wall, research sys
 | 1st | Retry with fix based on error analysis |
 | 2nd | Vault search + apply known pattern |
 | 3rd | Web search + apply best practice |
-| 4th | Alternative approach (different library, algorithm, design) |
+| 4th | Alternative **in-house** approach (different library, algorithm, design) — always try a genuinely different self-generated approach first |
+| 4.5 | **Cross-model second pass (OPTIONAL — only if the codex plugin is available).** Delegate the wall to the `codex:codex-rescue` **subagent via the Agent tool** (`subagent_type: "codex:codex-rescue"`), passing the wall classification, ALL prior attempts, and the error verbatim. Request **read-only diagnosis**, or a `--write` fix **only if a passing test gate already exists**. NEVER call `Skill(codex:rescue)` — it re-enters the command and hangs the session. If the plugin is unavailable, skip straight to 5th. |
 | 5th | Escalate to user with full context of all attempts |
+
+The 4.5 rung preserves self-sufficiency-first: a different in-house approach (attempt 4) is always tried before outsourcing to another model. Any Codex `--write` diff must still pass the normal verification gates (tests + intent check) before it is accepted or captured.
 
 ## Wall Log
 
