@@ -12,6 +12,7 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 const fileLayer = require('./file-layer.cjs');
 const atomicWrite = require('./atomic-write.cjs');
 
@@ -74,4 +75,66 @@ function stitchOrphans(engine, opts = {}) {
   return { before, after, processed, changed, applied: apply, report };
 }
 
-module.exports = { stitchOrphans };
+function buildMocContent(title, tag, members) {
+  const safe = String(title).replace(/"/g, '\\"');
+  return [
+    '---',
+    `title: "${safe}"`,
+    'type: moc',
+    `tags: [moc, ${tag}]`,
+    '---',
+    '',
+    `# ${title}`,
+    '',
+    `Map of Content for **${tag}** — ${members.length} notes.`,
+    '',
+    ...members.map((m) => `- [[${m}]]`),
+    '',
+  ].join('\n');
+}
+
+/**
+ * Generate Map-of-Content (MOC) hub notes: for every tag with at least
+ * `minMembers` notes, create/refresh a "MOC - <tag>" note under _moc/ that
+ * [[links]] all its members — turning loose tag groups into navigable hubs and
+ * giving orphans something to attach to. Dry-run by DEFAULT.
+ *
+ * @param {Object} engine — a built KnowledgeEngine
+ * @param {Object} [opts]
+ * @param {boolean} [opts.apply=false]
+ * @param {number} [opts.minMembers=3]
+ * @param {string} [opts.vaultDir] — required when apply:true (write location)
+ * @returns {{ applied:boolean, generated:number, report:Array<{tag,title,count,relPath,members:string[]}> }}
+ */
+function generateMOCs(engine, opts = {}) {
+  const apply = opts.apply === true;
+  const minMembers = typeof opts.minMembers === 'number' ? opts.minMembers : 3;
+  const vaultDir = opts.vaultDir;
+
+  const tags = engine.getAllTags(); // Map<tag, count>
+  const report = [];
+
+  for (const [tag, count] of tags) {
+    if (tag === 'moc') continue; // don't build a MOC of MOCs
+    if (count < minMembers) continue;
+    const members = [...new Set(
+      engine.search.searchByTag(tag, { limit: 500 }).map((r) => r.node.title).filter(Boolean)
+    )];
+    if (members.length < minMembers) continue;
+
+    const slug = String(tag).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    const title = `MOC - ${tag}`;
+    const relPath = path.join('_moc', `${slug}.md`);
+    report.push({ tag, title, count: members.length, relPath, members });
+
+    if (apply && vaultDir) {
+      try { atomicWrite.writeAtomic(path.join(vaultDir, relPath), buildMocContent(title, tag, members)); }
+      catch { /* skip this MOC on write error */ }
+    }
+  }
+
+  if (apply && vaultDir) engine.rebuild();
+  return { applied: apply, generated: report.length, report };
+}
+
+module.exports = { stitchOrphans, generateMOCs };

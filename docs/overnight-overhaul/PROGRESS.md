@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 6
+- iteration: 7
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -20,7 +20,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - T2 findRelatedByContent: done
 - T3 computeRelatedForNote + MCP wiring: done
 - T4 zed tend stitch: done (capability + dry-run; --apply to real vault gated on X4 canonical-vault choice)
-- T5 zed tend moc: todo
+- T5 zed tend moc: done (live dry-run would generate 16 MOC hubs; not applied to real vault yet)
 - T6 recency ranking + drop backlink boost: todo
 - T7 title-normalization surfacing: todo
 - T8 Codex Gate-3/5/6 wiring: todo
@@ -41,3 +41,5 @@ iter3 | T3 | done | orphanCount=42 (new-note connect; T4 stitch applies to exist
 iter4 | T4 | done | orphanCount=42 (dry-run: ALL 42 would connect; not applied — gated on X4) edges/node=0.78 | core/tend.cjs stitchOrphans + zed tend stitch CLI (dry-run default, --apply, --limit) + 2 tests; fixed findRelatedByContent self-normalization bug (self-note was deflating match scores to ~0). core 58→60 green. NOTE: `zed` in PATH is the INSTALLED plugin, not this tree — run `node bin/zed` to exercise edits.
 iter5 | T12a | done | orphanCount=42 (config feature; no vault change) edges/node=0.78 | core/config.cjs (resolveDataDir/VaultDir/DbPath/ProjectSlug) + ZED_VAULT_DIR override; bin/zed + mcp-server wired; +6 tests; verified override redirects vault (temp dir -> Empty), default preserved (76 notes). core 60→65 green. User chose ONE NELSON vault + per-project folders.
 iter6 | T12b | done | orphanCount=42 (config feature) edges/node=0.78 | config.resolveWritePath (per-project subfolder prefixing, _global shared, no double-prefix) + projectModeOn; wired into MCP zed_write_note + zed_decide (notePath + selfPath); +3 tests; seeded NELSON/.obsidian config (graph/daily-notes/templates). core 65→68 green. Activation (flip default + migrate) deferred to X4.
+
+iter7 | T5 | done | orphanCount=42 (MOC capability; dry-run plans 16 hubs; not applied) edges/node=0.78 | tend.generateMOCs + `zed tend moc` (dry-run default, --apply, --min) + buildMocContent + 1 test. core 68→69 green.

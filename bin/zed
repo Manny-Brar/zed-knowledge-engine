@@ -227,7 +227,26 @@ const commands = {
       }
       return output(`zed tend stitch --apply\n  Connected ${res.changed} notes. Orphans: ${res.before} → ${res.after}.`);
     }
-    error('Usage: zed tend <stitch> [--apply] [--limit N]   (moc, distill — coming soon)');
+    if (sub === 'moc') {
+      const tend = require('../core/tend.cjs');
+      const apply = commandArgs.includes('--apply');
+      let minMembers = 3;
+      const mi = commandArgs.indexOf('--min');
+      if (mi >= 0 && commandArgs[mi + 1]) minMembers = parseInt(commandArgs[mi + 1], 10) || 3;
+      const engine = getEngine();
+      const res = tend.generateMOCs(engine, { apply, minMembers, vaultDir: VAULT_DIR });
+      if (jsonMode) return output(res);
+      if (!apply) {
+        const lines = res.report.map(r => `  ${r.title} (${r.count} notes)`);
+        return output(
+          `zed tend moc (DRY RUN)\n  Would generate ${res.report.length} MOC(s) [min ${minMembers} members]\n` +
+          (lines.length ? lines.join('\n') + '\n' : '') +
+          `\nRun 'zed tend moc --apply' to write them under _moc/.`
+        );
+      }
+      return output(`zed tend moc --apply\n  Generated ${res.generated} MOC note(s) under _moc/.`);
+    }
+    error('Usage: zed tend <stitch|moc> [--apply] [--limit N] [--min N]   (distill — coming soon)');
   },
 
   // --- Graph queries ---

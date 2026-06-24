@@ -561,6 +561,32 @@ test('tend.stitchOrphans: --apply reduces orphan count', () => {
   teardownVault();
 });
 
+test('tend.generateMOCs: builds + writes a MOC for a well-populated tag', () => {
+  const dir = path.join(__dirname, '.test-moc');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'a.md'), '---\ntitle: A\ntags: [auth]\n---\n# A\nauth note one');
+  fs.writeFileSync(path.join(dir, 'b.md'), '---\ntitle: B\ntags: [auth]\n---\n# B\nauth note two');
+  fs.writeFileSync(path.join(dir, 'c.md'), '---\ntitle: C\ntags: [auth]\n---\n# C\nauth note three');
+  const engine = new KnowledgeEngine({ vaultPath: dir });
+  engine.build();
+  const tend = require('./tend.cjs');
+
+  const dry = tend.generateMOCs(engine, { minMembers: 3 });
+  assert.ok(dry.report.some(r => r.tag === 'auth' && r.count >= 3), 'dry-run should plan an auth MOC');
+  assert.strictEqual(dry.applied, false);
+
+  const applied = tend.generateMOCs(engine, { apply: true, minMembers: 3, vaultDir: dir });
+  assert.ok(applied.generated >= 1);
+  const mocPath = path.join(dir, '_moc', 'auth.md');
+  assert.ok(fs.existsSync(mocPath), 'MOC file should be written');
+  const moc = fs.readFileSync(mocPath, 'utf8');
+  assert.ok(moc.includes('[[A]]') && moc.includes('[[B]]') && moc.includes('[[C]]'), 'MOC should link all members');
+
+  engine.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('search: applies graph boost', () => {
   setupVault();
   const graph = new GraphLayer(':memory:');
