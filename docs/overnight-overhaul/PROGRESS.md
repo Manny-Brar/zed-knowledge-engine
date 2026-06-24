@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 4
+- iteration: 5
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -27,7 +27,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - T9 Codex trigger row + NON-GOAL note: todo
 - T10 Codex circuit-breaker + telemetry: todo
 - T11 zed tend distill (deterministic): todo
-- T12 Obsidian integration (ZED_VAULT_DIR + seed .obsidian into empty NELSON): todo
+- T12 Obsidian integration: T12a DONE (core/config.cjs resolver + ZED_VAULT_DIR override + tests; bin/zed + mcp-server wired). T12b TODO (per-project write subfolders NELSON/<project>/ + seed .obsidian config). Chosen layout: ONE NELSON vault, per-project folders, one graph.
 - X4 Canonicalize vault + migrate ~74 notes into NELSON: review (interactive, with user)
 - T13 fix ${CLAUDE_PLUGIN_DATA} stray-vault bug: todo
 
@@ -39,3 +39,4 @@ iter1 | T1 | done | orphanCount=42 (primitive, not yet applied to vault) edges/n
 iter2 | T2 | done | orphanCount=42 (matcher; applies via T3/T4) edges/node=0.78 | SearchLayer.findRelatedByContent (FTS+tag) + _keyTerms + 4 tests; core 52→56 green, autolink 25 green. Driven live (cron did not self-fire overnight).
 iter3 | T3 | done | orphanCount=42 (new-note connect; T4 stitch applies to existing) edges/node=0.78 | engine.connectNote + 2 tests; wired into zed_write_note + zed_decide (semantic Related fallback when literal autolink finds nothing). core 56→58 green, mcp syntax OK.
 iter4 | T4 | done | orphanCount=42 (dry-run: ALL 42 would connect; not applied — gated on X4) edges/node=0.78 | core/tend.cjs stitchOrphans + zed tend stitch CLI (dry-run default, --apply, --limit) + 2 tests; fixed findRelatedByContent self-normalization bug (self-note was deflating match scores to ~0). core 58→60 green. NOTE: `zed` in PATH is the INSTALLED plugin, not this tree — run `node bin/zed` to exercise edits.
+iter5 | T12a | done | orphanCount=42 (config feature; no vault change) edges/node=0.78 | core/config.cjs (resolveDataDir/VaultDir/DbPath/ProjectSlug) + ZED_VAULT_DIR override; bin/zed + mcp-server wired; +6 tests; verified override redirects vault (temp dir -> Empty), default preserved (76 notes). core 60→65 green. User chose ONE NELSON vault + per-project folders.

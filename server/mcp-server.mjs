@@ -43,9 +43,10 @@ const pkgVersion = require('../package.json').version;
 // Configuration
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = process.env.CLAUDE_PLUGIN_DATA || path.join(process.env.HOME, '.zed-data');
-const VAULT_DIR = path.join(DATA_DIR, 'vault');
-const DB_PATH = path.join(DATA_DIR, 'knowledge.db');
+const cfg = require('../core/config.cjs');
+const DATA_DIR = cfg.resolveDataDir();
+const VAULT_DIR = cfg.resolveVaultDir();   // ZED_VAULT_DIR can point this at an Obsidian vault
+const DB_PATH = cfg.resolveDbPath();       // cache stays in DATA_DIR, never inside the vault
 
 // Ensure data directories exist
 try {

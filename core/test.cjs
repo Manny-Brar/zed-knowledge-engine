@@ -67,6 +67,42 @@ function teardownVault() {
 }
 
 // ---------------------------------------------------------------------------
+// config tests (vault/data path resolution)
+// ---------------------------------------------------------------------------
+
+console.log('\n── config.cjs ──');
+
+test('config.resolveVaultDir: ZED_VAULT_DIR overrides everything', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(cfg.resolveVaultDir({ ZED_VAULT_DIR: '/x/NELSON', CLAUDE_PLUGIN_DATA: '/d' }), '/x/NELSON');
+});
+
+test('config.resolveVaultDir: ZED_VAULT_ROOT fallback, then <dataDir>/vault', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(cfg.resolveVaultDir({ ZED_VAULT_ROOT: '/r' }), '/r');
+  assert.strictEqual(cfg.resolveVaultDir({ CLAUDE_PLUGIN_DATA: '/d' }), path.join('/d', 'vault'));
+});
+
+test('config.resolveDbPath: stays in data dir, never inside the vault', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(
+    cfg.resolveDbPath({ ZED_VAULT_DIR: '/x/NELSON', CLAUDE_PLUGIN_DATA: '/d' }),
+    path.join('/d', 'knowledge.db')
+  );
+});
+
+test('config.resolveProjectSlug: derives slug from cwd basename', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(cfg.resolveProjectSlug({}, '/a/b/My Project'), 'my-project');
+});
+
+test('config.resolveProjectSlug: ZED_PROJECT overrides; empty disables', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(cfg.resolveProjectSlug({ ZED_PROJECT: 'DM_SETTER' }, '/x'), 'dm_setter');
+  assert.strictEqual(cfg.resolveProjectSlug({ ZED_PROJECT: '' }, '/x'), '');
+});
+
+// ---------------------------------------------------------------------------
 // file-layer tests
 // ---------------------------------------------------------------------------
 

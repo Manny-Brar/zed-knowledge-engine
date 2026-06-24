@@ -18,9 +18,10 @@ const fs = require('fs');
 // Configuration (matches MCP server paths)
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = process.env.ZED_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || path.join(process.env.HOME, '.zed-data');
-const VAULT_DIR = path.join(DATA_DIR, 'vault');
-const DB_PATH = path.join(DATA_DIR, 'knowledge.db');
+const cfg = require('../core/config.cjs');
+const DATA_DIR = cfg.resolveDataDir();
+const VAULT_DIR = cfg.resolveVaultDir();   // ZED_VAULT_DIR can point this at an Obsidian vault
+const DB_PATH = cfg.resolveDbPath();       // cache stays in DATA_DIR, never inside the vault
 const GLOBAL_DIR = path.join(process.env.HOME, '.zed', 'global');
 const GLOBAL_DB_PATH = path.join(process.env.HOME, '.zed', 'global.db');
 
