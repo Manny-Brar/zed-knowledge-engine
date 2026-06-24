@@ -37,6 +37,37 @@ Restart Claude Code to pick up changes.
 
 ---
 
+## Use ZED across all your projects
+
+ZED is designed to run with **one shared Obsidian vault** (one knowledge graph)
+and **per-project organization** — notes land in a per-project folder, evolve
+loops are scoped per project, and the runtime cache stays out of the vault.
+
+One-time global setup (in `~/.claude/settings.json`, so the MCP server, CLI, and
+hooks all agree):
+
+```jsonc
+{
+  "env": {
+    "ZED_VAULT_ROOT": "/path/to/your/Obsidian/NELSON",
+    "ZED_DATA_DIR": "/Users/you/.zed-data"
+  }
+}
+```
+
+Restart Claude Code, then verify with `zed health` and `zed loop-path`. After
+that, adding ZED to a new project is **zero-config** — just open it and work;
+ZED auto-creates `NELSON/<project>/` for notes and
+`~/.zed-data/loops/<project>/` for loops.
+
+→ Full guide: **[docs/SETUP-NEW-PROJECT.md](docs/SETUP-NEW-PROJECT.md)**
+
+> Put the env in `settings.json`, not just `.mcp.json` — `.mcp.json`'s `env`
+> only reaches the MCP server, not the hooks/CLI. Splitting them is the classic
+> "works in chat but the hooks read the wrong vault" bug.
+
+---
+
 ## How it works
 
 ZED is always on. You don't need to do anything different.

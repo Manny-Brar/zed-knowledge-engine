@@ -331,6 +331,13 @@ test('loop-init creates loop state files', () => {
   assert(fs.existsSync(path.join(loopDir, 'progress.md')), 'progress.md should exist');
 });
 
+test('loop-path prints the per-project loop dir', () => {
+  const out = zed('loop-path');
+  assert(out === loopStateDir, `Expected ${loopStateDir}, got: ${out}`);
+  const data = zedJson('loop-path');
+  assert(data.loopDir === loopStateDir, `Expected JSON loopDir ${loopStateDir}, got ${data.loopDir}`);
+});
+
 test('loop-init --json returns structured data', () => {
   // Re-init to test JSON mode
   const data = zedJson('loop-init "json test objective" --max 5');

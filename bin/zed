@@ -1677,6 +1677,13 @@ function _validateLoopState() {
 // Re-open commands object to add loop commands
 Object.assign(commands, {
 
+  'loop-path'() {
+    // Print the resolved per-project loop dir. Docs/skills reference this rather
+    // than a hardcoded path, since loop state now lives at <dataDir>/loops/<project>.
+    if (jsonMode) console.log(JSON.stringify({ loopDir: LOOP_DIR }));
+    else console.log(LOOP_DIR);
+  },
+
   'loop-init'() {
     const objective = commandArgs[0];
     if (!objective || !objective.trim()) error('Objective must not be empty. Usage: zed loop-init "objective text" [--max N]');
@@ -3265,6 +3272,7 @@ Maintenance:
 
 Evolve Loop:
   loop-init "obj" [--max N]   Start an evolve loop
+  loop-path                   Print the per-project loop dir
   loop-tick "progress"        Record iteration progress
   loop-status                 Check loop state
   loop-decompose "f1, f2"    Decompose objective into features

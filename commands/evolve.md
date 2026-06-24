@@ -41,7 +41,7 @@ When a quoted objective is provided:
 
 Before EVERY action in the evolve loop, you MUST pass these checks:
 
-1. **Objective Anchor**: Re-read `~/.zed-data/vault/_loop/objective.md` at the start of every iteration. Not every 3rd. Every single one.
+1. **Objective Anchor**: Re-read the objective at the start of every iteration — not every 3rd, every single one. The loop dir is per-project; get its path with `zed loop-path` (e.g. `cat "$(zed loop-path)/objective.md"`).
 2. **Action Justification**: Complete this sentence before any file edit: "This action achieves [objective] by [mechanism]." If you cannot complete it, DO NOT take the action.
 3. **Drift Firewall**: The following are NEVER in scope during an evolve loop, regardless of what the analysis suggests:
    - Adding new features not described in the objective
@@ -61,14 +61,15 @@ Before EVERY action in the evolve loop, you MUST pass these checks:
 When `--resume` is specified:
 
 1. Run `zed loop-status --json` via the Bash tool to get current state.
+   - Loop state is per-project; resolve its dir once with `LOOP=$(zed loop-path)` and reuse below.
 2. Read the handoff file first (most recent context):
-   - Run: `cat ~/.zed-data/vault/_loop/handoff.md` via Bash
+   - Run: `cat "$(zed loop-path)/handoff.md"` via Bash
 3. Read the objective:
-   - Run: `cat ~/.zed-data/vault/_loop/objective.md` via Bash
+   - Run: `cat "$(zed loop-path)/objective.md"` via Bash
 4. If features.json exists, check what's next:
    - Run: `zed loop-next --json` via Bash
 5. Check if cron state is active:
-   - Run: `cat ~/.zed-data/vault/_loop/cron-state.json 2>/dev/null` via Bash
+   - Run: `cat "$(zed loop-path)/cron-state.json" 2>/dev/null` via Bash
    - If cron mode was active, re-activate it and announce: **"ZED: Resuming evolve with cron mode — [objective] (iteration N)"**
 6. Announce: **"ZED: Resuming evolve — [objective] (iteration N)"**
 7. Follow the Phase-Gate Engine for the next iteration, starting with Gate 0 (RETRIEVE).

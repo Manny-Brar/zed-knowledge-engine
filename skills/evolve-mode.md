@@ -7,6 +7,11 @@ description: ZED Evolve Mode — autonomous improvement loops with cron scheduli
 
 Evolve mode runs structured autonomous loops toward a stated objective. Each iteration follows the full Phase-Gate Engine (see execution-protocol skill). Cron mode adds a 3-minute recurring cycle between iterations.
 
+> **Loop state is per-project.** The `_loop/` paths below are shorthand for the
+> current project's loop dir — `<dataDir>/loops/<project-slug>/`. Resolve the
+> real path with `zed loop-path` (e.g. `cat "$(zed loop-path)/objective.md"`).
+> A loop started in one project never continues in another.
+
 ## Starting an Evolve Loop
 
 When `/evolve "objective"` is invoked:
