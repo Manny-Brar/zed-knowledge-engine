@@ -283,6 +283,76 @@ function aggregateProtocolAdherence(events) {
 }
 
 // ---------------------------------------------------------------------------
+// Codex delegation telemetry + budget circuit-breaker
+// ---------------------------------------------------------------------------
+
+const CODEX_BUDGET_DEFAULT = 5; // max Codex delegations per session before escalating
+
+/**
+ * Record a Codex delegation. Logs WHAT was delegated and the runtime facts ZED
+ * cannot otherwise see (the model the runtime returned, token cost, read-vs-write,
+ * what it caught/fixed) so cost/value is provable — never assumed. Best-effort.
+ *
+ * @param {Object} entry
+ * @param {'read-only'|'write'} [entry.mode]
+ * @param {string} [entry.model]   — model id the runtime RETURNED (do not assume)
+ * @param {number} [entry.tokens]
+ * @param {string} [entry.caught]  — what it caught/fixed
+ * @param {boolean} [entry.isError]
+ * @param {string} [entry.note]
+ * @param {Object} [opts]
+ */
+function logCodexDelegation(entry, opts) {
+  try {
+    const logPath = getLogPath(opts);
+    const dir = path.dirname(logPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const row = {
+      ts: new Date().toISOString(),
+      sid: getSessionId(opts),
+      gid: getActiveGoalId(opts),
+      tool: 'codex_delegation',
+      mode: entry.mode || 'unknown',
+      model: entry.model || null,
+      tokens: entry.tokens !== undefined ? entry.tokens : null,
+      caught: entry.caught || null,
+      isError: entry.isError || false,
+      note: entry.note || null,
+    };
+    fs.appendFileSync(logPath, JSON.stringify(row) + '\n', 'utf-8');
+  } catch (e) { /* best-effort — never fail */ }
+}
+
+function aggregateCodexUsage(events) {
+  const codex = (events || []).filter((e) => e.tool === 'codex_delegation');
+  return {
+    total: codex.length,
+    writes: codex.filter((e) => e.mode === 'write').length,
+    reads: codex.filter((e) => e.mode === 'read-only').length,
+    errors: codex.filter((e) => e.isError).length,
+    totalTokens: codex.reduce((s, e) => s + (e.tokens || 0), 0),
+    models: [...new Set(codex.map((e) => e.model).filter(Boolean))],
+  };
+}
+
+/**
+ * Circuit-breaker: how many Codex delegations this session, vs the cap.
+ * ZED checks `exceeded` before delegating; if true, stop delegating and escalate.
+ *
+ * @param {Object} [opts]
+ * @param {number} [opts.cap=CODEX_BUDGET_DEFAULT]
+ * @returns {{ count:number, cap:number, exceeded:boolean }}
+ */
+function codexBudgetStatus(opts) {
+  const cap = (opts && opts.cap) || CODEX_BUDGET_DEFAULT;
+  const sid = getSessionId(opts);
+  const count = readEvents(opts).filter(
+    (e) => e.tool === 'codex_delegation' && (!sid || e.sid === sid)
+  ).length;
+  return { count, cap, exceeded: count >= cap };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -295,4 +365,8 @@ module.exports = {
   getLogPath,
   aggregateToolUsage,
   aggregateProtocolAdherence,
+  logCodexDelegation,
+  aggregateCodexUsage,
+  codexBudgetStatus,
+  CODEX_BUDGET_DEFAULT,
 };

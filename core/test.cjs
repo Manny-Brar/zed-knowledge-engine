@@ -575,6 +575,25 @@ test('tend.stitchOrphans: --apply reduces orphan count', () => {
   teardownVault();
 });
 
+test('event-log: Codex telemetry + budget circuit-breaker', () => {
+  const el = require('./event-log.cjs');
+  const tmp = path.join(__dirname, '.test-codex');
+  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.mkdirSync(tmp, { recursive: true });
+  el.logCodexDelegation({ mode: 'write', model: 'gpt-5.3-codex', tokens: 1000, caught: 'fixed failing test' }, { dataDir: tmp });
+  el.logCodexDelegation({ mode: 'read-only', model: 'gpt-5.3-codex', tokens: 200 }, { dataDir: tmp });
+  const events = el.readEvents({ dataDir: tmp });
+  const agg = el.aggregateCodexUsage(events);
+  assert.strictEqual(agg.total, 2);
+  assert.strictEqual(agg.writes, 1);
+  assert.strictEqual(agg.reads, 1);
+  assert.strictEqual(agg.totalTokens, 1200);
+  assert.deepStrictEqual(agg.models, ['gpt-5.3-codex']);
+  assert.strictEqual(el.codexBudgetStatus({ dataDir: tmp, cap: 2 }).exceeded, true);
+  assert.strictEqual(el.codexBudgetStatus({ dataDir: tmp, cap: 5 }).exceeded, false);
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
 test('tend.distill: deterministic MOC+stitch reduces orphans', () => {
   const dir = path.join(__dirname, '.test-distill');
   fs.rmSync(dir, { recursive: true, force: true });
