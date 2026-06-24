@@ -4,7 +4,8 @@
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/server/mcp-server.mjs"],
       "env": {
-        "CLAUDE_PLUGIN_DATA": "${CLAUDE_PLUGIN_DATA}"
+        "CLAUDE_PLUGIN_DATA": "${CLAUDE_PLUGIN_DATA}",
+        "ZED_VAULT_ROOT": "/Users/mannybrar/Library/Mobile Documents/iCloud~md~obsidian/Documents/NELSON"
       }
     }
   }
