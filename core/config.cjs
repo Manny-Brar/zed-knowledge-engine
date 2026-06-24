@@ -69,8 +69,32 @@ function resolveProjectSlug(env = process.env, cwd) {
   if (Object.prototype.hasOwnProperty.call(env, 'ZED_PROJECT')) {
     return slugify(env.ZED_PROJECT); // explicit (incl. "" -> "" disables)
   }
-  const base = path.basename(cwd || env.ZED_CWD || process.cwd() || '');
+  // Prefer an explicit project root over process.cwd(): hooks can fire with a
+  // subdirectory as cwd, which would yield an unstable slug. CLAUDE_PROJECT_DIR
+  // (set by the host) is the reliable project root, so it wins over cwd.
+  const base = path.basename(
+    cwd || env.ZED_CWD || env.CLAUDE_PROJECT_DIR || process.cwd() || ''
+  );
   return base ? slugify(base) : '';
+}
+
+/**
+ * Resolve the per-project evolve-loop state directory. Loop state (objective,
+ * progress, handoff, cron-state, assessments) is RUNTIME scaffolding, not
+ * knowledge — so it lives under the DATA dir, never inside the Obsidian vault,
+ * and is keyed by project slug so a loop started in project A never bleeds into
+ * project B. Falls back to a shared "_default" bucket when no slug is derivable.
+ *
+ * Layout: <dataDir>/loops/<project-slug>/
+ *
+ * @param {Object} [env=process.env]
+ * @param {string} [cwd] — override cwd (for tests)
+ * @returns {string} absolute loop dir
+ */
+function resolveLoopDir(env = process.env, cwd) {
+  const dataDir = resolveDataDir(env);
+  const slug = resolveProjectSlug(env, cwd) || '_default';
+  return path.join(dataDir, 'loops', slug);
 }
 
 /**
@@ -110,6 +134,7 @@ module.exports = {
   resolveVaultDir,
   resolveDbPath,
   resolveProjectSlug,
+  resolveLoopDir,
   projectModeOn,
   resolveWritePath,
   slugify,

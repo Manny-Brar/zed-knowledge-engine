@@ -53,7 +53,21 @@ function goalLockPath(opts) {
 }
 
 function loopObjectivePath(opts) {
-  return path.join(getVaultDir(opts), '_loop', 'objective.md');
+  // Evolve-loop state lives in the per-project loop dir under DATA (never the
+  // vault). Resolution: explicit opts.loopDir > legacy opts.vaultDir/_loop
+  // (kept for older callers + unit tests) > canonical config.resolveLoopDir(),
+  // honoring an opts.dataDir override.
+  if (opts && opts.loopDir) return path.join(opts.loopDir, 'objective.md');
+  if (opts && opts.vaultDir) return path.join(opts.vaultDir, '_loop', 'objective.md');
+  try {
+    const cfg = require('./config.cjs');
+    const env = (opts && opts.dataDir)
+      ? Object.assign({}, process.env, { ZED_DATA_DIR: opts.dataDir })
+      : process.env;
+    return path.join(cfg.resolveLoopDir(env), 'objective.md');
+  } catch (e) {
+    return path.join(getVaultDir(opts), '_loop', 'objective.md');
+  }
 }
 
 function projectClaudeMdPath(opts) {

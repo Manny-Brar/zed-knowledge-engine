@@ -22,6 +22,7 @@ const cfg = require('../core/config.cjs');
 const DATA_DIR = cfg.resolveDataDir();
 const VAULT_DIR = cfg.resolveVaultDir();   // ZED_VAULT_DIR can point this at an Obsidian vault
 const DB_PATH = cfg.resolveDbPath();       // cache stays in DATA_DIR, never inside the vault
+const LOOP_DIR = cfg.resolveLoopDir();     // per-project evolve-loop state, under DATA_DIR (never in the vault)
 const GLOBAL_DIR = path.join(process.env.HOME, '.zed', 'global');
 const GLOBAL_DB_PATH = path.join(process.env.HOME, '.zed', 'global.db');
 
@@ -35,7 +36,7 @@ for (const dir of [
   GLOBAL_DIR,
   path.join(GLOBAL_DIR, 'patterns'),
   path.join(GLOBAL_DIR, 'learnings'),
-  path.join(VAULT_DIR, '_loop'),
+  LOOP_DIR,
   // v8.0 — Karpathy-style raw/wiki/schema layout
   path.join(VAULT_DIR, 'raw'),
   path.join(VAULT_DIR, 'raw', 'clips'),
@@ -1656,7 +1657,7 @@ const commands = {
 };
 
 function _validateLoopState() {
-  const loopDir = path.join(VAULT_DIR, '_loop');
+  const loopDir = LOOP_DIR;
   const objectivePath = path.join(loopDir, 'objective.md');
   const progressPath = path.join(loopDir, 'progress.md');
 
@@ -1687,7 +1688,7 @@ Object.assign(commands, {
     }
 
     const date = new Date().toISOString().split('T')[0];
-    const loopDir = path.join(VAULT_DIR, '_loop');
+    const loopDir = LOOP_DIR;
 
     // Warn if a loop is already active
     const existingState = _validateLoopState();
@@ -1892,7 +1893,7 @@ Object.assign(commands, {
   },
 
   'loop-promote'() {
-    const loopDir = path.join(VAULT_DIR, '_loop');
+    const loopDir = LOOP_DIR;
     const progressPath = path.join(loopDir, 'progress.md');
     const objectivePath = path.join(loopDir, 'objective.md');
 
@@ -1960,7 +1961,7 @@ Object.assign(commands, {
   },
 
   'loop-decompose'() {
-    const loopDir = path.join(VAULT_DIR, '_loop');
+    const loopDir = LOOP_DIR;
     const objectivePath = path.join(loopDir, 'objective.md');
     const featuresPath = path.join(loopDir, 'features.json');
 
@@ -2023,7 +2024,7 @@ Object.assign(commands, {
   },
 
   'loop-next'() {
-    const featuresPath = path.join(VAULT_DIR, '_loop', 'features.json');
+    const featuresPath = path.join(LOOP_DIR, 'features.json');
     if (!fs.existsSync(featuresPath)) {
       if (jsonMode) console.log(JSON.stringify({ next: null, reason: 'no features.json' }));
       else console.log('No features.json. Run: zed loop-decompose "feature1, feature2"');
@@ -2062,7 +2063,7 @@ Object.assign(commands, {
   },
 
   'loop-complete'() {
-    const featuresPath = path.join(VAULT_DIR, '_loop', 'features.json');
+    const featuresPath = path.join(LOOP_DIR, 'features.json');
     if (!fs.existsSync(featuresPath)) {
       error('No features found. Run: zed loop-decompose "feature1, feature2" first');
     }

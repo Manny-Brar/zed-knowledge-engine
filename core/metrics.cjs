@@ -355,7 +355,9 @@ function computeCaptureRatio(opts) {
 
 function computeEvolveEfficiency(opts) {
   const { vaultPath } = opts;
-  const loopDir = path.join(vaultPath, '_loop');
+  // Prefer an explicit per-project loop dir; fall back to the legacy in-vault
+  // location for older callers and unit tests.
+  const loopDir = opts.loopDir || path.join(vaultPath, '_loop');
   const results = {
     activeLoop: false,
     completedIterations: 0,

@@ -116,6 +116,33 @@ test('config.resolveProjectSlug: ZED_PROJECT overrides; empty disables', () => {
   assert.strictEqual(cfg.resolveProjectSlug({ ZED_PROJECT: '' }, '/x'), '');
 });
 
+test('config.resolveProjectSlug: CLAUDE_PROJECT_DIR wins over process.cwd fallback', () => {
+  const cfg = require('./config.cjs');
+  // No explicit cwd arg, no ZED_CWD: CLAUDE_PROJECT_DIR is the reliable root.
+  assert.strictEqual(cfg.resolveProjectSlug({ CLAUDE_PROJECT_DIR: '/a/b/DM_SETTER' }), 'dm_setter');
+  // Explicit cwd arg and ZED_CWD both outrank CLAUDE_PROJECT_DIR.
+  assert.strictEqual(cfg.resolveProjectSlug({ CLAUDE_PROJECT_DIR: '/x/ignored' }, '/p/wins'), 'wins');
+  assert.strictEqual(cfg.resolveProjectSlug({ ZED_CWD: '/z/zwins', CLAUDE_PROJECT_DIR: '/x/ignored' }), 'zwins');
+});
+
+test('config.resolveLoopDir: per-project under <dataDir>/loops/<slug>', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(
+    cfg.resolveLoopDir({ ZED_DATA_DIR: '/d', ZED_PROJECT: 'DM_SETTER' }),
+    path.join('/d', 'loops', 'dm_setter')
+  );
+  // Slug derived from cwd; data dir honored.
+  assert.strictEqual(
+    cfg.resolveLoopDir({ ZED_DATA_DIR: '/d' }, '/a/b/slateos'),
+    path.join('/d', 'loops', 'slateos')
+  );
+  // No slug derivable -> shared _default bucket; never inside the vault.
+  assert.strictEqual(
+    cfg.resolveLoopDir({ ZED_DATA_DIR: '/d', ZED_PROJECT: '' }, ''),
+    path.join('/d', 'loops', '_default')
+  );
+});
+
 test('config.resolveWritePath: flat (unchanged) when not in project mode', () => {
   const cfg = require('./config.cjs');
   assert.strictEqual(cfg.resolveWritePath('/v', 'decisions/x.md', {}), path.join('/v', 'decisions/x.md'));

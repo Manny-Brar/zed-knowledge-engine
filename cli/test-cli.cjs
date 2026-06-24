@@ -39,9 +39,34 @@ function assert(condition, msg) {
 // Setup: temp vault
 // ---------------------------------------------------------------------------
 
+// Isolation: strip any vault/project overrides from the runner's own shell so
+// they can't leak through {...process.env} into the temp-vault subprocesses
+// (e.g. a real ZED_VAULT_ROOT would make the CLI read the live Obsidian vault).
+for (const k of ['ZED_VAULT_ROOT', 'ZED_VAULT_DIR', 'ZED_DB_PATH', 'ZED_DATA_DIR', 'ZED_PROJECT']) delete process.env[k];
+
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zed-cli-test-'));
 const vaultDir = path.join(tmpDir, 'vault');
 const dbPath = path.join(tmpDir, 'test.db');
+
+// Evolve-loop state now lives at <dataDir>/loops/<project-slug> (under DATA, not
+// the vault). Pin ZED_CWD in the spawned env so the slug is deterministic, and
+// compute the same path here so assertions match what the CLI writes.
+const cfg = require('../core/config.cjs');
+
+// Build an ISOLATED env for spawned CLI processes. Critically, strip any vault/
+// project overrides that may be present in the runner's shell (e.g. a real
+// ZED_VAULT_ROOT pointing at an Obsidian vault) — otherwise they leak through
+// {...process.env} and the CLI reads the real vault instead of the temp one.
+function testEnv(overrides = {}) {
+  const env = { ...process.env, ZED_DATA_DIR: tmpDir, CLAUDE_PLUGIN_DATA: tmpDir, ZED_CWD: tmpDir, ...overrides };
+  delete env.ZED_VAULT_ROOT;
+  delete env.ZED_VAULT_DIR;
+  delete env.ZED_DB_PATH;
+  delete env.ZED_PROJECT;
+  return env;
+}
+
+const loopStateDir = cfg.resolveLoopDir(testEnv());
 
 // Create vault structure
 for (const sub of ['decisions', 'patterns', 'sessions', 'architecture']) {
@@ -95,11 +120,7 @@ Related to [[API Design]].
 const BIN = path.join(__dirname, '..', 'bin', 'zed');
 
 function zed(cmd, opts = {}) {
-  const env = {
-    ...process.env,
-    ZED_DATA_DIR: tmpDir,
-    CLAUDE_PLUGIN_DATA: tmpDir,
-  };
+  const env = testEnv();
   try {
     // Quote BIN so paths containing spaces (e.g. iCloud's "Mobile Documents")
     // don't break argv splitting.
@@ -305,7 +326,7 @@ test('loop-init creates loop state files', () => {
   assert(out.includes('Evolve loop initialized'), `Expected init message, got: ${out}`);
   assert(out.includes('test objective'), 'Should echo objective');
   // Verify files were created
-  const loopDir = path.join(vaultDir, '_loop');
+  const loopDir = loopStateDir;
   assert(fs.existsSync(path.join(loopDir, 'objective.md')), 'objective.md should exist');
   assert(fs.existsSync(path.join(loopDir, 'progress.md')), 'progress.md should exist');
 });
@@ -348,7 +369,7 @@ test('loop-stop marks loop as completed', () => {
   const out = zed('loop-stop "test complete"');
   assert(out.includes('Evolve loop stopped'), `Expected stop message, got: ${out}`);
   // Verify objective was updated
-  const objectiveContent = fs.readFileSync(path.join(vaultDir, '_loop', 'objective.md'), 'utf-8');
+  const objectiveContent = fs.readFileSync(path.join(loopStateDir, 'objective.md'), 'utf-8');
   assert(objectiveContent.includes('completed: true'), 'Should mark completed');
   assert(objectiveContent.includes('test complete'), 'Should include stop reason');
 });
@@ -366,14 +387,14 @@ test('loop-stop --json returns structured data', () => {
 console.log('\nStructured Features:');
 test('loop-decompose creates features.json', () => {
   // Clean loop dir and re-init
-  const loopDir = path.join(vaultDir, '_loop');
+  const loopDir = loopStateDir;
   for (const f of fs.readdirSync(loopDir)) {
     fs.rmSync(path.join(loopDir, f), { recursive: true, force: true });
   }
   zed('loop-init "decompose test" --max 10');
   const out = zed('loop-decompose "auth system, user dashboard, notification service"');
   assert(out.includes('Decomposed into 3 features'), `Expected 3 features, got: ${out}`);
-  const featuresPath = path.join(vaultDir, '_loop', 'features.json');
+  const featuresPath = path.join(loopStateDir, 'features.json');
   assert(fs.existsSync(featuresPath), 'features.json should exist');
   const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
   assert(features.length === 3, `Expected 3 features, got ${features.length}`);
@@ -400,7 +421,7 @@ test('loop-complete marks feature done', () => {
 
 test('loop-status reports no loop after stop+promote or clean state', () => {
   // Clean up loop dir to simulate no active loop
-  const loopDir = path.join(vaultDir, '_loop');
+  const loopDir = loopStateDir;
   for (const f of fs.readdirSync(loopDir)) {
     fs.rmSync(path.join(loopDir, f), { recursive: true, force: true });
   }
@@ -720,7 +741,7 @@ console.log('\nError Handling:');
 
 test('loop-tick without active loop says no active loop', () => {
   // Clean loop dir
-  const loopDir = path.join(vaultDir, '_loop');
+  const loopDir = loopStateDir;
   for (const f of fs.readdirSync(loopDir)) {
     fs.rmSync(path.join(loopDir, f), { recursive: true, force: true });
   }
@@ -753,7 +774,7 @@ test('double loop-init warns about overwriting', () => {
   const out = zed('loop-init "second objective"', { expectError: true });
   // The warning goes to stderr, the success to stdout; expectError captures stderr
   // But the command succeeds, so we need to check differently
-  const loopDir = path.join(vaultDir, '_loop');
+  const loopDir = loopStateDir;
   const content = fs.readFileSync(path.join(loopDir, 'objective.md'), 'utf-8');
   assert(content.includes('second objective'), `Expected second objective, got overwrite issue`);
 });
@@ -818,6 +839,9 @@ console.log('\nHook Tests:');
 function runHook(hookScript, env = {}) {
   const scriptPath = path.join(__dirname, '..', 'scripts', hookScript);
   const fullEnv = { ...process.env, ...env };
+  // Pin ZED_CWD to the hook's data dir so the per-project loop slug is
+  // deterministic and matches what makeHookEnv() computes for assertions.
+  if (fullEnv.CLAUDE_PLUGIN_DATA && !fullEnv.ZED_CWD) fullEnv.ZED_CWD = fullEnv.CLAUDE_PLUGIN_DATA;
   try {
     const output = execSync(`bash "${scriptPath}"`, {
       env: fullEnv,
@@ -834,9 +858,13 @@ function runHook(hookScript, env = {}) {
 function makeHookEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zed-hook-test-'));
   const vault = path.join(dir, 'vault');
-  for (const sub of ['sessions', '_loop']) {
+  for (const sub of ['sessions']) {
     fs.mkdirSync(path.join(vault, sub), { recursive: true });
   }
+  // Per-project loop dir (under DATA, not the vault) — matches what the hooks
+  // resolve from { CLAUDE_PLUGIN_DATA: dir, ZED_CWD: dir }.
+  const loopDir = cfg.resolveLoopDir({ ...process.env, CLAUDE_PLUGIN_DATA: dir, ZED_CWD: dir });
+  fs.mkdirSync(loopDir, { recursive: true });
   // Create a minimal note so overview has something to report
   fs.writeFileSync(path.join(vault, 'test-note.md'), `---
 title: "Test Note"
@@ -848,7 +876,7 @@ tags: [test]
 # Test Note
 Content.
 `);
-  return { dir, vault };
+  return { dir, vault, loopDir };
 }
 
 // 1. session-start outputs vault stats
@@ -926,10 +954,9 @@ test('pre-compact-hook outputs compaction reminder', () => {
 
 // 7. stop-hook allows exit with no loop
 test('stop-hook allows exit with no loop', () => {
-  const { dir, vault } = makeHookEnv();
-  // Remove _loop dir so there's no active loop
-  fs.rmSync(path.join(vault, '_loop'), { recursive: true, force: true });
-  // Also remove objective specifically — the hook checks for objective file not _loop dir
+  const { dir, loopDir } = makeHookEnv();
+  // Remove loop dir so there's no active loop (hook checks for objective.md)
+  fs.rmSync(loopDir, { recursive: true, force: true });
   const { output, exitCode } = runHook('stop-hook.sh', { CLAUDE_PLUGIN_DATA: dir });
   assert(exitCode === 0, `Expected exit code 0, got ${exitCode}`);
   // Output should not contain blocking JSON
@@ -939,8 +966,7 @@ test('stop-hook allows exit with no loop', () => {
 
 // 8. stop-hook blocks with active loop
 test('stop-hook blocks with active loop', () => {
-  const { dir, vault } = makeHookEnv();
-  const loopDir = path.join(vault, '_loop');
+  const { dir, loopDir } = makeHookEnv();
   fs.writeFileSync(path.join(loopDir, 'objective.md'), `---
 title: "Test Objective"
 max_iterations: 5
@@ -971,8 +997,7 @@ iteration: 1
 
 // 9. stop-hook enforces capture gate
 test('stop-hook enforces capture gate', () => {
-  const { dir, vault } = makeHookEnv();
-  const loopDir = path.join(vault, '_loop');
+  const { dir, loopDir } = makeHookEnv();
   fs.writeFileSync(path.join(loopDir, 'objective.md'), `---
 title: "Capture Test"
 max_iterations: 5

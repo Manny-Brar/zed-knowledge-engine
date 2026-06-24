@@ -17,8 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
 # Canonical paths via config.cjs (honors ZED_VAULT_ROOT). Inline fallback if the
 # resolver file is ever absent; the resolver itself falls back on node errors.
-. "${SCRIPT_DIR}/_zed-paths.sh" 2>/dev/null || { DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"; VAULT_DIR="$DATA_DIR/vault"; DB_PATH="$DATA_DIR/knowledge.db"; }
-LOOP_DIR="$DATA_DIR/vault/_loop"
+. "${SCRIPT_DIR}/_zed-paths.sh" 2>/dev/null || { DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"; VAULT_DIR="$DATA_DIR/vault"; DB_PATH="$DATA_DIR/knowledge.db"; LOOP_DIR="$DATA_DIR/loops/_default"; }
 TRACKER="$DATA_DIR/edit-tracker.json"
 
 # v8.1 + v8.3: Session grading — read MCP event log and report session

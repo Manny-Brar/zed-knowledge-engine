@@ -18,7 +18,7 @@ if [ -n "${PLUGIN_ROOT:-}" ] && [ -f "${PLUGIN_ROOT}/core/config.cjs" ]; then
   _zed_resolved=$(ZED_CFG="${PLUGIN_ROOT}/core/config.cjs" node -e '
     try {
       const c = require(process.env.ZED_CFG);
-      process.stdout.write([c.resolveDataDir(), c.resolveVaultDir(), c.resolveDbPath()].join("\n"));
+      process.stdout.write([c.resolveDataDir(), c.resolveVaultDir(), c.resolveDbPath(), c.resolveLoopDir()].join("\n"));
     } catch (e) { process.exit(1); }
   ' 2>/dev/null) || _zed_resolved=""
 fi
@@ -27,9 +27,11 @@ if [ -n "$_zed_resolved" ]; then
   DATA_DIR=$(printf '%s\n' "$_zed_resolved" | sed -n '1p')
   VAULT_DIR=$(printf '%s\n' "$_zed_resolved" | sed -n '2p')
   DB_PATH=$(printf '%s\n' "$_zed_resolved" | sed -n '3p')
+  LOOP_DIR=$(printf '%s\n' "$_zed_resolved" | sed -n '4p')
 else
   # Legacy fallback — config.cjs absent or errored.
   DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
   VAULT_DIR="$DATA_DIR/vault"
   DB_PATH="$DATA_DIR/knowledge.db"
+  LOOP_DIR="$DATA_DIR/loops/_default"
 fi

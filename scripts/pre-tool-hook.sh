@@ -5,9 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
 # Canonical paths via config.cjs (honors ZED_VAULT_ROOT). Inline fallback if the
 # resolver file is ever absent; the resolver itself falls back on node errors.
-. "${SCRIPT_DIR}/_zed-paths.sh" 2>/dev/null || { DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"; VAULT_DIR="$DATA_DIR/vault"; DB_PATH="$DATA_DIR/knowledge.db"; }
+. "${SCRIPT_DIR}/_zed-paths.sh" 2>/dev/null || { DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"; VAULT_DIR="$DATA_DIR/vault"; DB_PATH="$DATA_DIR/knowledge.db"; LOOP_DIR="$DATA_DIR/loops/_default"; }
 TRACKER="$DATA_DIR/edit-tracker.json"
-LOOP_DIR="$DATA_DIR/vault/_loop"
 SCOPE_BOUNDARY="$LOOP_DIR/scope-boundary.md"
 OBJECTIVE="$LOOP_DIR/objective.md"
 

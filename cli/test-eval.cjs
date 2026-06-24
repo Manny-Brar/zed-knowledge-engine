@@ -19,6 +19,11 @@ const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const cfg = require('../core/config.cjs');
+
+// Isolation: strip vault/project overrides from the runner's shell so a real
+// ZED_VAULT_ROOT can't leak through {...process.env} into temp-vault subprocesses.
+for (const k of ['ZED_VAULT_ROOT', 'ZED_VAULT_DIR', 'ZED_DB_PATH', 'ZED_PROJECT']) delete process.env[k];
 
 // ---------------------------------------------------------------------------
 // Test infrastructure
@@ -60,7 +65,7 @@ function createTempVault(seedNotes = []) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zed-eval-'));
   const vaultDir = path.join(tmpDir, 'vault');
 
-  for (const sub of ['decisions', 'patterns', 'sessions', 'architecture', '_loop']) {
+  for (const sub of ['decisions', 'patterns', 'sessions', 'architecture']) {
     fs.mkdirSync(path.join(vaultDir, sub), { recursive: true });
   }
 
@@ -82,13 +87,19 @@ function createTempVault(seedNotes = []) {
     ZED_DATA_DIR: tmpDir,
     CLAUDE_PLUGIN_DATA: tmpDir,
     CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT,
+    ZED_CWD: tmpDir,
   };
+
+  // Per-project loop dir (under DATA, not the vault). ZED_CWD pins the slug so
+  // it matches what the spawned CLI and hooks compute from the same env.
+  const loopDir = cfg.resolveLoopDir(env);
+  fs.mkdirSync(loopDir, { recursive: true });
 
   function cleanup() {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   }
 
-  return { tmpDir, vaultDir, env, cleanup };
+  return { tmpDir, vaultDir, env, loopDir, cleanup };
 }
 
 /**
@@ -462,10 +473,9 @@ evalTest('3.3 Pre-compact hook produces compaction reminder', () => {
 });
 
 evalTest('3.4 Stop hook blocks when loop active and no captures', () => {
-  const { vaultDir, tmpDir, env, cleanup } = createTempVault();
+  const { tmpDir, env, loopDir, cleanup } = createTempVault();
   try {
-    // Create active loop objective (not completed)
-    const loopDir = path.join(vaultDir, '_loop');
+    // Create active loop objective (not completed) in the per-project loop dir
     fs.writeFileSync(path.join(loopDir, 'objective.md'), `---
 title: "Active Loop"
 max_iterations: 5
@@ -531,21 +541,20 @@ evalTest('3.5 Stop hook allows exit when no active loop', () => {
 console.log('\n--- Category 4: Evolve Loop Mechanics ---');
 
 evalTest('4.1 loop-init creates objective and progress files', () => {
-  const { vaultDir, env, cleanup } = createTempVault();
+  const { env, loopDir, cleanup } = createTempVault();
   try {
     const out = zed('loop-init "eval test objective" --max 3', env);
     assert(
       out.includes('Evolve loop initialized') || out.includes('eval test objective'),
       `Expected init confirmation, got: ${out.substring(0, 200)}`
     );
-    const loopDir = path.join(vaultDir, '_loop');
     assert(fs.existsSync(path.join(loopDir, 'objective.md')), 'objective.md should exist');
     assert(fs.existsSync(path.join(loopDir, 'progress.md')), 'progress.md should exist');
   } finally { cleanup(); }
 });
 
 evalTest('4.2 loop-decompose creates features.json with correct count', () => {
-  const { vaultDir, env, cleanup } = createTempVault();
+  const { env, loopDir, cleanup } = createTempVault();
   try {
     zed('loop-init "decompose test" --max 5', env);
     const out = zed('loop-decompose "feat1, feat2, feat3"', env);
@@ -553,7 +562,7 @@ evalTest('4.2 loop-decompose creates features.json with correct count', () => {
       out.includes('3 features') || out.includes('Decomposed'),
       `Expected 3 features, got: ${out.substring(0, 200)}`
     );
-    const featuresPath = path.join(vaultDir, '_loop', 'features.json');
+    const featuresPath = path.join(loopDir, 'features.json');
     assert(fs.existsSync(featuresPath), 'features.json should exist');
     const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
     assert(Array.isArray(features), 'features.json should be an array');
@@ -589,7 +598,7 @@ evalTest('4.4 loop-complete marks feature as done', () => {
 });
 
 evalTest('4.5 loop-stop marks objective as completed', () => {
-  const { vaultDir, env, cleanup } = createTempVault();
+  const { env, loopDir, cleanup } = createTempVault();
   try {
     zed('loop-init "stop test" --max 3', env);
     zed('loop-decompose "s1, s2"', env);
@@ -598,7 +607,7 @@ evalTest('4.5 loop-stop marks objective as completed', () => {
       out.includes('stopped') || out.includes('Evolve loop'),
       `Expected stop confirmation, got: ${out.substring(0, 200)}`
     );
-    const objectiveContent = fs.readFileSync(path.join(vaultDir, '_loop', 'objective.md'), 'utf-8');
+    const objectiveContent = fs.readFileSync(path.join(loopDir, 'objective.md'), 'utf-8');
     assert(objectiveContent.includes('completed: true'), 'Should mark completed: true');
   } finally { cleanup(); }
 });

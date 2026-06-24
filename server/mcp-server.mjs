@@ -56,7 +56,7 @@ try {
     path.join(VAULT_DIR, 'patterns'),
     path.join(VAULT_DIR, 'sessions'),
     path.join(VAULT_DIR, 'architecture'),
-    path.join(VAULT_DIR, '_loop'),
+    // (evolve-loop state lives under DATA_DIR/loops/<project>, not in the vault)
     // v8.0 — Karpathy-style raw/wiki/schema layout
     path.join(VAULT_DIR, 'raw'),
     path.join(VAULT_DIR, 'raw', 'clips'),

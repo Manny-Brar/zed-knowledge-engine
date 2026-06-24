@@ -7,14 +7,15 @@
 #   evolve-cron.sh status              — Check cron state
 #   evolve-cron.sh check               — Exit 0 if active, 1 if not
 #
-# State is stored in ~/.zed-data/vault/_loop/cron-state.json
+# State is stored in the per-project loop dir: <dataDir>/loops/<project>/cron-state.json
 
 set -euo pipefail
 trap 'echo "ZED cron hook error: $BASH_COMMAND failed" >&2' ERR
 
-DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
-VAULT_DIR="$DATA_DIR/vault"
-LOOP_DIR="$VAULT_DIR/_loop"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="${SCRIPT_DIR}/.."
+# Canonical per-project paths via config.cjs; inline fallback if the resolver is absent.
+. "${SCRIPT_DIR}/_zed-paths.sh" 2>/dev/null || { DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"; VAULT_DIR="$DATA_DIR/vault"; LOOP_DIR="$DATA_DIR/loops/_default"; }
 CRON_STATE="$LOOP_DIR/cron-state.json"
 
 mkdir -p "$LOOP_DIR"

@@ -43,6 +43,11 @@ function assert(condition, msg) {
 // Setup: isolated temp environment
 // ---------------------------------------------------------------------------
 
+// Isolation: strip the runner's own vault/project env so it can't leak into the
+// temp-vault subprocesses spawned below.
+for (const k of ['ZED_VAULT_ROOT', 'ZED_VAULT_DIR', 'ZED_DB_PATH', 'ZED_DATA_DIR', 'ZED_PROJECT']) delete process.env[k];
+
+const cfg = require('../core/config.cjs');
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zed-e2e-test-'));
 const vaultDir = path.join(tmpDir, 'vault');
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
@@ -50,9 +55,13 @@ const BIN = path.join(PLUGIN_ROOT, 'bin', 'zed');
 const SCRIPTS = path.join(PLUGIN_ROOT, 'scripts');
 
 // Create minimal vault structure (bin/zed auto-creates dirs, but hooks may need them)
-for (const sub of ['decisions', 'patterns', 'sessions', 'architecture', '_loop']) {
+for (const sub of ['decisions', 'patterns', 'sessions', 'architecture']) {
   fs.mkdirSync(path.join(vaultDir, sub), { recursive: true });
 }
+
+// Per-project loop dir (under DATA, not the vault). ZED_CWD pins the slug so it
+// matches what the spawned CLI computes.
+const loopStateDir = cfg.resolveLoopDir({ ...process.env, ZED_DATA_DIR: tmpDir, CLAUDE_PLUGIN_DATA: tmpDir, ZED_CWD: tmpDir });
 
 // Create edit tracker (session-start.sh resets it, but we need it for hooks)
 fs.writeFileSync(
@@ -69,6 +78,7 @@ const baseEnv = {
   ZED_DATA_DIR: tmpDir,
   CLAUDE_PLUGIN_DATA: tmpDir,
   CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT,
+  ZED_CWD: tmpDir,
 };
 
 function zed(cmd, opts = {}) {
@@ -236,7 +246,7 @@ test('9. loop-init creates loop state files', () => {
     `Expected init confirmation, got: ${out.substring(0, 200)}`
   );
 
-  const loopDir = path.join(vaultDir, '_loop');
+  const loopDir = loopStateDir;
   assert(fs.existsSync(path.join(loopDir, 'objective.md')), 'objective.md should exist');
   assert(fs.existsSync(path.join(loopDir, 'progress.md')), 'progress.md should exist');
 });
@@ -250,7 +260,7 @@ test('10. loop-decompose creates features.json', () => {
     `Expected 3 features, got: ${out.substring(0, 200)}`
   );
 
-  const featuresPath = path.join(vaultDir, '_loop', 'features.json');
+  const featuresPath = path.join(loopStateDir, 'features.json');
   assert(fs.existsSync(featuresPath), 'features.json should exist');
   const features = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
   assert(features.length === 3, `Expected 3 features, got ${features.length}`);
@@ -296,7 +306,7 @@ test('14. loop-stop completes the loop', () => {
     `Expected stop confirmation, got: ${out.substring(0, 200)}`
   );
 
-  const objectiveContent = fs.readFileSync(path.join(vaultDir, '_loop', 'objective.md'), 'utf-8');
+  const objectiveContent = fs.readFileSync(path.join(loopStateDir, 'objective.md'), 'utf-8');
   assert(objectiveContent.includes('completed: true'), 'Should mark completed');
 });
 
