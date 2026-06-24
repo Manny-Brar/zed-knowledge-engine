@@ -11,6 +11,7 @@ const path = require('path');
 const GraphLayer = require('./graph-layer.cjs');
 const SearchLayer = require('./search-layer.cjs');
 const fileLayer = require('./file-layer.cjs');
+const autolink = require('./autolink.cjs');
 
 // ---------------------------------------------------------------------------
 // KnowledgeEngine Class
@@ -289,6 +290,35 @@ class KnowledgeEngine {
    */
   searchWithSnippets(query, opts) {
     return this.search.searchWithSnippets(query, opts);
+  }
+
+  /**
+   * Connect a note to the graph by appending a "## Related" section of
+   * [[wikilinks]] to topically/tag-related notes. Combines the FTS+tag matcher
+   * (findRelatedByContent) with the pure injector (autolink.injectRelatedSection).
+   * Intended as a fallback when literal title autolinking found nothing — the
+   * mechanism that keeps new notes (and stitched orphans) from landing isolated.
+   *
+   * @param {Object} opts
+   * @param {string} opts.content        — full markdown including frontmatter
+   * @param {string[]} [opts.tags=[]]    — the note's tags
+   * @param {string|null} [opts.selfPath=null] — the note's own path (excluded)
+   * @param {number} [opts.max=3]        — max related links to add
+   * @param {number} [opts.minScore=0.2] — drop weak matches below this score
+   * @returns {{ content: string, added: string[] }}
+   */
+  connectNote(opts = {}) {
+    const { content = '', tags = [], selfPath = null, max = 3, minScore = 0.2 } = opts;
+    if (!content) return { content, added: [] };
+    const related = this.search.findRelatedByContent({
+      text: content,
+      tags,
+      limit: max,
+      excludePath: selfPath,
+      minScore,
+    });
+    if (!related.length) return { content, added: [] };
+    return autolink.injectRelatedSection(content, related, { max });
   }
 
   // -------------------------------------------------------------------------

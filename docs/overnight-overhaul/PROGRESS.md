@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 2
+- iteration: 3
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -18,7 +18,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 - T1 injectRelatedSection: done
 - T2 findRelatedByContent: done
-- T3 computeRelatedForNote + MCP wiring: todo
+- T3 computeRelatedForNote + MCP wiring: done
 - T4 zed tend stitch: todo
 - T5 zed tend moc: todo
 - T6 recency ranking + drop backlink boost: todo
@@ -37,3 +37,4 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 iter1 | T1 | done | orphanCount=42 (primitive, not yet applied to vault) edges/node=0.78 | autolink.injectRelatedSection + 8 tests; autolink suite 17→25 green, core 52 green
 iter2 | T2 | done | orphanCount=42 (matcher; applies via T3/T4) edges/node=0.78 | SearchLayer.findRelatedByContent (FTS+tag) + _keyTerms + 4 tests; core 52→56 green, autolink 25 green. Driven live (cron did not self-fire overnight).
+iter3 | T3 | done | orphanCount=42 (new-note connect; T4 stitch applies to existing) edges/node=0.78 | engine.connectNote + 2 tests; wired into zed_write_note + zed_decide (semantic Related fallback when literal autolink finds nothing). core 56→58 green, mcp syntax OK.

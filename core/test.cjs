@@ -434,6 +434,39 @@ test('findRelatedByContent: respects limit', () => {
   teardownVault();
 });
 
+test('engine.connectNote: appends a Related section for a would-be orphan', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const { content, added } = engine.connectNote({
+    content: '---\ntitle: New Note\n---\n\nThoughts on knowledge graphs, links and search ranking.',
+    tags: ['research'],
+    selfPath: path.join(TEST_DIR, 'new-note.md'),
+    max: 3,
+  });
+  assert.ok(added.length > 0, 'expected at least one related link');
+  assert.ok(content.includes('## Related'));
+  engine.close();
+  teardownVault();
+});
+
+test('engine.connectNote: no related -> content unchanged', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const orig = '---\ntitle: X\n---\n\nzzzz qqqq wxyz nonsense tokens matching nothing.';
+  const { content, added } = engine.connectNote({
+    content: orig,
+    tags: [],
+    selfPath: path.join(TEST_DIR, 'x.md'),
+    minScore: 5,
+  });
+  assert.strictEqual(added.length, 0);
+  assert.strictEqual(content, orig);
+  engine.close();
+  teardownVault();
+});
+
 test('search: applies graph boost', () => {
   setupVault();
   const graph = new GraphLayer(':memory:');

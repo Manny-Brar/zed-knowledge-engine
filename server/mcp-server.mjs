@@ -364,6 +364,19 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
         }
       } catch (e) { /* non-fatal — write the original content */ }
 
+      // T3: if literal autolinking connected nothing, append semantic [[Related]]
+      // links (FTS + tag matcher) so the note does not land orphaned.
+      try {
+        if (!autolinkReport) {
+          const selfPathR = path.resolve(path.join(VAULT_DIR, file_name.trim()));
+          const { content: connected, added } = engine.connectNote({ content, selfPath: selfPathR, max: 3 });
+          if (added.length > 0) {
+            content = connected;
+            autolinkReport = `\nRelated: ${added.map(t => `[[${t}]]`).join(', ')}`;
+          }
+        }
+      } catch (e) { /* non-fatal */ }
+
       engine.writeNote(notePath, content);
       engine.incrementalBuild();
 
@@ -481,6 +494,18 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
           autolinkReport = `\nAuto-linked: ${injected.map(t => `[[${t}]]`).join(', ')}`;
         }
       } catch (e) { /* non-fatal — write the original content */ }
+
+      // T3: decisions are high-value and often orphaned — if literal autolinking
+      // connected nothing, append semantic [[Related]] links.
+      try {
+        if (!autolinkReport) {
+          const { content: connected, added } = engine.connectNote({ content, selfPath: path.resolve(notePath), max: 3 });
+          if (added.length > 0) {
+            content = connected;
+            autolinkReport = `\nRelated: ${added.map(t => `[[${t}]]`).join(', ')}`;
+          }
+        }
+      } catch (e) { /* non-fatal */ }
 
       engine.writeNote(notePath, content);
       engine.incrementalBuild();
