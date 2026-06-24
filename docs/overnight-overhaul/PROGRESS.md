@@ -11,8 +11,8 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - branch: zed-overnight-overhaul
 - baselineOrphanCount: 42
 - currentOrphanCount: 42
-- cronJobId: (set after cron is armed)
-- status: armed
+- cronJobId: e13726c4
+- status: running
 
 ## Task status (mirror of PLAN; loop keeps in sync)
 
