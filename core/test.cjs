@@ -467,6 +467,35 @@ test('engine.connectNote: no related -> content unchanged', () => {
   teardownVault();
 });
 
+test('tend.stitchOrphans: dry-run reports without writing', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const tend = require('./tend.cjs');
+  const before = engine.getOrphans().length;
+  const res = tend.stitchOrphans(engine, { apply: false });
+  assert.strictEqual(res.applied, false);
+  assert.strictEqual(res.after, null);
+  engine.rebuild();
+  assert.strictEqual(engine.getOrphans().length, before, 'dry-run must not modify the vault');
+  engine.close();
+  teardownVault();
+});
+
+test('tend.stitchOrphans: --apply reduces orphan count', () => {
+  setupVault();
+  const engine = new KnowledgeEngine({ vaultPath: TEST_DIR });
+  engine.build();
+  const tend = require('./tend.cjs');
+  const before = engine.getOrphans().length;
+  const res = tend.stitchOrphans(engine, { apply: true });
+  assert.strictEqual(res.applied, true);
+  assert.ok(res.changed > 0, 'expected at least one orphan connected');
+  assert.ok(res.after < before, `expected fewer orphans (before=${before}, after=${res.after})`);
+  engine.close();
+  teardownVault();
+});
+
 test('search: applies graph boost', () => {
   setupVault();
   const graph = new GraphLayer(':memory:');

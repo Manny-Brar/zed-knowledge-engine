@@ -200,6 +200,35 @@ const commands = {
     output(jsonMode ? { name: pkg.name, version: pkg.version } : `zed v${pkg.version}`);
   },
 
+  // --- Vault gardening (zed tend <subverb>) ---
+
+  tend() {
+    const sub = commandArgs[0];
+    if (sub === 'stitch') {
+      const tend = require('../core/tend.cjs');
+      const apply = commandArgs.includes('--apply');
+      let limit = Infinity;
+      const li = commandArgs.indexOf('--limit');
+      if (li >= 0 && commandArgs[li + 1]) limit = parseInt(commandArgs[li + 1], 10) || Infinity;
+      const eqLim = commandArgs.find(a => a.startsWith('--limit='));
+      if (eqLim) limit = parseInt(eqLim.split('=')[1], 10) || Infinity;
+
+      const engine = getEngine();
+      const res = tend.stitchOrphans(engine, { apply, limit });
+      if (jsonMode) return output(res);
+      if (!apply) {
+        const lines = res.report.map(r => `  ${path.basename(r.path)} → ${r.added.map(t => `[[${t}]]`).join(', ')}`);
+        return output(
+          `zed tend stitch (DRY RUN)\n  Orphans: ${res.before} | would connect: ${res.changed}\n` +
+          (lines.length ? lines.join('\n') + '\n' : '') +
+          `\nRun 'zed tend stitch --apply' to write these [[Related]] links.`
+        );
+      }
+      return output(`zed tend stitch --apply\n  Connected ${res.changed} notes. Orphans: ${res.before} → ${res.after}.`);
+    }
+    error('Usage: zed tend <stitch> [--apply] [--limit N]   (moc, distill — coming soon)');
+  },
+
   // --- Graph queries ---
 
   backlinks() {

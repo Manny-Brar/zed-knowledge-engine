@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 3
+- iteration: 4
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -19,7 +19,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - T1 injectRelatedSection: done
 - T2 findRelatedByContent: done
 - T3 computeRelatedForNote + MCP wiring: done
-- T4 zed tend stitch: todo
+- T4 zed tend stitch: done (capability + dry-run; --apply to real vault gated on X4 canonical-vault choice)
 - T5 zed tend moc: todo
 - T6 recency ranking + drop backlink boost: todo
 - T7 title-normalization surfacing: todo
@@ -38,3 +38,4 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 iter1 | T1 | done | orphanCount=42 (primitive, not yet applied to vault) edges/node=0.78 | autolink.injectRelatedSection + 8 tests; autolink suite 17→25 green, core 52 green
 iter2 | T2 | done | orphanCount=42 (matcher; applies via T3/T4) edges/node=0.78 | SearchLayer.findRelatedByContent (FTS+tag) + _keyTerms + 4 tests; core 52→56 green, autolink 25 green. Driven live (cron did not self-fire overnight).
 iter3 | T3 | done | orphanCount=42 (new-note connect; T4 stitch applies to existing) edges/node=0.78 | engine.connectNote + 2 tests; wired into zed_write_note + zed_decide (semantic Related fallback when literal autolink finds nothing). core 56→58 green, mcp syntax OK.
+iter4 | T4 | done | orphanCount=42 (dry-run: ALL 42 would connect; not applied — gated on X4) edges/node=0.78 | core/tend.cjs stitchOrphans + zed tend stitch CLI (dry-run default, --apply, --limit) + 2 tests; fixed findRelatedByContent self-normalization bug (self-note was deflating match scores to ~0). core 58→60 green. NOTE: `zed` in PATH is the INSTALLED plugin, not this tree — run `node bin/zed` to exercise edits.

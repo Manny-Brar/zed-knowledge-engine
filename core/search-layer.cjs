@@ -229,6 +229,9 @@ class SearchLayer {
     if (terms.length) {
       let hits = [];
       try { hits = this.search(terms.join(' OR '), { limit: Math.max(limit * 3, 10) }); } catch { hits = []; }
+      // Drop the note itself BEFORE normalizing — otherwise its own (highest)
+      // score becomes the denominator and deflates every real match toward 0.
+      if (exclude) hits = hits.filter((h) => h.node && path.resolve(h.node.path) !== exclude);
       const top = hits.length ? (hits[0].boostedScore || 1) : 1;
       for (const h of hits) {
         const norm = top > 0 ? (h.boostedScore || 0) / top : 0;
