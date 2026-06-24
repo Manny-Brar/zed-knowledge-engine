@@ -12,7 +12,8 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - baselineOrphanCount: 42
 - currentOrphanCount: 0   (NELSON: D/56 -> A/100, 42 -> 0 orphans, 59 -> 227 edges)
 - cronJobId: e13726c4 (deleted — work complete)
-- status: COMPLETE — all queued tasks (T1-T13 + X4) done; remaining = user MCP restart + branch review/merge
+- status: SHIPPED — all tasks (T1-T13 + X4) done AND DEPLOYED. branch merged to main (FF, 18 commits) + pushed to origin (e2401bf..70e51bf). Live plugin clone (~/projects/zed-knowledge-engine, the symlink target the MCP server runs) reset --hard to origin/main; DB at ~/.zed-data/knowledge.db rebuilt from NELSON (92 nodes/227 edges, A/100). REMAINING = ONE more MCP/Claude restart so running server processes reload new code (they still hold old code in memory).
+- deployNote: root cause of "restart didn't take" = the live MCP server runs an INSTALLED clone via symlink (~/.claude/plugins/repos/zed-marketplace/zed-knowledge-engine -> ~/projects/zed-knowledge-engine), which was a DIFFERENT checkout than the iCloud working tree where all 18 commits lived. The old installed mcp-server.mjs predated config.cjs, so it never read ZED_VAULT_ROOT and recreated the stray ${CLAUDE_PLUGIN_DATA} vault. Fixed by merging+pushing to origin/main then reset --hard'ing the installed clone to it. Also discarded local drift-circuit-breaker hacks in that clone (thresholds had been bumped to 999999 during the overnight run; canonical 40/12 restored).
 
 ## Task status (mirror of PLAN; loop keeps in sync)
 
