@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 1
+- iteration: 2
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -17,7 +17,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 ## Task status (mirror of PLAN; loop keeps in sync)
 
 - T1 injectRelatedSection: done
-- T2 findRelatedByContent: todo
+- T2 findRelatedByContent: done
 - T3 computeRelatedForNote + MCP wiring: todo
 - T4 zed tend stitch: todo
 - T5 zed tend moc: todo
@@ -36,3 +36,4 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 (append `iterN | taskID | done|failed | orphanCount=NN edges/node=N.NN | summary` per iteration)
 
 iter1 | T1 | done | orphanCount=42 (primitive, not yet applied to vault) edges/node=0.78 | autolink.injectRelatedSection + 8 tests; autolink suite 17→25 green, core 52 green
+iter2 | T2 | done | orphanCount=42 (matcher; applies via T3/T4) edges/node=0.78 | SearchLayer.findRelatedByContent (FTS+tag) + _keyTerms + 4 tests; core 52→56 green, autolink 25 green. Driven live (cron did not self-fire overnight).

@@ -370,6 +370,70 @@ test('search: finds notes by content', () => {
   teardownVault();
 });
 
+test('findRelatedByContent: finds topically related notes, excludes self', () => {
+  setupVault();
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(TEST_DIR);
+  const search = new SearchLayer(graph.db, graph);
+  search.indexVault(TEST_DIR);
+  const alphaPath = path.join(TEST_DIR, 'alpha.md');
+  const related = search.findRelatedByContent({
+    text: 'knowledge graphs and link analysis ranking',
+    tags: [],
+    excludePath: alphaPath,
+    limit: 5,
+  });
+  assert.ok(Array.isArray(related));
+  assert.ok(!related.some(r => path.resolve(r.path) === path.resolve(alphaPath)), 'must exclude self');
+  if (related.length) {
+    assert.ok(typeof related[0].title === 'string');
+    assert.ok(related[0].score >= 0);
+    assert.ok(typeof related[0].reason === 'string');
+  }
+  graph.close();
+  teardownVault();
+});
+
+test('findRelatedByContent: tag co-occurrence contributes matches', () => {
+  setupVault();
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(TEST_DIR);
+  const search = new SearchLayer(graph.db, graph);
+  search.indexVault(TEST_DIR);
+  const related = search.findRelatedByContent({ text: '', tags: ['research'], limit: 5 });
+  assert.ok(related.some(r => /alpha/i.test(r.title)), 'expected a note tagged research');
+  assert.ok(related.every(r => typeof r.score === 'number'));
+  graph.close();
+  teardownVault();
+});
+
+test('findRelatedByContent: empty inputs return empty array', () => {
+  setupVault();
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(TEST_DIR);
+  const search = new SearchLayer(graph.db, graph);
+  search.indexVault(TEST_DIR);
+  assert.deepStrictEqual(search.findRelatedByContent({ text: '', tags: [] }), []);
+  graph.close();
+  teardownVault();
+});
+
+test('findRelatedByContent: respects limit', () => {
+  setupVault();
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(TEST_DIR);
+  const search = new SearchLayer(graph.db, graph);
+  search.indexVault(TEST_DIR);
+  const related = search.findRelatedByContent({
+    text: 'note links hub alpha beta charlie delta knowledge search ranking',
+    tags: ['core'],
+    limit: 2,
+  });
+  assert.ok(related.length <= 2);
+  graph.close();
+  teardownVault();
+});
+
 test('search: applies graph boost', () => {
   setupVault();
   const graph = new GraphLayer(':memory:');

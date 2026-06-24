@@ -195,6 +195,70 @@ class SearchLayer {
   }
 
   /**
+   * Find notes related to a piece of content by BOTH full-text similarity
+   * (top FTS hits over the content's salient terms) AND tag co-occurrence.
+   * Unlike title-substring autolinking, this connects notes that are
+   * topically related even when neither mentions the other's title — the
+   * matcher that lets `## Related` sections de-orphan date-titled/atomic notes.
+   *
+   * @param {Object} opts
+   * @param {string} [opts.text='']        — the note's body/title text
+   * @param {string[]} [opts.tags=[]]      — the note's tags
+   * @param {number} [opts.limit=5]        — max related notes returned
+   * @param {string|null} [opts.excludePath=null] — path of the note itself (excluded)
+   * @param {number} [opts.minScore=0]     — drop matches below this combined score
+   * @returns {Array<{title:string, path:string, score:number, reason:string}>}
+   */
+  findRelatedByContent(opts = {}) {
+    const { text = '', tags = [], limit = 5, excludePath = null, minScore = 0 } = opts;
+    const exclude = excludePath ? path.resolve(excludePath) : null;
+    const acc = new Map(); // node.id -> { node, score, reasons:Set }
+
+    const add = (node, score, reason) => {
+      if (!node) return;
+      if (exclude && path.resolve(node.path) === exclude) return;
+      const cur = acc.get(node.id) || { node, score: 0, reasons: new Set() };
+      cur.score += score;
+      cur.reasons.add(reason);
+      acc.set(node.id, cur);
+    };
+
+    // 1. Content similarity: FTS over the content's salient terms (OR-joined),
+    //    weighted 0.6 and normalized to the top hit so it composes with tags.
+    const terms = this._keyTerms(text, 8);
+    if (terms.length) {
+      let hits = [];
+      try { hits = this.search(terms.join(' OR '), { limit: Math.max(limit * 3, 10) }); } catch { hits = []; }
+      const top = hits.length ? (hits[0].boostedScore || 1) : 1;
+      for (const h of hits) {
+        const norm = top > 0 ? (h.boostedScore || 0) / top : 0;
+        add(h.node, 0.6 * norm, 'content');
+      }
+    }
+
+    // 2. Tag co-occurrence: each shared tag contributes a flat 0.4.
+    const tagList = Array.isArray(tags) ? tags : [tags];
+    for (const tag of tagList) {
+      if (!tag) continue;
+      let th = [];
+      try { th = this.searchByTag(String(tag), { limit: Math.max(limit * 2, 5) }); } catch { th = []; }
+      for (const r of th) add(r.node, 0.4, 'tag:' + tag);
+    }
+
+    // 3. Rank, threshold, limit.
+    return [...acc.values()]
+      .filter((r) => r.score >= minScore)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((r) => ({
+        title: r.node.title,
+        path: r.node.path,
+        score: Math.round(r.score * 1000) / 1000,
+        reason: [...r.reasons].join('+'),
+      }));
+  }
+
+  /**
    * Tiered search returning progressively more detail.
    *
    * L0: titles only (cheapest — for autocomplete, quick scans)
@@ -305,6 +369,34 @@ class SearchLayer {
         snippets,
       };
     });
+  }
+
+  /**
+   * Extract the most salient terms from a block of text for similarity search.
+   * Lowercases, strips punctuation, drops stopwords and short tokens, then
+   * returns the top-N by frequency. Deterministic, no external deps.
+   *
+   * @private
+   * @param {string} text
+   * @param {number} [n=8]
+   * @returns {string[]}
+   */
+  _keyTerms(text, n = 8) {
+    if (!text) return [];
+    const STOP = new Set(
+      ('a an the and or but if then else for to of in on at by with from as is are was were be been being ' +
+       'this that these those it its we you they he she them our your their not no yes do does did have has had ' +
+       'will would can could should may might must about into over under more most some any all each via using ' +
+       'use used note notes there here what when where which who whom how than too very just also out up down off')
+        .split(' ')
+    );
+    const freq = new Map();
+    const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/);
+    for (const w of words) {
+      if (w.length < 4 || STOP.has(w)) continue;
+      freq.set(w, (freq.get(w) || 0) + 1);
+    }
+    return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map((e) => e[0]);
   }
 
   /**
