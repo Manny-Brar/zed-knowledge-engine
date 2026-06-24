@@ -102,6 +102,35 @@ test('config.resolveProjectSlug: ZED_PROJECT overrides; empty disables', () => {
   assert.strictEqual(cfg.resolveProjectSlug({ ZED_PROJECT: '' }, '/x'), '');
 });
 
+test('config.resolveWritePath: flat (unchanged) when not in project mode', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(cfg.resolveWritePath('/v', 'decisions/x.md', {}), path.join('/v', 'decisions/x.md'));
+});
+
+test('config.resolveWritePath: prefixes project slug in project mode', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(
+    cfg.resolveWritePath('/v', 'decisions/x.md', { ZED_PROJECT: 'DM_SETTER' }),
+    path.join('/v', 'dm_setter', 'decisions/x.md')
+  );
+  assert.strictEqual(
+    cfg.resolveWritePath('/v', 'sessions/2026-06-24.md', { ZED_VAULT_ROOT: '/v' }, '/a/zed-knowledge-engine'),
+    path.join('/v', 'zed-knowledge-engine', 'sessions/2026-06-24.md')
+  );
+});
+
+test('config.resolveWritePath: no double-prefix; _global stays shared', () => {
+  const cfg = require('./config.cjs');
+  assert.strictEqual(
+    cfg.resolveWritePath('/v', 'dm_setter/decisions/x.md', { ZED_PROJECT: 'DM_SETTER' }),
+    path.join('/v', 'dm_setter/decisions/x.md')
+  );
+  assert.strictEqual(
+    cfg.resolveWritePath('/v', '_global/shared.md', { ZED_PROJECT: 'DM_SETTER' }),
+    path.join('/v', '_global/shared.md')
+  );
+});
+
 // ---------------------------------------------------------------------------
 // file-layer tests
 // ---------------------------------------------------------------------------

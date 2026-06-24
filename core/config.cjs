@@ -58,8 +58,40 @@ function resolveProjectSlug(env = process.env, cwd) {
   if (Object.prototype.hasOwnProperty.call(env, 'ZED_PROJECT')) {
     return slugify(env.ZED_PROJECT); // explicit (incl. "" -> "" disables)
   }
-  const base = path.basename(cwd || env.ZED_CWD || '');
+  const base = path.basename(cwd || env.ZED_CWD || process.cwd() || '');
   return base ? slugify(base) : '';
+}
+
+/**
+ * Per-project mode is ON only when the user opts in via ZED_VAULT_ROOT (an
+ * Obsidian vault root) or an explicit ZED_PROJECT. This keeps the historical
+ * flat single-vault behavior unchanged for users who set neither.
+ */
+function projectModeOn(env = process.env) {
+  return !!(env.ZED_VAULT_ROOT || Object.prototype.hasOwnProperty.call(env, 'ZED_PROJECT'));
+}
+
+/**
+ * Resolve the absolute path a note should be WRITTEN to. In per-project mode,
+ * notes are written under <vaultDir>/<projectSlug>/ so projects stay organized
+ * inside one shared graph. Paths already under the slug, or under the shared
+ * "_global/" area, are left unprefixed. Outside project mode it is a plain join
+ * (unchanged behavior).
+ *
+ * @param {string} vaultDir — the vault graph root
+ * @param {string} fileName — vault-relative path (e.g. "decisions/x.md")
+ * @param {Object} [env=process.env]
+ * @param {string} [cwd] — override cwd (for tests)
+ * @returns {string} absolute write path
+ */
+function resolveWritePath(vaultDir, fileName, env = process.env, cwd) {
+  const clean = String(fileName || '').replace(/^[/\\]+/, '');
+  if (!projectModeOn(env)) return path.join(vaultDir, clean);
+  const slug = resolveProjectSlug(env, cwd);
+  if (!slug) return path.join(vaultDir, clean);
+  const first = clean.split(/[/\\]/)[0];
+  if (first === slug || first === '_global') return path.join(vaultDir, clean);
+  return path.join(vaultDir, slug, clean);
 }
 
 module.exports = {
@@ -67,5 +99,7 @@ module.exports = {
   resolveVaultDir,
   resolveDbPath,
   resolveProjectSlug,
+  projectModeOn,
+  resolveWritePath,
   slugify,
 };

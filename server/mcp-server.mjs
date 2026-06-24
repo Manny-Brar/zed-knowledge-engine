@@ -318,7 +318,7 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
       if (!content || !content.trim()) {
         return { content: [{ type: 'text', text: 'Error: content must not be empty' }], isError: true };
       }
-      const notePath = path.join(VAULT_DIR, file_name.trim());
+      const notePath = cfg.resolveWritePath(VAULT_DIR, file_name.trim());
       const resolved = path.resolve(notePath);
       if (!resolved.startsWith(path.resolve(VAULT_DIR) + path.sep) && resolved !== path.resolve(VAULT_DIR)) {
         return { content: [{ type: 'text', text: 'Error: path escapes vault directory' }], isError: true };
@@ -357,7 +357,7 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
       let autolinkReport = '';
       try {
         const allTitles = engine.graph.db.prepare('SELECT title, path FROM nodes').all();
-        const selfPath = path.resolve(path.join(VAULT_DIR, file_name.trim()));
+        const selfPath = path.resolve(notePath);
         const { content: linked, injected } = autolink.injectWikilinks(content, allTitles, { selfPath });
         if (injected.length > 0) {
           content = linked;
@@ -369,7 +369,7 @@ Do NOT use this for routine code changes. Only write notes that are genuinely pe
       // links (FTS + tag matcher) so the note does not land orphaned.
       try {
         if (!autolinkReport) {
-          const selfPathR = path.resolve(path.join(VAULT_DIR, file_name.trim()));
+          const selfPathR = path.resolve(notePath);
           const { content: connected, added } = engine.connectNote({ content, selfPath: selfPathR, max: 3 });
           if (added.length > 0) {
             content = connected;
@@ -481,7 +481,7 @@ The 'alternatives' parameter is optional but valuable — documenting what you D
         '',
       ].join('\n');
 
-      const notePath = path.join(VAULT_DIR, fileName);
+      const notePath = cfg.resolveWritePath(VAULT_DIR, fileName);
 
       // Auto-inject [[wikilinks]] before writing — parity with zed_write_note.
       // Decisions are high-value and otherwise born orphaned (Phase 1 brain fix).
