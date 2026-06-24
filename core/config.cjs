@@ -25,16 +25,27 @@ function homeDir(env) {
   return env.HOME || env.USERPROFILE || '.';
 }
 
+// Guard against UNEXPANDED placeholders. When the plugin host fails to expand
+// e.g. "${CLAUDE_PLUGIN_DATA}" (see .mcp.json), the literal string leaks in as
+// the env value and path.join() would create a junk dir literally named
+// "${CLAUDE_PLUGIN_DATA}" relative to cwd (the source of the stray in-repo
+// vault). Treat any value containing an unexpanded $-placeholder as unset.
+function cleanEnvPath(v) {
+  if (!v || typeof v !== 'string') return null;
+  if (/\$\{|\$[A-Za-z_]/.test(v)) return null;
+  return v;
+}
+
 function resolveDataDir(env = process.env) {
-  return env.ZED_DATA_DIR || env.CLAUDE_PLUGIN_DATA || path.join(homeDir(env), '.zed-data');
+  return cleanEnvPath(env.ZED_DATA_DIR) || cleanEnvPath(env.CLAUDE_PLUGIN_DATA) || path.join(homeDir(env), '.zed-data');
 }
 
 function resolveVaultDir(env = process.env) {
-  return env.ZED_VAULT_DIR || env.ZED_VAULT_ROOT || path.join(resolveDataDir(env), 'vault');
+  return cleanEnvPath(env.ZED_VAULT_DIR) || cleanEnvPath(env.ZED_VAULT_ROOT) || path.join(resolveDataDir(env), 'vault');
 }
 
 function resolveDbPath(env = process.env) {
-  return env.ZED_DB_PATH || path.join(resolveDataDir(env), 'knowledge.db');
+  return cleanEnvPath(env.ZED_DB_PATH) || path.join(resolveDataDir(env), 'knowledge.db');
 }
 
 function slugify(s) {
@@ -68,7 +79,7 @@ function resolveProjectSlug(env = process.env, cwd) {
  * flat single-vault behavior unchanged for users who set neither.
  */
 function projectModeOn(env = process.env) {
-  return !!(env.ZED_VAULT_ROOT || Object.prototype.hasOwnProperty.call(env, 'ZED_PROJECT'));
+  return !!(cleanEnvPath(env.ZED_VAULT_ROOT) || Object.prototype.hasOwnProperty.call(env, 'ZED_PROJECT'));
 }
 
 /**

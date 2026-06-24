@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 8
+- iteration: 9
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -29,7 +29,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - T11 zed tend distill (deterministic): todo
 - T12 Obsidian integration: DONE. T12a (config resolver + ZED_VAULT_DIR). T12b (resolveWritePath per-project subfolders wired into MCP write/decide + tests; .obsidian config seeded into NELSON). Layout: ONE NELSON vault, per-project folders, one graph. REMAINING ACTIVATION (X4, with user): flip default ZED_VAULT_ROOT in settings.json + migrate existing notes + stitch --apply.
 - X4 Canonicalize vault + migrate ~74 notes into NELSON: review (interactive, with user)
-- T13 fix ${CLAUDE_PLUGIN_DATA} stray-vault bug: todo
+- T13 fix ${CLAUDE_PLUGIN_DATA} stray-vault bug: done (config guard rejects unexpanded ${...}; root cause = .mcp.json:7 passing the literal placeholder)
 
 ## Log
 
@@ -44,3 +44,4 @@ iter6 | T12b | done | orphanCount=42 (config feature) edges/node=0.78 | config.r
 
 iter7 | T5 | done | orphanCount=42 (MOC capability; dry-run plans 16 hubs; not applied) edges/node=0.78 | tend.generateMOCs + `zed tend moc` (dry-run default, --apply, --min) + buildMocContent + 1 test. core 68→69 green.
 iter8 | T6 | done | orphanCount=42 (ranking change) edges/node=0.78 | recency multiplier (half-life ~90d) in SearchLayer.search boostedScore + graphBoost:false option; findRelatedByContent drops backlink boost so orphans surface; +2 tests. core 69->71 green.
+iter9 | T13 | done | orphanCount=42 (bug fix) edges/node=0.78 | config.cleanEnvPath guard rejects unexpanded ${...} placeholders in all path env vars (root cause: .mcp.json passes literal "${CLAUDE_PLUGIN_DATA}" when host does not expand it, creating stray in-repo vault). +1 test, smoke-verified fallback. core 71->72 green. Existing stray dir left in place (gitignored) for X4 reconciliation.

@@ -77,6 +77,20 @@ test('config.resolveVaultDir: ZED_VAULT_DIR overrides everything', () => {
   assert.strictEqual(cfg.resolveVaultDir({ ZED_VAULT_DIR: '/x/NELSON', CLAUDE_PLUGIN_DATA: '/d' }), '/x/NELSON');
 });
 
+test('config: ignores UNEXPANDED ${...} placeholders (stray-vault bug guard)', () => {
+  const cfg = require('./config.cjs');
+  // The .mcp.json bug: CLAUDE_PLUGIN_DATA arrives as the literal placeholder.
+  assert.strictEqual(
+    cfg.resolveDataDir({ CLAUDE_PLUGIN_DATA: '${CLAUDE_PLUGIN_DATA}', HOME: '/h' }),
+    path.join('/h', '.zed-data')
+  );
+  assert.strictEqual(
+    cfg.resolveVaultDir({ ZED_VAULT_DIR: '${ANY}', CLAUDE_PLUGIN_DATA: '/d' }),
+    path.join('/d', 'vault')
+  );
+  assert.strictEqual(cfg.projectModeOn({ ZED_VAULT_ROOT: '${X}' }), false);
+});
+
 test('config.resolveVaultDir: ZED_VAULT_ROOT fallback, then <dataDir>/vault', () => {
   const cfg = require('./config.cjs');
   assert.strictEqual(cfg.resolveVaultDir({ ZED_VAULT_ROOT: '/r' }), '/r');
