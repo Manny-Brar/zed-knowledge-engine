@@ -178,11 +178,87 @@ function injectWikilinks(content, titleList, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Related-section injection (semantic connectivity)
+// ---------------------------------------------------------------------------
+
+/**
+ * Append a "## Related" section with [[wikilinks]] for related notes that are
+ * NOT already linked anywhere in the body. Unlike injectWikilinks (which only
+ * links titles literally mentioned in the text), this connects notes whose
+ * relationship is semantic (FTS/tag), de-orphaning date-titled and atomically
+ * named notes. Pure function — no graph/db dependency.
+ *
+ * @param {string} content — full markdown including frontmatter
+ * @param {Array.<{title:string}|string>} related — related note titles
+ * @param {Object} [opts]
+ * @param {string} [opts.heading='Related'] — section heading text
+ * @param {number} [opts.max=5] — max links to add
+ * @returns {{ content: string, added: string[] }}
+ */
+function injectRelatedSection(content, related, opts = {}) {
+  if (!content || !related || related.length === 0) {
+    return { content: content || '', added: [] };
+  }
+  if (!isAutoLinkEnabled()) {
+    return { content, added: [] };
+  }
+  const heading = opts.heading || 'Related';
+  const max = opts.max || 5;
+
+  // Normalize + dedupe titles (skip too-short titles, same rule as injection)
+  const titles = [];
+  const seen = new Set();
+  for (const r of related) {
+    const t = typeof r === 'string' ? r : (r && r.title);
+    if (!t || t.length < MIN_TITLE_LENGTH) continue;
+    const lc = t.toLowerCase();
+    if (seen.has(lc)) continue;
+    seen.add(lc);
+    titles.push(t);
+  }
+  if (titles.length === 0) return { content, added: [] };
+
+  // Separate frontmatter (never modify YAML)
+  const fmMatch = content.match(/^(---\r?\n[\s\S]*?\r?\n---\r?\n?)/);
+  const frontmatter = fmMatch ? fmMatch[1] : '';
+  let body = fmMatch ? content.slice(frontmatter.length) : content;
+
+  // Skip titles already linked anywhere in the body
+  const lcBody = body.toLowerCase();
+  const toAdd = [];
+  for (const t of titles) {
+    const lc = t.toLowerCase();
+    if (lcBody.includes('[[' + lc + ']]') || lcBody.includes('[[' + lc + '|')) continue;
+    toAdd.push(t);
+    if (toAdd.length >= max) break;
+  }
+  if (toAdd.length === 0) return { content, added: [] };
+
+  const bullets = toAdd.map((t) => '- [[' + t + ']]').join('\n');
+
+  // If a "## <heading>" section already exists, append bullets under it;
+  // otherwise create a new section at the end of the body.
+  const esc = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headingRe = new RegExp('^##\\s+' + esc + '\\s*$', 'mi');
+  const hm = body.match(headingRe);
+  if (hm) {
+    const insertAt = hm.index + hm[0].length;
+    body = body.slice(0, insertAt) + '\n' + bullets + body.slice(insertAt);
+  } else {
+    body = body.replace(/\s*$/, '');
+    body += '\n\n## ' + heading + '\n\n' + bullets + '\n';
+  }
+
+  return { content: frontmatter + body, added: toAdd };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
 module.exports = {
   injectWikilinks,
+  injectRelatedSection,
   isAutoLinkEnabled,
   MIN_TITLE_LENGTH,
 };

@@ -225,6 +225,82 @@ test('excludes the note being written from matching', () => {
 });
 
 // ---------------------------------------------------------------------------
+console.log('\n── autolink: injectRelatedSection ──');
+
+test('appends a Related section with [[links]]', () => {
+  const { content, added } = autolink.injectRelatedSection(
+    '---\ntitle: "2026-06-24"\n---\n\nDaily log with no title mentions.',
+    [{ title: 'Auth Strategy' }, { title: 'API Design' }]
+  );
+  assert.ok(content.includes('## Related'), 'expected a Related heading');
+  assert.ok(content.includes('- [[Auth Strategy]]'));
+  assert.ok(content.includes('- [[API Design]]'));
+  assert.strictEqual(added.length, 2);
+});
+
+test('accepts string titles too', () => {
+  const { added } = autolink.injectRelatedSection(
+    '---\ntitle: "T"\n---\n\nbody',
+    ['Token Pattern']
+  );
+  assert.deepStrictEqual(added, ['Token Pattern']);
+});
+
+test('skips titles already linked in the body', () => {
+  const { content, added } = autolink.injectRelatedSection(
+    '---\ntitle: "T"\n---\n\nWe already mention [[Auth Strategy]] here.',
+    [{ title: 'Auth Strategy' }, { title: 'API Design' }]
+  );
+  assert.ok(!added.includes('Auth Strategy'), 'should not re-add an already-linked title');
+  assert.ok(added.includes('API Design'));
+  assert.strictEqual((content.match(/\[\[Auth Strategy\]\]/g) || []).length, 1);
+});
+
+test('appends under an existing Related section without duplicating it', () => {
+  const { content, added } = autolink.injectRelatedSection(
+    '---\ntitle: "T"\n---\n\nbody\n\n## Related\n\n- [[Existing Note]]\n',
+    [{ title: 'API Design' }]
+  );
+  assert.strictEqual((content.match(/## Related/g) || []).length, 1, 'should not duplicate the section');
+  assert.ok(content.includes('[[Existing Note]]'));
+  assert.ok(content.includes('[[API Design]]'));
+  assert.deepStrictEqual(added, ['API Design']);
+});
+
+test('never modifies frontmatter', () => {
+  const fm = '---\ntitle: "T"\ntags: [a, b]\n---\n';
+  const { content } = autolink.injectRelatedSection(fm + '\nbody', [{ title: 'API Design' }]);
+  assert.ok(content.startsWith(fm), 'frontmatter must be untouched');
+});
+
+test('respects max', () => {
+  const { added } = autolink.injectRelatedSection(
+    '---\ntitle: "T"\n---\n\nbody',
+    [{ title: 'One Note' }, { title: 'Two Note' }, { title: 'Three Note' }],
+    { max: 2 }
+  );
+  assert.strictEqual(added.length, 2);
+});
+
+test('disabled via ZED_AUTOLINK=0 (related)', () => {
+  const saved = process.env.ZED_AUTOLINK;
+  process.env.ZED_AUTOLINK = '0';
+  try {
+    const { added } = autolink.injectRelatedSection('---\ntitle: "T"\n---\n\nbody', [{ title: 'API Design' }]);
+    assert.strictEqual(added.length, 0);
+  } finally {
+    if (saved !== undefined) process.env.ZED_AUTOLINK = saved;
+    else delete process.env.ZED_AUTOLINK;
+  }
+});
+
+test('no-op when no related provided', () => {
+  const { content, added } = autolink.injectRelatedSection('---\ntitle: "T"\n---\n\nbody', []);
+  assert.strictEqual(added.length, 0);
+  assert.ok(!content.includes('## Related'));
+});
+
+// ---------------------------------------------------------------------------
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`autolink tests: ${passed} passed, ${failed} failed, ${passed + failed} total`);
 console.log(`${'═'.repeat(50)}`);
