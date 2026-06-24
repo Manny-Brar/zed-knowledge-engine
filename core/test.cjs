@@ -575,6 +575,25 @@ test('tend.stitchOrphans: --apply reduces orphan count', () => {
   teardownVault();
 });
 
+test('tend.distill: deterministic MOC+stitch reduces orphans', () => {
+  const dir = path.join(__dirname, '.test-distill');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'a.md'), '---\ntitle: A Auth\ntags: [auth]\n---\n# A Auth\nauthentication strategy and tokens');
+  fs.writeFileSync(path.join(dir, 'b.md'), '---\ntitle: B Auth\ntags: [auth]\n---\n# B Auth\nauthentication tokens and sessions');
+  fs.writeFileSync(path.join(dir, 'c.md'), '---\ntitle: C Auth\ntags: [auth]\n---\n# C Auth\nauthentication strategy notes');
+  const engine = new KnowledgeEngine({ vaultPath: dir });
+  engine.build();
+  const tend = require('./tend.cjs');
+  const before = engine.getOrphans().length;
+  assert.ok(before >= 3, 'expected orphans before distill');
+  const res = tend.distill(engine, { apply: true, vaultDir: dir, minMembers: 3 });
+  assert.strictEqual(res.applied, true);
+  assert.ok(res.after < before, `distill should reduce orphans (before=${before}, after=${res.after})`);
+  engine.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('tend.findWeakTitles: flags date-only/generic titled orphans', () => {
   const dir = path.join(__dirname, '.test-weak');
   fs.rmSync(dir, { recursive: true, force: true });

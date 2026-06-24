@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 12
+- iteration: 13
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -26,7 +26,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - T8 Codex Gate-3/5/6 wiring: done (execution-protocol: optional Gate-3 delegation to codex:codex-rescue subagent + Gate-5 hard-blocker verifier for Codex diffs; review stays on zed_council)
 - T9 Codex trigger row + NON-GOAL note: done (behavior-controller: codex-delegation trigger row + multi-agent NON-GOAL)
 - T10 Codex circuit-breaker + telemetry: todo
-- T11 zed tend distill (deterministic): todo
+- T11 zed tend distill (deterministic): done (composes generateMOCs + stitchOrphans; one-command vault tidy; +1 test)
 - T12 Obsidian integration: DONE. T12a (config resolver + ZED_VAULT_DIR). T12b (resolveWritePath per-project subfolders wired into MCP write/decide + tests; .obsidian config seeded into NELSON). Layout: ONE NELSON vault, per-project folders, one graph. REMAINING ACTIVATION (X4, with user): flip default ZED_VAULT_ROOT in settings.json + migrate existing notes + stitch --apply.
 - X4 Canonicalize vault + migrate notes into NELSON: DONE — 76 notes copied into NELSON per-project (slateos 21, dm_setter 18, _global 34, zed 2, podcast 1); source backed up; moc+stitch applied -> A/100, 0 orphans; ZED_VAULT_ROOT flipped in .mcp.json (needs MCP restart to take effect).
 - T13 fix ${CLAUDE_PLUGIN_DATA} stray-vault bug: done (config guard rejects unexpanded ${...}; root cause = .mcp.json:7 passing the literal placeholder)
@@ -48,3 +48,4 @@ iter9 | T13 | done | orphanCount=42 (bug fix) edges/node=0.78 | config.cleanEnvP
 iter10 | T7 | done | orphanCount=42 (diagnostic) edges/node=0.78 | tend.findWeakTitles + `zed tend titles` (flag date-only/generic orphan titles, report-only) + 1 test. Live: 31/42 orphans are date/session-titled (orphan floor). core 72->73 green. PHASE 2 COMPLETE (T1-T7).
 iter11 | X4 | done | orphanCount=42->0  grade=D/56->A/100  edges=59->227 | Activated NELSON as the ZED system vault. Backed up source (76 md); migrated 76 notes into per-project folders (slateos/dm_setter/unfiltered_podcast/zed-knowledge-engine/_global) via scripts/migrate-to-nelson.cjs; tend moc --apply (16 hubs) + tend stitch --apply (last 3) -> 0 orphans, A/100, 92 notes/227 edges. Flipped ZED_VAULT_ROOT in .mcp.json (restart MCP to take effect). PAYOFF DELIVERED.
 iter12 | T8+T9 | done | orphanCount=0 (prompt wiring) | Codex executor wiring: execution-protocol Gate-3 optional delegation to codex:codex-rescue SUBAGENT (never Skill, test-gate required) + Gate-5 HARD-BLOCKER verifier (Codex diff must pass tests + zed-validator before capture); behavior-controller codex-delegation trigger row + multi-agent NON-GOAL (review stays on existing zed_council). Doc-only, no test net (small additive). zero new gates.
+iter13 | T11 | done | orphanCount=0 | tend.distill (deterministic: generateMOCs + stitchOrphans, no LLM) + `zed tend distill` CLI + 1 test. One-command vault tidy. core 73->74 green.

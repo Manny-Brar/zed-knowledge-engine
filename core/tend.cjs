@@ -169,4 +169,28 @@ function findWeakTitles(engine, opts = {}) {
   return weak.slice(0, limit);
 }
 
-module.exports = { stitchOrphans, generateMOCs, findWeakTitles };
+/**
+ * Deterministic vault distill: run the gardening passes that compound
+ * connectivity, in order — generate MOC hubs, then stitch remaining orphans —
+ * and report the orphan delta. Pure composition of generateMOCs + stitchOrphans;
+ * NO LLM, NO merge/promote (those stay a separate, human-approved step). This is
+ * the one-command "tidy the vault" that took NELSON from 42 orphans to 0.
+ *
+ * @param {Object} engine — a built KnowledgeEngine
+ * @param {Object} [opts]
+ * @param {boolean} [opts.apply=false]
+ * @param {string} [opts.vaultDir] — required when apply:true (for MOC writes)
+ * @param {number} [opts.minMembers=3]
+ * @param {number} [opts.max=3]
+ * @returns {{ applied:boolean, before:number, after:(number|null), mocsGenerated:number, stitched:number }}
+ */
+function distill(engine, opts = {}) {
+  const apply = opts.apply === true;
+  const before = engine.getOrphans().length;
+  const moc = generateMOCs(engine, { apply, vaultDir: opts.vaultDir, minMembers: opts.minMembers || 3 });
+  const stitch = stitchOrphans(engine, { apply, max: opts.max || 3 });
+  const after = apply ? engine.getOrphans().length : null;
+  return { applied: apply, before, after, mocsGenerated: moc.generated, stitched: stitch.changed };
+}
+
+module.exports = { stitchOrphans, generateMOCs, findWeakTitles, distill };
