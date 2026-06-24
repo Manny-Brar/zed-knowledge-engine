@@ -4,7 +4,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 
 ## Counters
 
-- iteration: 7
+- iteration: 8
 - maxIterations: 30
 - failStreak: 0
 - failStreakLimit: 3
@@ -21,7 +21,7 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - T3 computeRelatedForNote + MCP wiring: done
 - T4 zed tend stitch: done (capability + dry-run; --apply to real vault gated on X4 canonical-vault choice)
 - T5 zed tend moc: done (live dry-run would generate 16 MOC hubs; not applied to real vault yet)
-- T6 recency ranking + drop backlink boost: todo
+- T6 recency ranking + drop backlink boost: done
 - T7 title-normalization surfacing: todo
 - T8 Codex Gate-3/5/6 wiring: todo
 - T9 Codex trigger row + NON-GOAL note: todo
@@ -43,3 +43,4 @@ iter5 | T12a | done | orphanCount=42 (config feature; no vault change) edges/nod
 iter6 | T12b | done | orphanCount=42 (config feature) edges/node=0.78 | config.resolveWritePath (per-project subfolder prefixing, _global shared, no double-prefix) + projectModeOn; wired into MCP zed_write_note + zed_decide (notePath + selfPath); +3 tests; seeded NELSON/.obsidian config (graph/daily-notes/templates). core 65→68 green. Activation (flip default + migrate) deferred to X4.
 
 iter7 | T5 | done | orphanCount=42 (MOC capability; dry-run plans 16 hubs; not applied) edges/node=0.78 | tend.generateMOCs + `zed tend moc` (dry-run default, --apply, --min) + buildMocContent + 1 test. core 68→69 green.
+iter8 | T6 | done | orphanCount=42 (ranking change) edges/node=0.78 | recency multiplier (half-life ~90d) in SearchLayer.search boostedScore + graphBoost:false option; findRelatedByContent drops backlink boost so orphans surface; +2 tests. core 69->71 green.

@@ -8,8 +8,12 @@
 
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const fileLayer = require('./file-layer.cjs');
+
+// Recency decay: notes lose ~half their recency weight every ~90 days.
+const RECENCY_LAMBDA = 0.0077;
 
 // ---------------------------------------------------------------------------
 // SearchLayer Class
@@ -147,9 +151,19 @@ class SearchLayer {
 
       const backlinkCount = this.graph.getBacklinkCount(node.id);
       // FTS5 rank is negative (more negative = better match)
-      // We negate it so higher = better, then apply boost
+      // We negate it so higher = better, then apply boosts
       const ftsScore = -row.rank;
-      const boostedScore = ftsScore * (1 + 0.1 * backlinkCount);
+      // Recency: gently favor recently-modified notes (half-life ~90 days).
+      let recencyFactor = 1;
+      try {
+        const ageDays = (Date.now() - fs.statSync(node.path).mtimeMs) / 86400000;
+        if (ageDays > 0) recencyFactor = Math.exp(-RECENCY_LAMBDA * ageDays);
+      } catch { /* missing file — skip recency adjustment */ }
+      // Graph boost (backlink amplification) is ON by default, but suggest/
+      // related paths pass graphBoost:false so low-backlink orphans surface
+      // instead of being buried under popular hubs.
+      const graphMul = (opts.graphBoost === false) ? 1 : (1 + 0.1 * backlinkCount);
+      const boostedScore = ftsScore * graphMul * recencyFactor;
 
       return {
         node,
@@ -228,7 +242,7 @@ class SearchLayer {
     const terms = this._keyTerms(text, 8);
     if (terms.length) {
       let hits = [];
-      try { hits = this.search(terms.join(' OR '), { limit: Math.max(limit * 3, 10) }); } catch { hits = []; }
+      try { hits = this.search(terms.join(' OR '), { limit: Math.max(limit * 3, 10), graphBoost: false }); } catch { hits = []; }
       // Drop the note itself BEFORE normalizing — otherwise its own (highest)
       // score becomes the denominator and deflates every real match toward 0.
       if (exclude) hits = hits.filter((h) => h.node && path.resolve(h.node.path) !== exclude);

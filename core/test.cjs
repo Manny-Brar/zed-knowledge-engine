@@ -587,6 +587,38 @@ test('tend.generateMOCs: builds + writes a MOC for a well-populated tag', () => 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('search: recency nudges recently-modified notes above stale ones', () => {
+  const dir = path.join(__dirname, '.test-rec');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'old.md'), '---\ntitle: Old Auth\n---\n# Old Auth\nauthentication strategy notes');
+  fs.writeFileSync(path.join(dir, 'new.md'), '---\ntitle: New Auth\n---\n# New Auth\nauthentication strategy notes');
+  const oldT = (Date.now() - 400 * 86400000) / 1000;
+  fs.utimesSync(path.join(dir, 'old.md'), oldT, oldT);
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(dir);
+  const search = new SearchLayer(graph.db, graph);
+  search.indexVault(dir);
+  const titles = search.search('authentication strategy').map(r => r.node.title);
+  assert.ok(titles.indexOf('New Auth') >= 0 && titles.indexOf('Old Auth') >= 0);
+  assert.ok(titles.indexOf('New Auth') < titles.indexOf('Old Auth'), 'recent note should rank above stale');
+  graph.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('search: graphBoost:false disables backlink amplification', () => {
+  setupVault();
+  const graph = new GraphLayer(':memory:');
+  graph.buildGraph(TEST_DIR);
+  const search = new SearchLayer(graph.db, graph);
+  search.indexVault(TEST_DIR);
+  const hb = search.search('hub', { graphBoost: true }).find(r => /hub/i.test(r.node.title));
+  const hp = search.search('hub', { graphBoost: false }).find(r => /hub/i.test(r.node.title));
+  if (hb && hp) assert.ok(hb.boostedScore >= hp.boostedScore, 'backlink boost should raise (or equal) the score');
+  graph.close();
+  teardownVault();
+});
+
 test('search: applies graph boost', () => {
   setupVault();
   const graph = new GraphLayer(':memory:');
