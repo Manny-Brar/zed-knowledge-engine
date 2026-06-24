@@ -14,8 +14,9 @@ trap 'echo "ZED hook error: $BASH_COMMAND failed" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
-DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
-VAULT_DIR="$DATA_DIR/vault"
+# Canonical paths via config.cjs (honors ZED_VAULT_ROOT). Inline fallback if the
+# resolver file is ever absent; the resolver itself falls back on node errors.
+. "${SCRIPT_DIR}/_zed-paths.sh" 2>/dev/null || { DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"; VAULT_DIR="$DATA_DIR/vault"; DB_PATH="$DATA_DIR/knowledge.db"; }
 TRACKER="$DATA_DIR/edit-tracker.json"
 
 export ZED_DATA_DIR="$DATA_DIR"
@@ -38,7 +39,7 @@ echo "patterns, or architecture insights, capture them NOW with"
 echo "'zed_decide' / 'zed_write_note' before they are compressed."
 
 # If evolve loop active, mention it
-LOOP_DIR="$VAULT_DIR/_loop"
+LOOP_DIR="$DATA_DIR/vault/_loop"
 if [ -f "$LOOP_DIR/objective.md" ]; then
   OBJECTIVE_TITLE=$(ZED_FILE="$LOOP_DIR/objective.md" node -e "
     try {

@@ -8,8 +8,9 @@ trap 'echo "ZED hook error: $BASH_COMMAND failed" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
-DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"
-VAULT_DIR="$DATA_DIR/vault"
+# Canonical paths via config.cjs (honors ZED_VAULT_ROOT). Inline fallback if the
+# resolver file is ever absent; the resolver itself falls back on node errors.
+. "${SCRIPT_DIR}/_zed-paths.sh" 2>/dev/null || { DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.zed-data}"; VAULT_DIR="$DATA_DIR/vault"; DB_PATH="$DATA_DIR/knowledge.db"; }
 
 # Skip if vault doesn't exist yet
 if [ ! -d "$VAULT_DIR" ]; then
