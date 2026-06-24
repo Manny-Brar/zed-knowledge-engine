@@ -177,16 +177,8 @@ When running in evolve mode, EVERY iteration follows this exact sequence:
 
 1. Re-read objective (scope anchor)
 2. Re-read handoff from previous iteration
-3. Gate 0: RETRIEVE — search vault for relevant context
-4. Gate 1: PLAN — plan this iteration's unit of work
-5. Gate 2: RESEARCH — fill knowledge gaps (vault first, then web)
-6. Gate 3: EXECUTE — implement
-7. Gate 4: SELF-ASSESS — compare against objective and original prompt
-8. Gate 5: TEST — run tests, fix failures
-9. Gate 6: CAPTURE — save knowledge to vault
-10. Gate 7: DOCUMENT — update affected docs
-11. Gate 8: HANDOFF — write structured handoff for next iteration
-12. `zed loop-tick "summary"` — advance iteration counter
-13. Identify what the NEXT iteration should work on (prevents premature stopping)
+3. Run the full Gate 0-8 ladder above. Evolve-specific framing: Gate 1 plans ONE unit of work from the decomposition; Gate 4 self-assesses against the objective AND the original prompt. (See the `evolve-mode` skill for complete loop mechanics.)
+4. `zed loop-tick "summary"` — advance iteration counter
+5. Identify what the NEXT iteration should work on (prevents premature stopping)
 
 The blocking Stop hook enforces Gates 6 and 8 mechanically.

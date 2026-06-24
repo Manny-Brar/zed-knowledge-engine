@@ -19,10 +19,9 @@ fi
 
 export ZED_DATA_DIR="$DATA_DIR"
 
-# Rebuild graph index (graceful failure)
-node "$PLUGIN_ROOT/bin/zed" rebuild >/dev/null 2>&1 || echo "ZED: Graph rebuild failed — vault may need repair. Run: zed fix"
-
-# Output vault stats so Claude sees them at session start
+# Output vault stats so Claude sees them at session start. `overview` builds +
+# persists the graph/index in-process, so a separate `rebuild` spawn here is
+# redundant — dropping it removes one full vault walk + node cold-start per session.
 echo "=== ZED Session Start ==="
 node "$PLUGIN_ROOT/bin/zed" overview 2>/dev/null || echo "Vault: present (stats unavailable)"
 
