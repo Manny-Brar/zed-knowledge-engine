@@ -135,6 +135,7 @@ These triggers are algorithmic. When the condition is met, the action is MANDATO
 | behavior-controller | Every prompt | MUST determine mode and apply rules |
 | wall-breaker | Error/crash=ERROR, unknown API/tech=KNOWLEDGE, multiple approaches=DESIGN, missing package=DEPENDENCY, too complex=COMPLEXITY | MUST classify wall type and follow structured research protocol |
 | onboarding | Vault empty (<3 notes) or first session with ZED | MUST run first-session setup flow |
+| codex-delegation | OPTIONAL: a Tier-3 large *mechanical* task with an existing test gate, OR wall-breaker attempt 4.5 (stuck after a different in-house approach) | MAY hand it to the `codex:codex-rescue` SUBAGENT via the Agent tool — NEVER `Skill(codex:rescue)`. Plugin-conditional; every Codex diff is re-verified by Gate 5 TEST + `zed-validator` before capture |
 
 ---
 
@@ -172,6 +173,8 @@ ZED enforces back-pressure through:
 4. **Drift detection** — The stop hook calculates drift score and circuit-breaks on excessive deviation
 
 Without back-pressure, Claude Code writes code that "looks right" but fails in practice. With back-pressure, it writes code that actually works.
+
+**NON-GOAL**: no debate loops, no N-agent committees, no default "two models must agree." Cross-model second opinion is served ONLY by the existing `zed_council` at Gate 2.5 (GPT already participates). Codex is an OPTIONAL, test-gated *executor* — never the brain, never the verifier; its output is always re-checked by Gate 5 + `zed-validator` before capture.
 
 ---
 

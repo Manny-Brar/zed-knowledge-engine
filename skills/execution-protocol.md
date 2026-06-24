@@ -88,6 +88,7 @@ work — council is expensive (~7 API calls).
 1. Implement the plan (or directly execute for Tier 1)
 2. Single-feature focus — do NOT touch unrelated code
 3. For Tier 3: checkpoint every significant change (brief status update)
+4. **Tier 3 only, OPTIONAL — cross-model delegation**: if the remaining work is large *mechanical* implementation above the >5000-token delegation threshold (behavior-controller.md) AND a passing test gate already exists, you MAY hand it to the `codex:codex-rescue` **subagent** (Agent tool, `subagent_type: "codex:codex-rescue"`, `--write --background`), then resume at Gate 5. Invoke the SUBAGENT via the Agent tool — NEVER `Skill(codex:rescue)` (it re-enters the command and hangs the session). NEVER delegate work that needs vault knowledge, architecture judgment, or user conversation. All Codex paths are OPTIONAL and degrade gracefully (fall back to in-house work) if the plugin is absent.
 
 ## Gate 4: SELF-ASSESS (Back-Pressure Checkpoint)
 
@@ -122,6 +123,7 @@ Required for Tier 2 and Tier 3. This is a **back-pressure gate**: it BLOCKS all 
 4. For Tier 3: run the full test suite, not just related tests
 5. For Tier 3: use the `zed-validator` agent for adversarial review
 6. If no tests exist for the changed code: write at least one test that validates the change before proceeding
+7. **Delegated (Codex) diffs are HARD-GATED**: any Codex `--write` diff MUST pass this Gate 5 TEST **and** a `zed-validator` INTENT pass (did we build the RIGHT thing?) before Gate 6. A Codex diff produced with NO pre-existing test gate is REJECTED, not captured. No path skips from Codex output straight to capture. Cross-model *review* of a decision uses the existing Gate 2.5 `zed_council` (GPT already participates) — do NOT add a separate Codex review gate.
 
 **Output:** Test results (pass/fail counts) as evidence. Copy the actual test output — do not summarize "tests pass" without evidence. If all pass, proceed. If any fail, fix and re-test.
 
