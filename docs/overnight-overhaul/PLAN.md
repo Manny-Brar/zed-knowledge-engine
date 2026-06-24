@@ -37,7 +37,7 @@ their `core/test-*.cjs`, and `docs/**`. Anything else → mark task `blocked`.
 | ID | Task | File set | Status |
 |----|------|----------|--------|
 | T11 | `zed tend distill` — deterministic-first: compile uncompiled raw via wiki-layer, autolink orphans, rebuild graph, append log. NO unsupervised LLM merge. | bin/zed, core/wiki-layer.cjs, core/test-*.cjs | todo |
-| T12 | Obsidian system integration: point ZED at the real iCloud Obsidian vault + seed `.obsidian` config from `templates/obsidian/`. | bin/zed, templates/obsidian/ | blocked (need vault path from user) |
+| T12 | Obsidian integration (loop-safe): add a `ZED_VAULT_DIR` env override that decouples the vault path from DATA_DIR (default behavior UNCHANGED when unset) + a unit test; then seed `.obsidian/` config into the EMPTY NELSON vault from `templates/obsidian/`. Target (verified empty — safe): `/Users/mannybrar/Library/Mobile Documents/iCloud~md~obsidian/Documents/NELSON`. SCOPE EXCEPTION: this task may write to `<NELSON>/.obsidian/` only. Do NOT migrate or move any existing notes (that's X4). | bin/zed, server/mcp-server.mjs, templates/obsidian/, core/test-*.cjs, NELSON/.obsidian/ | todo |
 | T13 | Fix the `${CLAUDE_PLUGIN_DATA}` unexpanded-env-var bug that creates a stray in-repo vault dir. | scripts/**, bin/zed | todo |
 
 ## EXCLUDED from unattended execution (human review required)
@@ -47,3 +47,4 @@ their `core/test-*.cjs`, and `docs/**`. Anything else → mark task `blocked`.
 | X1 | Aggressive MUST 31→<10 cut + Skill-Trigger-Table collapse + 5-level ULTRATHINK rewrite | No automated test net; high blast radius on core operating contract. |
 | X2 | Optional local semantic layer (sqlite-vec + transformers.js) | Adds dependencies; gate on telemetry + explicit user OK. |
 | X3 | Deeper Fable-5 prompt changes beyond the safe subset already shipped | Prompt-semantic, untestable; review interactively. |
+| X4 | Canonicalize the vault: make NELSON the single home, point ZED at it (via T12's ZED_VAULT_DIR), and migrate/reconcile the ~74 existing notes split across the stray `${CLAUDE_PLUGIN_DATA}/vault` and the codex-plugin data dir. | Moves personal knowledge between locations; the canonical-vault choice is the user's. Do interactively, not unattended. |

@@ -27,7 +27,8 @@ The autonomous loop reads and updates this file every iteration. Humans: this is
 - T9 Codex trigger row + NON-GOAL note: todo
 - T10 Codex circuit-breaker + telemetry: todo
 - T11 zed tend distill (deterministic): todo
-- T12 Obsidian vault integration: blocked (need vault path)
+- T12 Obsidian integration (ZED_VAULT_DIR + seed .obsidian into empty NELSON): todo
+- X4 Canonicalize vault + migrate ~74 notes into NELSON: review (interactive, with user)
 - T13 fix ${CLAUDE_PLUGIN_DATA} stray-vault bug: todo
 
 ## Log
