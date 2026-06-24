@@ -137,4 +137,36 @@ function generateMOCs(engine, opts = {}) {
   return { applied: apply, generated: report.length, report };
 }
 
-module.exports = { stitchOrphans, generateMOCs };
+/**
+ * Surface notes with WEAK titles — date-only (e.g. "2026-06-24") or generic
+ * ("Untitled", "Note", "Session …") — that no content/title matcher can hub
+ * well. These are the floor on how low orphanRatio can go; report-only (no
+ * rename) so a human can give them atomic, concept-bearing titles.
+ *
+ * @param {Object} engine — a built KnowledgeEngine
+ * @param {Object} [opts]
+ * @param {number} [opts.limit=Infinity]
+ * @param {boolean} [opts.orphansOnly=true] — only flag weak-titled ORPHANS
+ * @returns {Array<{title:string, path:string, reason:string, orphan:boolean}>}
+ */
+function findWeakTitles(engine, opts = {}) {
+  const limit = typeof opts.limit === 'number' ? opts.limit : Infinity;
+  const orphansOnly = opts.orphansOnly !== false;
+  const orphanPaths = new Set(engine.getOrphans().map((o) => path.resolve(o.path)));
+  const nodes = engine.graph.db.prepare('SELECT id, path, title FROM nodes').all();
+
+  const weak = [];
+  for (const n of nodes) {
+    const t = (n.title || '').trim();
+    const isDate = /^\d{4}-\d{2}-\d{2}/.test(t);
+    const isGeneric = !t || t.length < 4 || /^(untitled|note|notes|index|readme|session|daily)\b/i.test(t);
+    if (!isDate && !isGeneric) continue;
+    const orphan = orphanPaths.has(path.resolve(n.path));
+    if (orphansOnly && !orphan) continue;
+    weak.push({ title: t, path: n.path, reason: isDate ? 'date-title' : 'generic-title', orphan });
+  }
+  weak.sort((a, b) => (b.orphan === a.orphan ? 0 : b.orphan ? 1 : -1));
+  return weak.slice(0, limit);
+}
+
+module.exports = { stitchOrphans, generateMOCs, findWeakTitles };

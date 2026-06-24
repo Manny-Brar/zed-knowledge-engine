@@ -575,6 +575,22 @@ test('tend.stitchOrphans: --apply reduces orphan count', () => {
   teardownVault();
 });
 
+test('tend.findWeakTitles: flags date-only/generic titled orphans', () => {
+  const dir = path.join(__dirname, '.test-weak');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, '2026-06-24.md'), '---\ntitle: 2026-06-24\n---\n# 2026-06-24\na daily note, orphaned');
+  fs.writeFileSync(path.join(dir, 'good.md'), '---\ntitle: Authentication Strategy\n---\n# Authentication Strategy\nsolid concept title, orphaned');
+  const engine = new KnowledgeEngine({ vaultPath: dir });
+  engine.build();
+  const tend = require('./tend.cjs');
+  const weak = tend.findWeakTitles(engine, { orphansOnly: true });
+  assert.ok(weak.some(w => w.title === '2026-06-24' && w.reason === 'date-title'), 'should flag the date-titled note');
+  assert.ok(!weak.some(w => /Authentication Strategy/.test(w.title)), 'should NOT flag the concept-titled note');
+  engine.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('tend.generateMOCs: builds + writes a MOC for a well-populated tag', () => {
   const dir = path.join(__dirname, '.test-moc');
   fs.rmSync(dir, { recursive: true, force: true });

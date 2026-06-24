@@ -246,7 +246,19 @@ const commands = {
       }
       return output(`zed tend moc --apply\n  Generated ${res.generated} MOC note(s) under _moc/.`);
     }
-    error('Usage: zed tend <stitch|moc> [--apply] [--limit N] [--min N]   (distill — coming soon)');
+    if (sub === 'titles') {
+      const tend = require('../core/tend.cjs');
+      const all = commandArgs.includes('--all');
+      const engine = getEngine();
+      const weak = tend.findWeakTitles(engine, { orphansOnly: !all });
+      if (jsonMode) return output({ count: weak.length, weak });
+      const lines = weak.map(w => `  ${path.basename(w.path)} — "${w.title}" [${w.reason}${w.orphan ? ', orphan' : ''}]`);
+      return output(
+        `zed tend titles${all ? ' --all' : ' (orphans)'}\n  ${weak.length} weak-titled note(s) — retitle these with atomic, concept-bearing names so they can be linked:\n` +
+        (lines.length ? lines.join('\n') : '  (none)')
+      );
+    }
+    error('Usage: zed tend <stitch|moc|titles> [--apply] [--limit N] [--min N] [--all]   (distill — coming soon)');
   },
 
   // --- Graph queries ---
