@@ -40,12 +40,38 @@ function resolveDataDir(env = process.env) {
   return cleanEnvPath(env.ZED_DATA_DIR) || cleanEnvPath(env.CLAUDE_PLUGIN_DATA) || path.join(homeDir(env), '.zed-data');
 }
 
-function resolveVaultDir(env = process.env) {
-  return cleanEnvPath(env.ZED_VAULT_DIR) || cleanEnvPath(env.ZED_VAULT_ROOT) || path.join(resolveDataDir(env), 'vault');
+/**
+ * Per-project vault mode: each project gets its OWN Obsidian vault (and thus its
+ * own graph + DB), auto-derived as <ZED_VAULT_BASE>/<project-slug>. This is the
+ * "separate graph per project" model. An explicit ZED_VAULT_DIR opts a single
+ * project out (pins it to one vault). Distinct from ZED_VAULT_ROOT, which is the
+ * "one shared vault, per-project subfolders, one merged graph" model.
+ */
+function perProjectVaultMode(env = process.env) {
+  return !!cleanEnvPath(env.ZED_VAULT_BASE) && !cleanEnvPath(env.ZED_VAULT_DIR);
 }
 
-function resolveDbPath(env = process.env) {
-  return cleanEnvPath(env.ZED_DB_PATH) || path.join(resolveDataDir(env), 'knowledge.db');
+// Precedence: explicit ZED_VAULT_DIR > per-project ZED_VAULT_BASE/<slug>
+// > shared ZED_VAULT_ROOT > <dataDir>/vault.
+function resolveVaultDir(env = process.env, cwd) {
+  const explicit = cleanEnvPath(env.ZED_VAULT_DIR);
+  if (explicit) return explicit;
+  const base = cleanEnvPath(env.ZED_VAULT_BASE);
+  if (base) return path.join(base, resolveProjectSlug(env, cwd) || '_default');
+  const root = cleanEnvPath(env.ZED_VAULT_ROOT);
+  if (root) return root;
+  return path.join(resolveDataDir(env), 'vault');
+}
+
+// In per-project-vault mode the DB is keyed by project too, so separate vaults
+// never merge through a shared index: <dataDir>/graphs/<slug>/knowledge.db.
+function resolveDbPath(env = process.env, cwd) {
+  const explicit = cleanEnvPath(env.ZED_DB_PATH);
+  if (explicit) return explicit;
+  if (perProjectVaultMode(env)) {
+    return path.join(resolveDataDir(env), 'graphs', resolveProjectSlug(env, cwd) || '_default', 'knowledge.db');
+  }
+  return path.join(resolveDataDir(env), 'knowledge.db');
 }
 
 function slugify(s) {
@@ -103,6 +129,10 @@ function resolveLoopDir(env = process.env, cwd) {
  * flat single-vault behavior unchanged for users who set neither.
  */
 function projectModeOn(env = process.env) {
+  // Subfolder prefixing applies ONLY to the shared-vault (ZED_VAULT_ROOT) model.
+  // In per-project-vault mode each project IS its own vault root, so notes go to
+  // the vault root (decisions/, patterns/, …) with no slug prefix.
+  if (perProjectVaultMode(env)) return false;
   return !!(cleanEnvPath(env.ZED_VAULT_ROOT) || Object.prototype.hasOwnProperty.call(env, 'ZED_PROJECT'));
 }
 
@@ -135,6 +165,7 @@ module.exports = {
   resolveDbPath,
   resolveProjectSlug,
   resolveLoopDir,
+  perProjectVaultMode,
   projectModeOn,
   resolveWritePath,
   slugify,

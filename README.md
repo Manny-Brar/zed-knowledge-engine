@@ -39,9 +39,10 @@ Restart Claude Code to pick up changes.
 
 ## Use ZED across all your projects
 
-ZED is designed to run with **one shared Obsidian vault** (one knowledge graph)
-and **per-project organization** — notes land in a per-project folder, evolve
-loops are scoped per project, and the runtime cache stays out of the vault.
+ZED runs with **one separate Obsidian vault (and graph) per project** — each
+project gets its own vault, its own graph, and its own evolve-loop state; the
+runtime cache stays out of the vault. (Prefer one merged graph instead? Use
+`ZED_VAULT_ROOT` — see the guide.)
 
 One-time global setup (in `~/.claude/settings.json`, so the MCP server, CLI, and
 hooks all agree):
@@ -49,22 +50,23 @@ hooks all agree):
 ```jsonc
 {
   "env": {
-    "ZED_VAULT_ROOT": "/path/to/your/Obsidian/NELSON",
+    "ZED_VAULT_BASE": "/path/to/your/Obsidian/Documents",
     "ZED_DATA_DIR": "/Users/you/.zed-data"
   }
 }
 ```
 
-Restart Claude Code, then verify with `zed health` and `zed loop-path`. After
-that, adding ZED to a new project is **zero-config** — just open it and work;
-ZED auto-creates `NELSON/<project>/` for notes and
-`~/.zed-data/loops/<project>/` for loops.
+Restart Claude Code, then run **`zed doctor`** to verify (version, graph model,
+features, health in one shot). After that, adding ZED to a new project is
+**zero-config** — open it and work; ZED auto-creates `<base>/<project>/` (its own
+vault + graph) and `~/.zed-data/graphs/<project>/` (its own index).
 
 → Full guide: **[docs/SETUP-NEW-PROJECT.md](docs/SETUP-NEW-PROJECT.md)**
 
 > Put the env in `settings.json`, not just `.mcp.json` — `.mcp.json`'s `env`
 > only reaches the MCP server, not the hooks/CLI. Splitting them is the classic
-> "works in chat but the hooks read the wrong vault" bug.
+> "works in chat but the hooks read the wrong vault" bug. Run `zed doctor` to
+> confirm everything resolves to the same place.
 
 ---
 

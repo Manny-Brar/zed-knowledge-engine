@@ -28,6 +28,7 @@ const GLOBAL_DB_PATH = path.join(process.env.HOME, '.zed', 'global.db');
 
 // Ensure dirs exist
 for (const dir of [
+  path.dirname(DB_PATH),   // per-project DB parent (<dataDir>/graphs/<slug>) must exist before open
   VAULT_DIR,
   path.join(VAULT_DIR, 'decisions'),
   path.join(VAULT_DIR, 'patterns'),
@@ -200,6 +201,97 @@ const commands = {
   version() {
     const pkg = require('../package.json');
     output(jsonMode ? { name: pkg.name, version: pkg.version } : `zed v${pkg.version}`);
+  },
+
+  // One-command self-check: version, the source actually loaded, update status,
+  // the active graph model, a feature checklist, env wiring, and vault health.
+  // Answers "am I on the latest, with codex + the lean-prompt pass + the right
+  // Obsidian setup?". Pass --check to compare against GitHub (does a fetch).
+  doctor() {
+    const cp = require('child_process');
+    const os = require('os');
+    const ROOT = path.join(__dirname, '..');
+    const safeReq = (p) => { try { return require(p); } catch { return {}; } };
+    const plugin = safeReq('../.claude-plugin/plugin.json');
+    const pkg = safeReq('../package.json');
+    const git = (c) => { try { return cp.execSync('git ' + c, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+    const fileHas = (rel, re) => { try { return re.test(fs.readFileSync(path.join(ROOT, rel), 'utf8')); } catch { return false; } };
+
+    const commit = git('rev-parse --short HEAD');
+    const branch = git('rev-parse --abbrev-ref HEAD') || 'main';
+    const state = git('status --porcelain') ? 'modified' : 'clean';
+    let updateStatus = 'unknown — pass --check to compare with GitHub';
+    if (commandArgs.includes('--check') && commit) {
+      git('fetch origin');
+      const behind = git(`rev-list --count HEAD..origin/${branch}`);
+      const ahead = git(`rev-list --count origin/${branch}..HEAD`);
+      if (behind === '0') updateStatus = `up to date with origin/${branch}`;
+      else if (behind) updateStatus = `${behind} commit(s) BEHIND origin/${branch} — run: git -C "${ROOT}" pull && restart`;
+      if (ahead && ahead !== '0') updateStatus += ` (${ahead} local ahead)`;
+    } else if (commit) {
+      updateStatus = `at ${commit}; run \`zed doctor --check\` to compare with GitHub`;
+    }
+
+    const features = {
+      'config single-source (config.cjs)': fs.existsSync(path.join(ROOT, 'core', 'config.cjs')),
+      'per-project loops (resolveLoopDir)': typeof cfg.resolveLoopDir === 'function',
+      'per-project vaults (ZED_VAULT_BASE)': typeof cfg.perProjectVaultMode === 'function',
+      'codex executor wiring': fileHas('skills/execution-protocol.md', /codex/i),
+      'lean prompts (Fable-5 subtraction)': fileHas('agents/zed.md', /Prose-default|Error ownership|Apply context silently/i),
+    };
+
+    const model = cfg.perProjectVaultMode()
+      ? 'per-project (separate vault + graph per project)'
+      : (cfg.resolveVaultDir() && process.env.ZED_VAULT_ROOT
+        ? 'shared vault (one merged graph, per-project folders)'
+        : 'default (single local vault)');
+
+    let settingsEnv = {};
+    try { settingsEnv = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8')).env || {}; } catch { /* none */ }
+    const envOk = !!(settingsEnv.ZED_VAULT_BASE || settingsEnv.ZED_VAULT_ROOT || settingsEnv.ZED_VAULT_DIR);
+
+    let health = null;
+    try {
+      const engine = getEngine();
+      const stats = engine.getStats();
+      if (stats.nodeCount > 0) {
+        const hubs = engine.findHubs(100);
+        const clusters = engine.getClusters();
+        const hubsWithLinks = hubs.filter((h) => h.backlink_count > 0).length;
+        const { score, grade } = computeHealthScore(stats, clusters.length, hubsWithLinks);
+        health = { grade, score, notes: stats.nodeCount, orphans: stats.orphanCount };
+      } else health = { grade: 'empty', score: 0, notes: 0, orphans: 0 };
+    } catch (e) { health = { error: e.message }; }
+
+    const report = {
+      version: plugin.version || pkg.version,
+      packageVersion: pkg.version,
+      loadedFrom: ROOT,
+      git: { commit, branch, state },
+      updateStatus,
+      graphModel: model,
+      paths: { vault: VAULT_DIR, db: DB_PATH, dataDir: DATA_DIR, loopDir: LOOP_DIR },
+      features,
+      settingsEnvConfigured: envOk,
+      health,
+    };
+    if (jsonMode) return output(report);
+
+    const ck = (b) => (b ? '✓' : '✗');
+    const L = [];
+    L.push(`ZED Doctor — v${report.version}  (npm pkg ${report.packageVersion})`);
+    L.push(`  loaded from : ${ROOT}`);
+    L.push(`  git         : ${commit || '?'} (${branch}, ${state})`);
+    L.push(`  updates     : ${updateStatus}`);
+    L.push(`  graph model : ${model}`);
+    L.push(`  vault       : ${VAULT_DIR}`);
+    L.push(`  db          : ${DB_PATH}`);
+    L.push(`  loop dir    : ${LOOP_DIR}`);
+    L.push('  features:');
+    for (const [k, v] of Object.entries(features)) L.push(`    ${ck(v)} ${k}`);
+    L.push(`  settings env: ${ck(envOk)} ${envOk ? 'ZED vault env present in ~/.claude/settings.json' : 'MISSING — add ZED_VAULT_BASE + ZED_DATA_DIR to ~/.claude/settings.json'}`);
+    if (health && !health.error) L.push(`  vault health: ${health.grade}${typeof health.score === 'number' ? ` (${health.score}/100)` : ''} — ${health.notes} notes, ${health.orphans} orphans`);
+    output(L.join('\n'));
   },
 
   // --- Vault gardening (zed tend <subverb>) ---
@@ -3307,6 +3399,7 @@ Obsidian Integration (v8.3):
 Other:
   vault-info                Compact JSON vault state (for scripts)
   version                   Show ZED version
+  doctor [--check]          Self-check: version, source, graph model, features, health
 
 Options:
   --json                    Output as JSON (for machine parsing)

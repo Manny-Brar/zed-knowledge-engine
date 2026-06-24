@@ -51,6 +51,7 @@ const DB_PATH = cfg.resolveDbPath();       // cache stays in DATA_DIR, never ins
 // Ensure data directories exist
 try {
   for (const dir of [
+    path.dirname(DB_PATH),   // per-project DB parent (<dataDir>/graphs/<slug>) must exist before open
     VAULT_DIR,
     path.join(VAULT_DIR, 'decisions'),
     path.join(VAULT_DIR, 'patterns'),

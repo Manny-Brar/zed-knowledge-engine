@@ -1,140 +1,116 @@
 # Add ZED to a new project
 
-How to roll the ZED system out across all your projects, with **one shared
-Obsidian vault** and **per-project organization**. After the one-time global
-setup, adding ZED to a new project is essentially zero-config — just work in it.
+Roll ZED out across all your projects with **one separate Obsidian vault (and
+graph) per project**. After a one-time global setting, adding ZED to a new
+project is zero-config — just open it and work; ZED auto-creates that project's
+own vault, graph, and loop state.
 
 ---
 
 ## The model (read this once)
 
 ```
-ONE Obsidian vault (one graph)          ONE data dir (runtime state, not synced)
-NELSON/                                 ~/.zed-data/
-├── _global/        shared notes        ├── knowledge.db      the graph index
-├── dm_setter/      project A notes     └── loops/            evolve-loop state
-├── slateos/        project B notes         ├── dm_setter/    project A's loop
-├── zed-knowledge-engine/  …               └── slateos/      project B's loop
-└── _moc/           map-of-content hubs
+ONE base dir (your Obsidian "Documents")        ONE data dir (runtime, not synced)
+~/.../iCloud~md~obsidian/Documents/             ~/.zed-data/
+├── dm_setter/      ← project A's OWN vault      ├── graphs/
+│   ├── decisions/  (its own graph)              │   ├── dm_setter/knowledge.db   ← A's index
+│   ├── patterns/                                │   └── slateos/knowledge.db     ← B's index
+│   └── _moc/                                    └── loops/
+├── slateos/        ← project B's OWN vault          ├── dm_setter/   ← A's evolve loop
+│   └── …  (separate graph)                          └── slateos/     ← B's evolve loop
+└── NELSON/         ← legacy archive (untouched)
 ```
 
-- **Notes** live in the Obsidian vault under a **per-project folder** (auto-named
-  from the repo directory). One graph, so cross-project links and search still work;
-  `_global/` is shared knowledge.
-- **Runtime state** (the SQLite index, evolve-loop scaffolding) lives in
-  `~/.zed-data` — **never** inside the Obsidian vault, so it doesn't sync or clutter.
-- **Evolve loops are per-project**: a loop you start in project A only ever
-  continues inside project A. (Run `zed loop-path` to see the active project's loop dir.)
+- **Each project is its own Obsidian vault** under `<base>/<project-slug>`, with
+  its **own graph** and **own DB**. Opening a project's vault in Obsidian shows
+  only that project's notes — no merged "everything" graph.
+- **Fully isolated**: no cross-project search or links. (If you ever want shared
+  knowledge, pin a project to a shared vault with `ZED_VAULT_DIR` — see below.)
+- **Runtime state** (SQLite index, evolve-loop scaffolding) lives in `~/.zed-data`,
+  never inside the Obsidian vault, keyed by project.
 
-The single source of truth for all paths is `core/config.cjs`. Everything — the
-MCP server, the `zed` CLI, and the hooks — resolves paths the same way, driven by
-two environment variables.
+The single source of truth for all paths is `core/config.cjs`; the MCP server,
+the `zed` CLI, and the hooks all resolve identically from it.
 
 ---
 
-## One-time global setup (do this once per machine)
+## One-time global setup (once per machine)
 
-ZED reads two env vars. Set them in **`~/.claude/settings.json`** so the MCP
-server, the CLI, **and** the hooks all inherit them (this is the critical part —
-`.mcp.json` only configures the MCP server, not the hooks/CLI):
+Set **two** env vars in **`~/.claude/settings.json`** (not just `.mcp.json` —
+that only configures the MCP server, not the hooks/CLI):
 
 ```jsonc
 {
   "env": {
-    // Your Obsidian vault root — the one graph all projects share.
-    "ZED_VAULT_ROOT": "/Users/you/Library/Mobile Documents/iCloud~md~obsidian/Documents/NELSON",
-    // Runtime cache + loop state. Keep it OUT of the Obsidian vault.
+    // The folder that will CONTAIN one Obsidian vault per project.
+    "ZED_VAULT_BASE": "/Users/you/Library/Mobile Documents/iCloud~md~obsidian/Documents",
+    // Runtime cache + per-project DBs + loop state. Keep it OUT of Obsidian.
     "ZED_DATA_DIR": "/Users/you/.zed-data"
   }
   // ...your other settings (permissions, enabledPlugins, etc.)
 }
 ```
 
-Then **restart Claude Code** once so the running MCP server and the session
-inherit the new env. Verify:
+Restart Claude Code once, then verify with **`zed doctor`** (see below).
 
-```bash
-zed health        # should report your real vault (A/100, N notes)
-zed loop-path     # should print  ~/.zed-data/loops/<this-project>
-```
-
-> Why `settings.json` and not `.mcp.json`? `.mcp.json`'s `env` block only reaches
-> the MCP server process. Hooks (SessionStart/Stop/PreTool) and the `zed` CLI are
-> separate processes — they only pick up env from `settings.json`. Putting the
-> vars in only one place is the classic "works in chat but the hooks use the wrong
-> vault" bug.
+> **`ZED_VAULT_BASE` vs `ZED_VAULT_ROOT`:** `ZED_VAULT_BASE` = *separate vault per
+> project* (what this guide sets up). `ZED_VAULT_ROOT` = the older *one shared
+> vault, per-project subfolders, one merged graph* model. Set one, not both.
 
 ---
 
 ## Adding ZED to a new project
 
-Once the global setup is done, **there's nothing to install per project.** Open
-the project in Claude Code and start working — ZED auto-creates
-`NELSON/<project>/` for notes and `~/.zed-data/loops/<project>/` for any evolve
-loop. The project folder name is derived from the repo directory.
+Nothing to install. Open the project in Claude Code and work — ZED auto-creates
+`<base>/<project-slug>/` (its vault) and `~/.zed-data/graphs/<slug>/` (its DB).
+The slug is the lowercased repo directory name.
 
-The optional touches below make it nicer:
+Optional touches:
 
-### 1. (Optional) Pin the project folder name
+1. **Pin the vault/folder name** — `.claude/settings.json` in the repo:
+   `{ "env": { "ZED_PROJECT": "dm_setter" } }` (forces the slug).
+2. **Pin to a SHARED vault instead** (opt a project out of isolation) —
+   `{ "env": { "ZED_VAULT_DIR": "/path/to/shared/vault" } }` overrides the base.
+3. **Declare a North Star** — add `## North Star` to the repo's `CLAUDE.md`, or
+   run `zed goal-pin "…" --criteria "…"`.
 
-By default the folder/slug is the lowercased repo directory name (e.g.
-`/Users/you/code/DM_SETTER` → `dm_setter`). To force a specific name, add a
-project-scoped setting in the repo's **`.claude/settings.json`**:
-
-```jsonc
-{ "env": { "ZED_PROJECT": "dm_setter" } }
-```
-
-Set `ZED_PROJECT` to `""` to opt a project out of per-project foldering (notes go
-to the vault root).
-
-### 2. (Optional, recommended) Declare a North Star
-
-Give the project a long-running goal so ZED keeps work on-target (Standard 11).
-Add a `## North Star` block to the repo's **`CLAUDE.md`**, or run:
-
-```bash
-zed goal-pin "Ship a reliable X" --criteria "tests green; no regressions"
-```
-
-### 3. Verify
-
-```bash
-zed health                       # vault grade + note count
-zed loop-path                    # ~/.zed-data/loops/<project>
-zed search "something"           # graph-boosted search across the whole vault
-```
-
-That's it. Notes you capture (`zed decide`, `zed_write_note`, daily notes) land
-under `NELSON/<project>/`; evolve loops stay scoped to the project.
+Then open `<base>/<project-slug>` as a vault in Obsidian → its Graph View shows
+only that project.
 
 ---
 
-## Running an evolve loop in a project
+## Verify anytime: `zed doctor`
+
+One command tells you the version, the source actually loaded, update status, the
+active graph model, a feature checklist (codex wiring, lean prompts, per-project
+loops/vaults), whether your `settings.json` env is wired, and vault health:
 
 ```bash
-/zed:evolve "harden the auth flow"      # starts a loop in THIS project only
-zed loop-path                            # where its state lives
-/zed:evolve --status
-/zed:evolve --stop                       # always stop cleanly when done
+zed doctor            # full self-check
+zed doctor --check    # also compares your installed commit against GitHub
+zed loop-path         # this project's evolve-loop dir
 ```
-
-Because loops are per-project, a loop left running in one repo will **not** hijack
-the Stop hook in another. Still, **stop loops you're done with** (`/zed:evolve
---stop`) — a never-stopped loop stays "active" in its project's slot.
 
 ---
 
-## Keeping the vault healthy
+## Updating ZED (all projects at once)
+
+ZED is a **single** plugin shared by every project (symlinked install). One update
+covers everything — there is no per-project update:
 
 ```bash
-zed health            # grade (aim for A); lists orphans
-zed tend distill      # one-shot tidy: generate MOC hubs + stitch orphans
-zed tend moc          # (preview) map-of-content hubs per tag
-zed tend stitch       # (preview) connect orphan notes
+git -C ~/projects/zed-knowledge-engine pull   # then restart Claude Code
+zed doctor --check                            # confirm you're current
 ```
 
-Add `--apply` to `tend` subcommands to write changes (they're dry-run by default).
+---
+
+## Keeping a vault healthy
+
+```bash
+zed health            # grade for the CURRENT project's vault (aim for A)
+zed tend distill      # one-shot tidy: MOC hubs + stitch orphans (add --apply)
+```
 
 ---
 
@@ -142,23 +118,22 @@ Add `--apply` to `tend` subcommands to write changes (they're dry-run by default
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Hooks/CLI use the wrong vault; `zed health` shows a stale or empty vault | Env set only in `.mcp.json`, not `settings.json` | Move `ZED_VAULT_ROOT`/`ZED_DATA_DIR` into `~/.claude/settings.json`; restart |
-| Changes to `settings.json` didn't take effect | Running session/server still has old env | Restart Claude Code (hooks pick up changes on next fire; the MCP server needs a restart) |
-| A stray `${CLAUDE_PLUGIN_DATA}` folder appears in a repo | Host didn't expand the placeholder | Already guarded by `config.cjs` (`cleanEnvPath`); delete the stray dir, it won't recur |
-| Project notes land in the wrong folder | Slug derived from an unexpected cwd | Pin `ZED_PROJECT` in the repo's `.claude/settings.json` |
-| An evolve loop won't stop nagging the Stop hook | A loop was never stopped | `cd` into that project and run `/zed:evolve --stop`, or archive `~/.zed-data/loops/<project>/` |
+| Projects still share one graph | `ZED_VAULT_ROOT` set instead of `ZED_VAULT_BASE` | Swap to `ZED_VAULT_BASE` in `~/.claude/settings.json`; restart |
+| Hooks/CLI use the wrong vault | Env only in `.mcp.json`, not `settings.json` | Put `ZED_VAULT_BASE`/`ZED_DATA_DIR` in `~/.claude/settings.json`; restart |
+| `settings.json` change didn't take | Running session/server has old env | Restart Claude Code (hooks pick up changes on next fire; the MCP server needs a restart) |
+| Project notes land in the wrong vault | Slug derived from an unexpected cwd | Pin `ZED_PROJECT` in the repo's `.claude/settings.json` |
+| "Am I current / fully featured?" | — | Run `zed doctor --check` |
 
 ---
 
 ## Reference: what resolves where
 
-| Thing | Resolver | Default |
+| Thing | Precedence | Default |
 |---|---|---|
-| Vault (notes) | `ZED_VAULT_DIR` > `ZED_VAULT_ROOT` > `<dataDir>/vault` | `<dataDir>/vault` |
 | Data dir (cache/state) | `ZED_DATA_DIR` > `CLAUDE_PLUGIN_DATA` > `~/.zed-data` | `~/.zed-data` |
-| DB index | `ZED_DB_PATH` > `<dataDir>/knowledge.db` | `<dataDir>/knowledge.db` |
-| Project folder/slug | `ZED_PROJECT` > `CLAUDE_PROJECT_DIR` basename > cwd basename | repo dir name |
+| Vault (notes) | `ZED_VAULT_DIR` > `ZED_VAULT_BASE/<slug>` > `ZED_VAULT_ROOT` > `<dataDir>/vault` | `<dataDir>/vault` |
+| DB index | `ZED_DB_PATH` > (per-project) `<dataDir>/graphs/<slug>/knowledge.db` > `<dataDir>/knowledge.db` | per project in base mode |
+| Project slug | `ZED_PROJECT` > `CLAUDE_PROJECT_DIR` basename > cwd basename | repo dir name |
 | Evolve loop dir | `<dataDir>/loops/<project-slug>` | `<dataDir>/loops/_default` |
 
-All of these are computed in `core/config.cjs` — the one place to look if a path
-is ever surprising.
+All computed in `core/config.cjs` — the one place to look if a path surprises you.

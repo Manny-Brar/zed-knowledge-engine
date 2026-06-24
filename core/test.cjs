@@ -143,6 +143,38 @@ test('config.resolveLoopDir: per-project under <dataDir>/loops/<slug>', () => {
   );
 });
 
+test('config: ZED_VAULT_BASE gives each project its own vault + DB (separate graphs)', () => {
+  const cfg = require('./config.cjs');
+  const env = { ZED_VAULT_BASE: '/obs', ZED_DATA_DIR: '/d', ZED_PROJECT: 'DM_SETTER' };
+  assert.strictEqual(cfg.perProjectVaultMode(env), true);
+  // Vault = <base>/<slug>; DB keyed by project so graphs never merge.
+  assert.strictEqual(cfg.resolveVaultDir(env), path.join('/obs', 'dm_setter'));
+  assert.strictEqual(cfg.resolveDbPath(env), path.join('/d', 'graphs', 'dm_setter', 'knowledge.db'));
+  // Each project is its own vault root — NO subfolder prefixing.
+  assert.strictEqual(cfg.projectModeOn(env), false);
+  assert.strictEqual(
+    cfg.resolveWritePath(cfg.resolveVaultDir(env), 'decisions/x.md', env),
+    path.join('/obs', 'dm_setter', 'decisions/x.md')
+  );
+});
+
+test('config: ZED_VAULT_DIR overrides ZED_VAULT_BASE (pins one project to one vault)', () => {
+  const cfg = require('./config.cjs');
+  const env = { ZED_VAULT_BASE: '/obs', ZED_VAULT_DIR: '/pinned', ZED_DATA_DIR: '/d', ZED_PROJECT: 'x' };
+  assert.strictEqual(cfg.perProjectVaultMode(env), false);
+  assert.strictEqual(cfg.resolveVaultDir(env), '/pinned');
+  assert.strictEqual(cfg.resolveDbPath(env), path.join('/d', 'knowledge.db'));
+});
+
+test('config: ZED_VAULT_ROOT (shared) still merges into one graph with subfolders', () => {
+  const cfg = require('./config.cjs');
+  const env = { ZED_VAULT_ROOT: '/nelson', ZED_DATA_DIR: '/d' };
+  assert.strictEqual(cfg.perProjectVaultMode(env), false);
+  assert.strictEqual(cfg.resolveVaultDir(env), '/nelson');
+  assert.strictEqual(cfg.resolveDbPath(env), path.join('/d', 'knowledge.db')); // one shared DB
+  assert.strictEqual(cfg.projectModeOn(env), true); // subfolder prefixing on
+});
+
 test('config.resolveWritePath: flat (unchanged) when not in project mode', () => {
   const cfg = require('./config.cjs');
   assert.strictEqual(cfg.resolveWritePath('/v', 'decisions/x.md', {}), path.join('/v', 'decisions/x.md'));
